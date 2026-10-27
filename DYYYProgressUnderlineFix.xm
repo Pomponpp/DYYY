@@ -80,9 +80,5 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
 }
 %end
 
-%hook AWEDProgressCoreContainer
-- (void)layoutSubviews {
-    %orig;
-    DYYYFixClearProgressUnderline(self);
-}
-%end
+// 注：AWEDProgressCoreContainer 在 AwemeHeaders.h 中并非 UIView 子类，无法安全转换，
+// 故不在此 hook，避免编译错误。
