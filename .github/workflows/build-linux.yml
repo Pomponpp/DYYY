@@ -1,0 +1,103 @@
+name: build deb linux
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scheme: [rootless]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Cache theos
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/theos
+          key: linux-theos-${{ matrix.scheme }}-v3
+
+      - name: Install theos on Linux
+        run: |
+          set -e
+          if [ ! -d "$GITHUB_WORKSPACE/theos" ]; then
+            bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)" || true
+            # fallback manual install
+            if [ ! -d "$GITHUB_WORKSPACE/theos" ]; then
+              git clone --depth 1 https://github.com/theos/theos.git "$GITHUB_WORKSPACE/theos"
+              curl -fsSL -o "$GITHUB_WORKSPACE/theos/sdks/iPhoneOS.sdk.zip" https://github.com/theos/sdks/archive/refs/heads/master.zip || true
+            fi
+          fi
+          ls "$GITHUB_WORKSPACE/theos/bin" | head -5 || echo "theos bin missing"
+          echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
+
+      - name: Install SDK
+        run: |
+          set -e
+          SDK_DIR="$GITHUB_WORKSPACE/theos/sdks"
+          mkdir -p "$SDK_DIR"
+          if [ ! -d "$SDK_DIR/iPhoneOS.sdk" ] && [ ! -d "$SDK_DIR/iPhoneOS"*.sdk ]; then
+            curl -fsSL -o /tmp/sdks.zip https://github.com/theos/sdks/archive/refs/heads/master.zip
+            unzip -q /tmp/sdks.zip -d /tmp/sdks
+            mv /tmp/sdks/sdks-master/iPhoneOS*.sdk "$SDK_DIR/" || ls /tmp/sdks/sdks-master | head
+          fi
+          ls "$SDK_DIR" | head -8
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ldid xz-utils make
+
+      - name: Build package
+        env:
+          MATRIX_SCHEME: ${{ matrix.scheme }}
+        run: |
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          export PATH="$THEOS/bin:$PATH"
+          rm -rf packages && mkdir -p packages
+          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j$(nproc)
+          for f in packages/*.deb; do
+            [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
+          done
+          printf 'Built: %s\n' packages/*.deb
+
+      - name: Extract dylib from deb
+        run: |
+          set -e
+          DEB=$(ls packages/*.deb | head -1)
+          WORK=$(mktemp -d)
+          ar -x "$DEB" --output="$WORK" || (mkdir -p "$WORK" && cd "$WORK" && ar -x "$OLDPWD/$DEB")
+          cd "$WORK"
+          if [ -f data.tar.zst ]; then
+            zstd -d data.tar.zst -o data.tar
+          elif [ -f data.tar.xz ]; then
+            xz -d data.tar.xz
+          elif [ -f data.tar.gz ]; then
+            gunzip data.tar.gz
+          fi
+          tar -xf data.tar -C .
+          DYLIB=$(find . -name "DYYY.dylib" -type f | head -1)
+          if [ -z "$DYLIB" ]; then DYLIB=$(find . -name "*.dylib" -type f | head -1); fi
+          echo "found dylib: $DYLIB"
+          ldid -S "$DYLIB" || true
+          cp "$DYLIB" "$OLDPWD/packages/DYYY_2.2-9-rootless.dylib"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: DYYY-linux-rootless-${{ github.run_number }}
+          path: |
+            ${{ github.workspace }}/packages/*.deb
+            ${{ github.workspace }}/packages/*.dylib
+          retention-days: 5
