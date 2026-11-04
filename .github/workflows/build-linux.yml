@@ -26,14 +26,14 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/theos
-          key: linux-theos-v4-final
+          key: linux-theos-v5-fullsubmodules
 
       - name: Install theos on Linux
         run: |
           set -e
-          if [ ! -d "$GITHUB_WORKSPACE/theos" ]; then
-            git clone --depth 1 https://github.com/theos/theos.git "$GITHUB_WORKSPACE/theos"
-          fi
+          # 关键：vendor/include 与 vendor/lib 是 theos 的 git submodule，
+          # 必须带 --recursive 拉全，否则 vendor 永远残缺（此前 8 轮失败的根因）
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$GITHUB_WORKSPACE/theos"
           echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
 
       - name: Install SDK
@@ -63,20 +63,16 @@ jobs:
           set -e
           export THEOS="$GITHUB_WORKSPACE/theos"
           export PATH="$THEOS/bin:$PATH"
-          # 用 theos 官方 update-theos 安装 vendor（它清楚正确结构）
-          chmod +x "$THEOS/bin/update-theos" 2>/dev/null || true
-          "$THEOS/bin/update-theos" || {
-            echo "update-theos 失败，回退手动安装"
-            VENDOR="$THEOS/vendor"
-            rm -rf "$VENDOR" && mkdir -p "$VENDOR" /tmp/tc
-            curl -fsSL -o /tmp/toolchain.tar.xz https://github.com/theos/toolchain/releases/download/2024.05.24/toolchain_linux_x86_64.tar.xz
-            tar -xf /tmp/toolchain.tar.xz -C /tmp/tc
-            cp -a /tmp/tc/* "$VENDOR/" 2>/dev/null || true
-          }
-          echo "=== vendor 根 ==="; ls "$THEOS/vendor" | head -10
+          # vendor/include 与 vendor/lib 是 theos 的 submodule，clone --recursive
+          # 已拉全；此处只校验。
           echo "=== vendor/include ==="; ls "$THEOS/vendor/include" 2>/dev/null | head -5
           echo "=== vendor/lib ==="; ls "$THEOS/vendor/lib" 2>/dev/null | head -5
-          test -d "$THEOS/vendor/include" && test -d "$THEOS/vendor/lib" && echo "VENDOR OK"
+          test -d "$THEOS/vendor/include" && test -d "$THEOS/vendor/lib" && echo "VENDOR OK" || {
+            echo "vendor 残缺，用 update-theos 补拉"
+            chmod +x "$THEOS/bin/update-theos" 2>/dev/null || true
+            "$THEOS/bin/update-theos"
+            ls "$THEOS/vendor/include" | head -3
+          }
 
       - name: Install dependencies
         run: |
