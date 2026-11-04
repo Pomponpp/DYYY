@@ -48,11 +48,10 @@ DYYY_FILES += DYYYProbe.xm
 DYYY_CFLAGS = -fobjc-arc -w
 DYYY_LDFLAGS = -weak_framework AVFAudio
 # Linux 交叉编译：@available 展开引用 compiler-rt 的 ___isOSVersionAtLeast，
-# Linux 工具链不带该库。--defsym 直接在链接期定义符号（恒真）。
-# 所有 @available 调用点在 iOS17 分支外均有 respondsToSelector 运行时保护，
-# 恒真语义安全。仅 Linux 工具链存在时启用（macOS 构建不受影响）。
+# Linux 工具链不带该库。用纯汇编文件（DYYYVersionSymbol.s）定义符号，
+# 仅当 Linux 工具链存在时加入编译列表（macOS 构建不受影响）。
 ifneq ($(wildcard $(THEOS)/toolchain/linux/iphone/bin/clang),)
-    DYYY_LDFLAGS += -Wl,--defsym=___isOSVersionAtLeast=1
+    DYYY_FILES += DYYYVersionSymbol.s
 endif
 DYYY_FRAMEWORKS = CoreAudio
 CXXFLAGS += -std=c++11
