@@ -7814,6 +7814,7 @@ static char kDYYYAvatarSaveGestureKey;
 
 static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
     if (!avatarVC) return;
+    NSLog(@"[DYYY][avatar-save] 触发保存（VC=%s）", class_getName([avatarVC class]));
 
     // 取头像 URL：优先 avatarImageURL 属性，回退 user.avatarMedium.originURLList
     NSURL *imageURL = nil;
@@ -7828,23 +7829,28 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
                 AWEURLModel *urlModel = [(AWEUserModel *)userModel avatarMedium];
                 NSString *best = urlModel.originURLList.firstObject;
                 if (best.length > 0) imageURL = [NSURL URLWithString:best];
+                NSLog(@"[DYYY][avatar-save] user 回退路径 URL=%@", best ?: @"(空)");
             }
         }
     } @catch (NSException *exception) {
+        NSLog(@"[DYYY][avatar-save] 取 URL 异常: %@", exception);
         imageURL = nil;
     }
 
     if (!imageURL) {
+        NSLog(@"[DYYY][avatar-save] 失败：未取到头像地址");
         [DYYYToast showSuccessToastWithMessage:@"未取到头像地址"];
         return;
     }
 
+    NSLog(@"[DYYY][avatar-save] 开始下载: %@", imageURL);
     // 下载 + 保存走统一通道（DYYYManager 内部处理并发、去重与授权）
     [DYYYManager downloadMedia:imageURL
                       mediaType:MediaTypeImage
                           audio:nil
                      completion:^(BOOL success) {
       dispatch_async(dispatch_get_main_queue(), ^{
+        NSLog(@"[DYYY][avatar-save] 下载保存结果=%d", success ? 1 : 0);
         [DYYYToast showSuccessToastWithMessage:success ? @"头像已保存到相册" : @"保存失败，请检查网络与相册权限"];
       });
     }];
