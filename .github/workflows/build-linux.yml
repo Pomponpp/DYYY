@@ -61,23 +61,22 @@ jobs:
       - name: Install vendor (toolchain + includes)
         run: |
           set -e
-          VENDOR="$GITHUB_WORKSPACE/theos/vendor"
-          # 按 theos 的实际要求（vendor/include 与 vendor/lib）判断，缺则强制重装
-          if [ ! -d "$VENDOR/include" ] || [ ! -d "$VENDOR/lib" ]; then
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          export PATH="$THEOS/bin:$PATH"
+          # 用 theos 官方 update-theos 安装 vendor（它清楚正确结构）
+          chmod +x "$THEOS/bin/update-theos" 2>/dev/null || true
+          "$THEOS/bin/update-theos" || {
+            echo "update-theos 失败，回退手动安装"
+            VENDOR="$THEOS/vendor"
             rm -rf "$VENDOR" && mkdir -p "$VENDOR" /tmp/tc
             curl -fsSL -o /tmp/toolchain.tar.xz https://github.com/theos/toolchain/releases/download/2024.05.24/toolchain_linux_x86_64.tar.xz
             tar -xf /tmp/toolchain.tar.xz -C /tmp/tc
-            # toolchain tar 解包在 vendor/toolchain/linux/iphone/...，上提到 vendor 根
-            if [ -d "/tmp/tc/toolchain/linux/iphone" ]; then
-              cp -a /tmp/tc/toolchain/linux/iphone/* "$VENDOR/"
-            else
-              cp -a /tmp/tc/* "$VENDOR/" 2>/dev/null || true
-            fi
-          fi
-          echo "=== vendor 根 ==="; ls "$VENDOR" | head -8
-          echo "=== vendor/include ==="; ls "$VENDOR/include" 2>/dev/null | head -4
-          echo "=== vendor/lib ==="; ls "$VENDOR/lib" 2>/dev/null | head -4
-          test -d "$VENDOR/include" && test -d "$VENDOR/lib" && echo "VENDOR OK"
+            cp -a /tmp/tc/* "$VENDOR/" 2>/dev/null || true
+          }
+          echo "=== vendor 根 ==="; ls "$THEOS/vendor" | head -10
+          echo "=== vendor/include ==="; ls "$THEOS/vendor/include" 2>/dev/null | head -5
+          echo "=== vendor/lib ==="; ls "$THEOS/vendor/lib" 2>/dev/null | head -5
+          test -d "$THEOS/vendor/include" && test -d "$THEOS/vendor/lib" && echo "VENDOR OK"
 
       - name: Install dependencies
         run: |
