@@ -152,6 +152,42 @@ jobs:
           echo "tag=$release_name" >> "$GITHUB_OUTPUT"
           echo "title=$release_name" >> "$GITHUB_OUTPUT"
 
+      - name: Rename release assets to match tag
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          BUILD_RUN_NUMBER: ${{ needs.source.outputs.run_number }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          version="$RELEASE_VERSION"
+          suffix="#${BUILD_RUN_NUMBER}"
+          echo "Renaming release assets to carry ${suffix} (matching tag DYYY_${version}${suffix})"
+          for file in packages/*.deb; do
+            [ -f "$file" ] || continue
+            base=$(basename "$file")
+            # com.huami.dyyy_<version>_<arch>-<scheme>.deb -> 版本段追加 #N
+            if [[ "$base" == *"${version}_"* ]]; then
+              renamed="${base/${version}_/${version}${suffix}_}"
+              if [ "$renamed" != "$base" ]; then
+                mv "$file" "packages/$renamed"
+                echo "  $base -> $renamed"
+              fi
+            fi
+          done
+          for file in packages/*.dylib; do
+            [ -f "$file" ] || continue
+            base=$(basename "$file")
+            # DYYY_<version>.dylib -> DYYY_<version>#N.dylib
+            if [[ "$base" == "DYYY_${version}.dylib" ]]; then
+              renamed="DYYY_${version}${suffix}.dylib"
+              mv "$file" "packages/$renamed"
+              echo "  $base -> $renamed"
+            fi
+          done
+          printf 'Renamed release assets:\n'
+          printf '  %s\n' packages/*
+
       - name: Verify release assets
         shell: bash
         run: |
