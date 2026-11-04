@@ -349,15 +349,6 @@
         player.frame = state.nativeHostFrame;
         state.applying = NO;
         state.mediaHost = NO;
-        // 冻结根修（41.0 实测）：frame 还原后 Metal 层可能仍持有旧尺寸的
-        // drawable，表现为布局全对但画面定格（弹幕动、画面不动）。
-        // 对渲染层显式触发一次重布局+重绘，迫使 Metal 重新提交缓冲。
-        UIView *render = [self renderView:player];
-        if (render) {
-            [render setNeedsLayout];
-            [render setNeedsDisplay];
-            [render.layer setNeedsDisplay];
-        }
     }
 
     static BOOL scheduled = NO;
@@ -495,16 +486,14 @@
     state.normalWindow = view.window;
 }
 + (BOOL)keepsMediaHostFullscreen:(UIView *)view state:(DYYYFullscreenPlayerState *)state {
-    if (!state.mediaHost || state.applying || state.normalWindow != view.window) return NO;
-    if (!CGRectEqualToRect(state.mediaHostParentBounds, view.superview.bounds)) return NO;
-    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return NO;
-    if (![self usesFullscreenLayoutForController:state.owner]) return NO;
-    // 关键：这里必须再确认"这一页当前就是可见页"。
-    // 之前只依赖 mediaHost 标记，一旦某页被标过，即使滚走后在后续 layout 中
-    // 仍会返回全屏 bounds，导致离屏页的播放器被撑满并盖到当前页上
-    //（表现为两个视频叠在一起、位置随滑动变化）。
-    if (![self hostIsCurrentPage:view owner:state.owner]) return NO;
-    return YES;
+    // 回归撤回（用户确认冻结非原生）：会话起点基线只凭 mediaHost 标记维持撑满。
+    // 40.9 加的 hostIsCurrentPage 闸门在滑动中反复翻转，bounds/center 在
+    // 全屏与原区间来回切换，正是画面冻结（Metal 被打停、需手动暂停再播）的源头。
+    // 已撑满的页保持撑满、不再写回，frame 零抖动；离屏页不新增撑满由
+    // layoutPlayerContainer 的 hostVisible 分支负责（只跳过、不还原）。
+    return state.mediaHost && !state.applying && state.normalWindow == view.window &&
+        CGRectEqualToRect(state.mediaHostParentBounds, view.superview.bounds) &&
+        DYYYGetBool(@"DYYYEnableFullScreen") && [self usesFullscreenLayoutForController:state.owner];
 }
 + (CGRect)boundsForMediaHost:(UIView *)view proposed:(CGRect)bounds {
     DYYYFullscreenPlayerState *state = objc_getAssociatedObject(view, @selector(state:));
@@ -646,10 +635,9 @@
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || ![self visible:player]) return native;
     UIWindow *window = player.window;
     UIViewController *owner = [self owner:player state:state];
-    // 与 layoutPlayerContainer 同一道闸门：只有当前页才允许改变播放器尺寸。
-    // visible: 只判几何相交，滑动/预加载时相邻页也会命中，必须再确认页身份，
-    // 否则相邻两页的播放器都按满屏计算，表现为两个作品同时铺开（图文页尤其明显）。
-    if (![self hostIsCurrentPage:player owner:owner]) return native;
+    // 回归撤回：会话起点基线只用 visible: 几何判定。40.9 加的 hostIsCurrentPage
+    // 闸门在滑动中反复翻转，播放器尺寸在原生与全屏间来回切，同样是 frame 抖动源。
+    // 离屏页不再被"新撑满"由 layoutPlayerContainer 的 hostVisible 分支负责。
     BOOL recommended = [self usesRecommendedLayoutForController:owner];
     if (![self usesFullscreenLayoutForController:owner]) return native;
     if ([self isImageContentController:owner]) {
@@ -844,19 +832,13 @@
         UIView *parent = host.superview;
         if (!parent || CGRectIsEmpty(parent.bounds) || !CGAffineTransformIsIdentity(host.transform)) continue;
         if (!state.mediaHost && ![self view:host spansWidthOf:parent]) continue;
-        // 40.9：预加载/复用的离屏 cell 也会走这里。swipe 切换瞬间相邻两页都
-        // 与窗口相交，若两边都撑满就会上下两个视频重叠播放，且位置随滑动偏移
-        // 不固定。这里只允许"窗口中心点所在的那一页"撑满，其余页还原原生尺寸。
+        // 40.9 起曾用「非当前页就把已撑满的 host 还原回 nativeHostFrame」来防
+        // 双视频叠加，但实测这正是画面冻结的回归源：滚动/切页时判定反复翻转，
+        // 承载区 frame 被逐帧来回写，播放器 Metal 渲染被中断（画面定格、弹幕照常，
+        // 需手动暂停再播放才恢复）。用户确认原版无此问题——这里只保留判定，
+        // 不再对离屏页写回 frame：非当前页保持原样，杜绝 frame 抖动。
         BOOL hostVisible = [self hostIsCurrentPage:host owner:controller];
-        if (!hostVisible) {
-            if (state.mediaHost) {
-                state.applying = YES;
-                host.frame = state.nativeHostFrame;
-                state.applying = NO;
-                state.mediaHost = NO;
-            }
-            continue;
-        }
+        if (!hostVisible) continue;
         state = [self state:host];
         if (!state.mediaHost || state.normalWindow != view.window || !CGRectEqualToRect(state.mediaHostParentBounds, parent.bounds)) {
             state.nativeHostFrame = current;
