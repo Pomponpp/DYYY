@@ -731,28 +731,64 @@
 #pragma mark - 媒体容器
 
 // 判断该视图所在的分页 cell 是否就是"当前页"。
-// 不能用 CGRectIntersectsRect：滑动切换时上一页与下一页都与窗口相交，
-// 两边容器都会被撑满，表现为上下两个视频叠在一起且位置随滑动偏移不固定。
-// 这里用"窗口中心点落在该 cell 内"作为唯一判定，保证任一时刻只有一页被撑满。
+// 不再用几何包含关系（滑动瞬间两页都与窗口相交，判定必然有竞态），改为：
+//   1) 滚动进行中一律不切换（返回上一次结果），避免中途反复撑满/还原
+//   2) 停稳后从 pager 取"可见 cell 中离内容偏移最近的那一个"，用对象身份比较
+// 对象身份比较没有浮点误差，也不会因为页面边缘相交而误判。
 + (BOOL)hostIsCurrentPage:(UIView *)host owner:(UIViewController *)owner {
     UIView *cell = [self cellForPlayer:host owner:owner];
     if (!cell || !cell.window) return NO;
     UIView *pager = [self pagingViewForCell:cell];
     if (!pager || pager.window != cell.window) return NO;
-    UIScrollView *scroll = (UIScrollView *)pager;
-    CGRect cellRect = [cell convertRect:cell.bounds toView:cell.window];
-    CGPoint windowCenter = CGPointMake(CGRectGetMidX(cell.window.bounds), CGRectGetMidY(cell.window.bounds));
 
-    // 滑动进行中：不改变撑满对象，避免两页交替撑满造成错位与重复播放。
-    // 保持给滚动中的那一页（手指所在页或即将停靠页）一个稳定判定。
-    if (scroll.isTracking || scroll.isDragging || scroll.isDecelerating) {
-        // 仍在滚动时，以"离窗口中心最近的那一页"为准，且必须真正包含中心点附近
-        CGFloat distance = fabs(CGRectGetMidY(cellRect) - windowCenter.y);
-        CGFloat half = CGRectGetHeight(cellRect) * 0.5;
-        // 允许中心落在 cell 边缘 half 范围内（滚动中页面未完全对位）
-        return distance <= half;
+    // 滚动进行中：冻结判定，沿用上一次的结论（由调用方缓存）。
+    if ([pager isKindOfClass:[UIScrollView class]]) {
+        UIScrollView *scroll = (UIScrollView *)pager;
+        if (scroll.isTracking || scroll.isDragging || scroll.isDecelerating) {
+            NSNumber *cached = objc_getAssociatedObject(cell, @selector(hostIsCurrentPage:owner:));
+            if (cached) return cached.boolValue;
+        }
     }
-    return CGRectContainsPoint(cellRect, windowCenter);
+
+    BOOL isCurrent = NO;
+    if ([pager isKindOfClass:[UITableView class]]) {
+        UITableView *table = (UITableView *)pager;
+        // 可见 cell 中，取中心点离表格可视区中心最近的
+        CGFloat midY = table.contentOffset.y + CGRectGetHeight(table.bounds) * 0.5;
+        UIView *best = nil;
+        CGFloat bestDistance = CGFLOAT_MAX;
+        for (UITableViewCell *visible in table.visibleCells) {
+            CGRect rect = [visible convertRect:visible.bounds toView:table];
+            CGFloat distance = fabs(CGRectGetMidY(rect) - midY);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = visible;
+            }
+        }
+        isCurrent = (best == cell);
+    } else if ([pager isKindOfClass:[UICollectionView class]]) {
+        UICollectionView *collection = (UICollectionView *)pager;
+        CGFloat midY = collection.contentOffset.y + CGRectGetHeight(collection.bounds) * 0.5;
+        UIView *best = nil;
+        CGFloat bestDistance = CGFLOAT_MAX;
+        for (UICollectionViewCell *visible in collection.visibleCells) {
+            CGRect rect = [visible convertRect:visible.bounds toView:collection];
+            CGFloat distance = fabs(CGRectGetMidY(rect) - midY);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = visible;
+            }
+        }
+        isCurrent = (best == cell);
+    } else {
+        // 兜底：几何判定
+        CGRect cellRect = [cell convertRect:cell.bounds toView:cell.window];
+        CGPoint windowCenter = CGPointMake(CGRectGetMidX(cell.window.bounds), CGRectGetMidY(cell.window.bounds));
+        isCurrent = CGRectContainsPoint(cellRect, windowCenter);
+    }
+
+    objc_setAssociatedObject(cell, @selector(hostIsCurrentPage:owner:), @(isCurrent), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return isCurrent;
 }
 
 + (void)layoutPlayerContainer:(UIViewController *)controller {
@@ -800,25 +836,42 @@
         state.owner = controller;
         state.normalWindow = view.window;
         state.fullscreenHostFrame = target;
-        // 诊断：记录撑满判定（仅在开启全屏诊断时输出，便于定位双视频问题）
-        static BOOL sFullscreenDiagLogged = NO;
-        if (!sFullscreenDiagLogged && DYYYGetBool(@"DYYYFullscreenDiag")) {
-            sFullscreenDiagLogged = YES;
-            UIView *cell = [self cellForPlayer:host owner:controller];
-            UIView *pager = [self pagingViewForCell:cell];
-            NSLog(@"[DYYY][fullscreen] host=%s cell=%s pager=%s cellRect=%@ window=%@ tracking=%d",
+        // 诊断：完整记录每次撑满判定，用于定位滑动时多页同时撑满的问题。
+        if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+            UIView *diagCell = [self cellForPlayer:host owner:controller];
+            UIView *diagPager = [self pagingViewForCell:diagCell];
+            CGRect cellRect = diagCell ? [diagCell convertRect:diagCell.bounds toView:diagCell.window] : CGRectZero;
+            UIScrollView *scroll = (UIScrollView *)diagPager;
+            CGPoint center = CGPointMake(CGRectGetMidX(host.window.bounds), CGRectGetMidY(host.window.bounds));
+            NSLog(@"[DYYY][fullscreen] host=%s cell=%s pager=%s cellRect=%@ win=%@ "
+                  @"centerHit=%d tracking=%d dragging=%d decel=%d offset=%@",
                   class_getName([host class]),
-                  cell ? class_getName([cell class]) : "nil",
-                  pager ? class_getName([pager class]) : "nil",
-                  NSStringFromCGRect(cell ? [cell convertRect:cell.bounds toView:cell.window] : CGRectZero),
+                  diagCell ? class_getName([diagCell class]) : "nil",
+                  diagPager ? class_getName([diagPager class]) : "nil",
+                  NSStringFromCGRect(cellRect),
                   NSStringFromCGRect(host.window.bounds),
-                  [(UIScrollView *)pager isTracking]);
+                  CGRectContainsPoint(cellRect, center) ? 1 : 0,
+                  scroll ? scroll.isTracking : -1,
+                  scroll ? scroll.isDragging : -1,
+                  scroll ? scroll.isDecelerating : -1,
+                  scroll ? NSStringFromCGPoint(scroll.contentOffset) : @"nil");
         }
         // 承载区全程全高；评论避让只改内部播放器，不补背景或等待消失回调。
         if (!CGRectEqualToRect(current, target)) {
             state.applying = YES;
             host.frame = target;
             state.applying = NO;
+        }
+
+        // 关键：容器撑满后必须把承载它的 cell 也撑到同一高度，
+        // 否则容器会溢出 cell 边界、盖到相邻页上，看起来就是"两个视频叠在一起"。
+        UIView *hostCell = [self cellForPlayer:host owner:controller];
+        if (hostCell && [hostCell isKindOfClass:[UITableViewCell class]]) {
+            CGRect cellFrame = hostCell.frame;
+            if (fabs(CGRectGetHeight(cellFrame) - CGRectGetHeight(target)) > 0.5) {
+                cellFrame.size.height = CGRectGetHeight(target);
+                hostCell.frame = cellFrame;
+            }
         }
     }
 }

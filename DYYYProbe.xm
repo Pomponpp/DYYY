@@ -390,8 +390,16 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
 - (BOOL)p_shouldShowFunctionWithType:(long long)type {
     BOOL result = %orig;
     if (DYYYProbeEnabled()) {
-        DYYYProbeLog(@"[功能项] type=%lld 显示=%d  user=%@", type, result ? 1 : 0,
-                     [self respondsToSelector:@selector(user)] ? [self valueForKey:@"user"] : @"?");
+        id userValue = nil;
+        id obj = (id)self;
+        if ([obj respondsToSelector:NSSelectorFromString(@"user")]) {
+            @try {
+                userValue = [obj valueForKey:@"user"];
+            } @catch (__unused NSException *e) {
+                userValue = nil;
+            }
+        }
+        DYYYProbeLog(@"[功能项] type=%lld 显示=%d", type, result ? 1 : 0);
     }
     return result;
 }

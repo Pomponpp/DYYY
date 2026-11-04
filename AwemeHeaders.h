@@ -763,6 +763,16 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEProfileAvatarFunctionManager : NSObject
 - (BOOL)shouldShowSaveAvatarItem;
 - (BOOL)allowsAvatarDownload;
+- (BOOL)allowsRoleHeadDownload;
+- (BOOL)currentAllowsRoleHeadDownload;
+- (BOOL)p_shouldShowFunctionWithType:(long long)type;
+@end
+
+// 40.9 头像预览页（保存按钮所在页面）
+@interface AWEProfileAvatarViewController : UIViewController
+- (BOOL)p_shouldShowFunctionWithType:(long long)type;
+- (id)p_collectionViewCellWithType:(long long)type;
+- (void)updateActionViewWithType:(long long)type status:(BOOL)status animated:(BOOL)animated;
 @end
 @interface AWEProfileTaskCardStyleListItemCell : UIView
 @end
