@@ -206,7 +206,7 @@
     // 40.9：Swift 类点号名已不可查，必须回退 mangled 名，否则整条毛玻璃清理逻辑直接跳过
     // （表现为评论列表部分 cell 保留不透明背景、透出视频画面）。
     Class innerClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController");
-    if (!innerClass) innerClass = NSClassFromString("_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
+    if (!innerClass) innerClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
     if (!innerClass) {
         static BOOL warnedOnce = NO;
         if (!warnedOnce) {
@@ -221,7 +221,7 @@
     static dispatch_once_t panelOnce;
     dispatch_once(&panelOnce, ^{
       panelClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentPanelViewController");
-      if (!panelClass) panelClass = NSClassFromString("_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
+      if (!panelClass) panelClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
     });
     // 诊断日志：每次布局都打（带类名与路径），观察打开评论时的触发链。
     NSLog(@"[DYYY][blur] layoutController vc=%s", class_getName([controller class]));
