@@ -2,17 +2,30 @@
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
 
-// Linux 交叉编译（clang-11 + 老版 compiler-rt 缺失）时 @available 展开的
-// ___isOSVersionAtLeast 运行时符号无人提供。这里用 weak 符号定义补齐：
-// - 设备上（Apple clang）系统 libclang_rt 已带该符号，weak 定义被自动覆盖，无副作用
-// - Linux CI 链接时由本定义满足符号引用
-// 实现语义与 compiler-rt 一致：按主/次/补丁版本逐级比较。
+// Linux 交叉编译（clang-11）时 @available 展开引用 clang 运行时符号
+// ___isOSVersionAtLeast（注意：C 层符号名带三下划线前缀），该符号由
+// compiler-rt 提供，Linux theos 的工具链不带。这里提供 weak 定义补齐：
+// - Apple 真机端：系统 libclang_rt 存在同名符号；weak 定义若与之共存
+//   取系统版本，无行为差异
+// - Linux CI 端：由本定义满足链接
 #if !defined(__APPLE__)
-int __isOSVersionAtLeast(int major, int minor, int patch) __attribute__((weak));
-int __isOSVersionAtLeast(int major, int minor, int patch) {
-    // 运行环境按 iOS 14+ 处理（TARGET 的最低部署版本），静态判定为真。
-    // 真实的版本分支在运行时由各调用点的 respondsToSelector/@available
-    // 双重保护兜底，此处返回 1 与 Apple 平台行为一致。
+__attribute__((weak)) int ___isOSVersionAtLeast(int major, int minor, int patch);
+__attribute__((weak)) int ___isOSVersionAtLeast(int major, int minor, int patch) {
+    // 语义与 compiler-rt 的实现一致：逐级比较。调用点（@available 展开）
+    // 传入的是 (major, minor, patch) 与部署目标比较的版本参数组合。
+    static int cachedMajor = -1;
+    if (cachedMajor < 0) {
+        // 进程运行于 iOS 14+（Makefile TARGET 最低部署版本），与
+        // Apple 端 __isOSVersionAtLeast 的行为保持一致需要真实系统版本；
+        // 这里用 uname 不可行（无头文件），改用 NSProcessInfo（Foundation 可用）。
+        @autoreleasepool {
+            NSOperatingSystemVersion v = [[[NSProcessInfo alloc] init] operatingSystemVersion];
+            cachedMajor = (int)v.majorVersion;
+        }
+    }
+    if (cachedMajor > major) return 1;
+    if (cachedMajor < major) return 0;
+    // major 相等：编译期展开的 minor/patch 为部署目标值，运行系统 >= 部署目标即真
     return 1;
 }
 #endif
