@@ -57,11 +57,15 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xz-utils make
+          sudo apt-get install -y -qq xz-utils make perl
           # ldid 不在 ubuntu 源里，从官方 release 安装
           sudo curl -fsSL -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_linux_x86_64
           sudo chmod +x /usr/local/bin/ldid
-          ldid -V || echo "ldid installed"
+          # theos 打包 deb 需要 dm.pl（装到 theos/bin）
+          sudo curl -fsSL -o "$GITHUB_WORKSPACE/theos/bin/dm.pl" https://raw.githubusercontent.com/theos/theos/master/bin/dm.pl
+          sudo chmod +x "$GITHUB_WORKSPACE/theos/bin/dm.pl"
+          ldid -V 2>/dev/null || echo "ldid installed"
+          ls "$GITHUB_WORKSPACE/theos/bin/dm.pl"
 
       - name: Build package
         env:
