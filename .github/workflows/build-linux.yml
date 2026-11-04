@@ -64,13 +64,20 @@ jobs:
           VENDOR="$GITHUB_WORKSPACE/theos/vendor"
           # 按 theos 的实际要求（vendor/include 与 vendor/lib）判断，缺则强制重装
           if [ ! -d "$VENDOR/include" ] || [ ! -d "$VENDOR/lib" ]; then
-            rm -rf "$VENDOR" && mkdir -p "$VENDOR"
+            rm -rf "$VENDOR" && mkdir -p "$VENDOR" /tmp/tc
             curl -fsSL -o /tmp/toolchain.tar.xz https://github.com/theos/toolchain/releases/download/2024.05.24/toolchain_linux_x86_64.tar.xz
-            tar -xf /tmp/toolchain.tar.xz -C "$VENDOR"
+            tar -xf /tmp/toolchain.tar.xz -C /tmp/tc
+            # toolchain tar 解包在 vendor/toolchain/linux/iphone/...，上提到 vendor 根
+            if [ -d "/tmp/tc/toolchain/linux/iphone" ]; then
+              cp -a /tmp/tc/toolchain/linux/iphone/* "$VENDOR/"
+            else
+              cp -a /tmp/tc/* "$VENDOR/" 2>/dev/null || true
+            fi
           fi
-          ls "$VENDOR" | head -8
-          ls "$VENDOR/include" 2>/dev/null | head -4
-          ls "$VENDOR/lib" 2>/dev/null | head -4
+          echo "=== vendor 根 ==="; ls "$VENDOR" | head -8
+          echo "=== vendor/include ==="; ls "$VENDOR/include" 2>/dev/null | head -4
+          echo "=== vendor/lib ==="; ls "$VENDOR/lib" 2>/dev/null | head -4
+          test -d "$VENDOR/include" && test -d "$VENDOR/lib" && echo "VENDOR OK"
 
       - name: Install dependencies
         run: |
