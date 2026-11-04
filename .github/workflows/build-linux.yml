@@ -32,14 +32,8 @@ jobs:
         run: |
           set -e
           if [ ! -d "$GITHUB_WORKSPACE/theos" ]; then
-            bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)" || true
-            # fallback manual install
-            if [ ! -d "$GITHUB_WORKSPACE/theos" ]; then
-              git clone --depth 1 https://github.com/theos/theos.git "$GITHUB_WORKSPACE/theos"
-              curl -fsSL -o "$GITHUB_WORKSPACE/theos/sdks/iPhoneOS.sdk.zip" https://github.com/theos/sdks/archive/refs/heads/master.zip || true
-            fi
+            git clone --depth 1 https://github.com/theos/theos.git "$GITHUB_WORKSPACE/theos"
           fi
-          ls "$GITHUB_WORKSPACE/theos/bin" | head -5 || echo "theos bin missing"
           echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
 
       - name: Install SDK
@@ -47,12 +41,24 @@ jobs:
           set -e
           SDK_DIR="$GITHUB_WORKSPACE/theos/sdks"
           mkdir -p "$SDK_DIR"
-          if [ ! -d "$SDK_DIR/iPhoneOS.sdk" ] && [ ! -d "$SDK_DIR/iPhoneOS"*.sdk ]; then
+          if [ -z "$(ls -A "$SDK_DIR" 2>/dev/null)" ]; then
             curl -fsSL -o /tmp/sdks.zip https://github.com/theos/sdks/archive/refs/heads/master.zip
             unzip -q /tmp/sdks.zip -d /tmp/sdks
-            mv /tmp/sdks/sdks-master/iPhoneOS*.sdk "$SDK_DIR/" || ls /tmp/sdks/sdks-master | head
+            mv /tmp/sdks/sdks-master/iPhoneOS*.sdk "$SDK_DIR/"
           fi
           ls "$SDK_DIR" | head -8
+
+      - name: Install vendor (toolchain + includes)
+        run: |
+          set -e
+          VENDOR="$GITHUB_WORKSPACE/theos/vendor"
+          mkdir -p "$VENDOR"
+          # toolchain（iOS 交叉编译器）
+          if [ -z "$(ls -A "$VENDOR" 2>/dev/null)" ]; then
+            curl -fsSL -o /tmp/toolchain.tar.xz https://github.com/theos/toolchain/releases/download/2024.05.24/toolchain_linux_x86_64.tar.xz
+            tar -xf /tmp/toolchain.tar.xz -C "$VENDOR"
+          fi
+          ls "$VENDOR" | head -6
 
       - name: Install dependencies
         run: |
