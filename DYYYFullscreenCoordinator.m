@@ -45,6 +45,11 @@
 @implementation DYYYFullscreenPlayerState
 @end
 
+// 前向声明：供 keepsMediaHostFullscreen 提前调用（实现位于文件后部媒体容器区）
+@interface DYYYFullscreenCoordinator (DYYYPageIdentity)
++ (BOOL)hostIsCurrentPage:(UIView *)host owner:(UIViewController *)owner;
+@end
+
 @implementation DYYYFullscreenCoordinator
 + (NSString *)buildIdentifier { return @"fullscreen-creator-native-20261024.2"; }
 + (NSString *)contentSourceForController:(UIViewController *)controller {
@@ -468,9 +473,16 @@
     state.normalWindow = view.window;
 }
 + (BOOL)keepsMediaHostFullscreen:(UIView *)view state:(DYYYFullscreenPlayerState *)state {
-    return state.mediaHost && !state.applying && state.normalWindow == view.window &&
-        CGRectEqualToRect(state.mediaHostParentBounds, view.superview.bounds) &&
-        DYYYGetBool(@"DYYYEnableFullScreen") && [self usesFullscreenLayoutForController:state.owner];
+    if (!state.mediaHost || state.applying || state.normalWindow != view.window) return NO;
+    if (!CGRectEqualToRect(state.mediaHostParentBounds, view.superview.bounds)) return NO;
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return NO;
+    if (![self usesFullscreenLayoutForController:state.owner]) return NO;
+    // 关键：这里必须再确认"这一页当前就是可见页"。
+    // 之前只依赖 mediaHost 标记，一旦某页被标过，即使滚走后在后续 layout 中
+    // 仍会返回全屏 bounds，导致离屏页的播放器被撑满并盖到当前页上
+    //（表现为两个视频叠在一起、位置随滑动变化）。
+    if (![self hostIsCurrentPage:view owner:state.owner]) return NO;
+    return YES;
 }
 + (CGRect)boundsForMediaHost:(UIView *)view proposed:(CGRect)bounds {
     DYYYFullscreenPlayerState *state = objc_getAssociatedObject(view, @selector(state:));
