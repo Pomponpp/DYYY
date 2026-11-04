@@ -136,16 +136,21 @@ static void DYYYProbeDumpAvatarInventory(void) {
         DYYYProbeLog(@"%@", out);
 
         // 第二段：对重点类单独打印方法签名，便于确认保存入口挂在哪个类。
+        // 注意：Swift 类需用 mangled 名（_TtC…）查询，点号名在 40.9 不可查。
         NSArray<NSString *> *focusClasses = @[
             @"AWEProfileAvatarFunctionManager",
             @"AWEProfileAvatarFunctionCell",
             @"AWEProfileAvatarFunctionModel",
-            @"AWEProfileAvatarPreviewStream",
-            @"AWEProfileAvatarPreviewStreamOpt",
+            @"AWEProfileAvatarViewController",
             @"AWEProfileAvatarActionView",
             @"AWEProfileAvatarActionButtonsView",
             @"AWEDYProfileHeaderActionController",
             @"AWEProfileHeaderActionController",
+            @"AWEProfileAvatarCollectionViewCellV2",
+            // 40.9 长按头像菜单的真实类（Swift，需 mangled 名）
+            @"_TtC17AWEStorySwiftImpl27ProfileAvatarLongPressAlert",
+            @"IESLiveShareAvatarCell",
+            @"IESIMShareAvatarView",
         ];
         NSMutableString *methods = [NSMutableString string];
         [methods appendString:@"[probe] ===== 重点类方法签名开始 =====\n"];
@@ -255,8 +260,8 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
     if (!DYYYProbeEnabled()) {
         return;
     }
-    // 延后到首帧之后，避免拖慢启动；放在后台队列降低主线程压力。
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)),
+    // 延后到启动完成后（抖音自身类已注册），避免类清单缺项。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)),
                    dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
                      DYYYProbeDumpAvatarInventory();
                    });

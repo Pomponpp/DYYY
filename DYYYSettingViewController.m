@@ -250,7 +250,6 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"隐藏底部相关" key:@"DYYYHideBottomRelated" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏视频锚点" key:@"DYYYHideFeedAnchorContainer" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏挑战贴纸" key:@"DYYYHideChallengeStickers" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"隐藏图文标签" key:@"DYYYHideEditTags" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏校园提示" key:@"DYYYHideTemplateTags" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏作者店铺" key:@"DYYYHideHisShop" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏顶栏横线" key:@"DYYYHideTopBarLine" type:DYYYSettingItemTypeSwitch],
@@ -258,7 +257,6 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"隐藏短剧合集" key:@"DYYYHideTemplatePlaylet" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏动图标签" key:@"DYYYHideLiveGIF" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏笔记标签" key:@"DYYYHideItemTag" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"隐藏底部话题" key:@"DYYYHideTemplateGroup" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏相机定位" key:@"DYYYHideCameraLocation" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏视频滑条" key:@"DYYYHideStoryProgressSlide" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"隐藏图片滑条" key:@"DYYYHideDotsIndicator" type:DYYYSettingItemTypeSwitch],
@@ -394,8 +392,8 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"清屏隐藏倍速按钮" key:@"DYYYHideSpeed" type:DYYYSettingItemTypeSwitch]
         ],
         @[
-            [DYYYSettingItem itemWithTitle:@"自检报告" key:@"DYYIShowAuditReport" type:DYYYSettingItemTypeAction],
-            [DYYYSettingItem itemWithTitle:@"导出运行日志" key:@"DYYIExportRuntimeLog" type:DYYYSettingItemTypeAction],
+            [DYYYSettingItem itemWithTitle:@"自检报告" key:@"DYYYShowAuditReport" type:DYYYSettingItemTypeAction],
+            [DYYYSettingItem itemWithTitle:@"导出运行日志" key:@"DYYYExportRuntimeLog" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"头像保存探针" key:@"DYYYEnableAvatarProbe" type:DYYYSettingItemTypeSwitch]
         ]
     ];
@@ -712,9 +710,9 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
     if (item.type == DYYYSettingItemTypePicker) {
         [self showUniversalPickerForIndexPath:indexPath];
     } else if (item.type == DYYYSettingItemTypeAction) {
-        if ([item.key isEqualToString:@"DYYIShowAuditReport"]) {
+        if ([item.key isEqualToString:@"DYYYShowAuditReport"]) {
             [DYYYDiagnostics showAuditReportFromViewController:self];
-        } else if ([item.key isEqualToString:@"DYYIExportRuntimeLog"]) {
+        } else if ([item.key isEqualToString:@"DYYYExportRuntimeLog"]) {
             [DYYYDiagnostics exportRuntimeLogFromViewController:self];
         }
     }
