@@ -207,7 +207,19 @@
     // （表现为评论列表部分 cell 保留不透明背景、透出视频画面）。
     Class innerClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController");
     if (!innerClass) innerClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
-    if (!innerClass) return;
+    if (!innerClass) {
+        static BOOL warnedOnce = NO;
+        if (!warnedOnce) {
+            warnedOnce = YES;
+            NSLog(@"[DYYY][blur] 评论面板类未找到（点号与 mangled 名均失败），毛玻璃清理跳过");
+        }
+        return;
+    }
+    static BOOL loggedOnce = NO;
+    if (!loggedOnce && DYYYGetBool(@"DYYYEnableCommentBlur")) {
+        loggedOnce = YES;
+        NSLog(@"[DYYY][blur] 毛玻璃协调激活（面板类命中）");
+    }
     if ([controller isKindOfClass:innerClass]) {
         [self updatePanel:controller];
         return;

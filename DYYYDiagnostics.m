@@ -8,8 +8,9 @@
 
 static NSString *const kDYYYRuntimeLogSubdir = @"DYYYLogs";
 static NSString *const kDYYYRuntimeLogName = @"runtime.log";
-static const unsigned long long kDYYYRuntimeLogMaxBytes = 4 * 1024 * 1024; // 4MB 轮转
-static const NSUInteger kDYYYRuntimeLogMaxBackups = 2;
+static const unsigned long long kDYYYRuntimeLogMaxBytes = 2 * 1024 * 1024; // 2MB 轮转
+static const NSUInteger kDYYYRuntimeLogMaxBackups = 1;
+static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 3 天
 
 @implementation DYYYDiagnostics
 
@@ -91,6 +92,32 @@ static const NSUInteger kDYYYRuntimeLogMaxBackups = 2;
     [fileManager moveItemAtPath:[self runtimeLogPath] toPath:firstBackup error:nil];
 }
 
+// 手机侧日志清理：启动时清理超过保留期(3天)的日志文件与过期导出副本，
+// 防止长期占用存储。导出目录 Documents/DYYY/logs 也一并清理旧文件。
++ (void)cleanupStaleLogs {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      NSFileManager *fileManager = [NSFileManager defaultManager];
+      NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:-kDYYYRuntimeLogMaxAge];
+      NSArray<NSString *> *dirs = @[
+          [self runtimeLogDirectory],
+          [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject]
+              stringByAppendingPathComponent:@"DYYY/logs"],
+      ];
+      for (NSString *dir in dirs) {
+          NSArray<NSString *> *files = [fileManager contentsOfDirectoryAtPath:dir error:nil];
+          for (NSString *file in files) {
+              if (![file hasSuffix:@".log"] && ![file hasSuffix:@".txt"]) continue;
+              NSString *path = [dir stringByAppendingPathComponent:file];
+              NSDate *modified = [fileManager attributesOfItemAtPath:path error:nil].fileModificationDate;
+              if (modified && [modified compare:deadline] == NSOrderedAscending) {
+                  [fileManager removeItemAtPath:path error:nil];
+              }
+          }
+      }
+    });
+}
+
 + (NSString *)exportedLogPathWithName:(NSString *)name {
     NSString *documents = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
     NSString *dir = [[documents stringByAppendingPathComponent:@"DYYY"] stringByAppendingPathComponent:@"logs"];
@@ -103,6 +130,8 @@ static const NSUInteger kDYYYRuntimeLogMaxBackups = 2;
         return;
     }
 
+    // 导出前先清理过期日志（3 天前的运行日志与导出副本）
+    [self cleanupStaleLogs];
     [self rotateRuntimeLogIfNeeded];
 
     NSFileManager *fileManager = [NSFileManager defaultManager];
