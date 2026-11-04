@@ -7788,6 +7788,83 @@ static NSHashTable *processedParentViews = nil;
 
 %end
 
+// ===== 保存他人头像（40.9 重写版）=====
+// 背景：抖音 40.9 删除了头像预览页的长按保存入口（原生实测无反应），
+// 旧 hook（shouldShowSaveAvatarItem / allowsAvatarDownload 等）永远等不到调用。
+// 因此不再复活原生功能，改为 DYYY 自行实现：
+//   在头像预览页加大拇指长按手势 → 取头像原图 URL → 下载 → 存相册。
+// 开关沿用 DYYYEnableSaveAvatar（设置页「启用保存他人头像」）。
+static char kDYYYAvatarSaveGestureKey;
+
+static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
+    if (!avatarVC) return;
+
+    // 取头像 URL：优先 avatarImageURL 属性，回退 user.avatarMedium.originURLList
+    NSURL *imageURL = nil;
+    @try {
+        if ([avatarVC respondsToSelector:NSSelectorFromString(@"avatarImageURL")]) {
+            NSURL *direct = [(AWEProfileAvatarViewController *)avatarVC avatarImageURL];
+            if ([direct isKindOfClass:[NSURL class]]) imageURL = direct;
+        }
+        if (!imageURL && [avatarVC respondsToSelector:NSSelectorFromString(@"user")]) {
+            id userModel = [(AWEProfileAvatarViewController *)avatarVC user];
+            if ([userModel isKindOfClass:NSClassFromString(@"AWEUserModel")]) {
+                AWEURLModel *urlModel = [(AWEUserModel *)userModel avatarMedium];
+                NSString *best = urlModel.originURLList.firstObject;
+                if (best.length > 0) imageURL = [NSURL URLWithString:best];
+            }
+        }
+    } @catch (NSException *exception) {
+        imageURL = nil;
+    }
+
+    if (!imageURL) {
+        [DYYYToast showSuccessToastWithMessage:@"未取到头像地址"];
+        return;
+    }
+
+    // 下载 + 保存走统一通道（DYYYManager 内部处理并发、去重与授权）
+    [DYYYManager downloadMedia:imageURL
+                      mediaType:MediaTypeImage
+                          audio:nil
+                     completion:^(BOOL success) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [DYYYToast showSuccessToastWithMessage:success ? @"头像已保存到相册" : @"保存失败，请检查网络与相册权限"];
+      });
+    }];
+}
+
+%hook AWEProfileAvatarViewController
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    if (!DYYYGetBool(@"DYYYEnableSaveAvatar")) return;
+
+    // 挂长按手势（只挂一次）
+    if (!objc_getAssociatedObject(self, &kDYYYAvatarSaveGestureKey)) {
+        UILongPressGestureRecognizer *gesture =
+            [[UILongPressGestureRecognizer alloc] initWithTarget:self
+                                                          action:@selector(dyyy_handleAvatarSaveLongPress:)];
+        gesture.minimumPressDuration = 0.6;
+        gesture.numberOfTouchesRequired = 1;
+        objc_setAssociatedObject(self, &kDYYYAvatarSaveGestureKey, gesture, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [self.view addGestureRecognizer:gesture];
+    }
+}
+
+%new
+- (void)dyyy_handleAvatarSaveLongPress:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state != UIGestureRecognizerStateBegan) return;
+    DYYYPerformAvatarSave((UIViewController *)self);
+}
+
+%new
+- (void)dyyy_saveAvatarTapped {
+    DYYYPerformAvatarSave((UIViewController *)self);
+}
+
+%end
+
 // 隐藏点击进入直播间
 %hook AWELiveFeedStatusLabel
 - (void)layoutSubviews {

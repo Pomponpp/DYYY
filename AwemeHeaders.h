@@ -773,6 +773,8 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (BOOL)p_shouldShowFunctionWithType:(long long)type;
 - (id)p_collectionViewCellWithType:(long long)type;
 - (void)updateActionViewWithType:(long long)type status:(BOOL)status animated:(BOOL)animated;
+@property(nonatomic, copy) NSURL *avatarImageURL;
+@property(nonatomic, strong) id user;
 @end
 @interface AWEProfileTaskCardStyleListItemCell : UIView
 @end
