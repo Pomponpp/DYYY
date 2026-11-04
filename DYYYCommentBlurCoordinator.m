@@ -184,7 +184,10 @@
 }
 + (void)layoutController:(UIViewController *)controller {
     if (![NSThread isMainThread]) return;
+    // 40.9：Swift 类点号名已不可查，必须回退 mangled 名，否则整条毛玻璃清理逻辑直接跳过
+    // （表现为评论列表部分 cell 保留不透明背景、透出视频画面）。
     Class innerClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController");
+    if (!innerClass) innerClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
     if (!innerClass) return;
     if ([controller isKindOfClass:innerClass]) {
         [self updatePanel:controller];

@@ -1,11 +1,12 @@
 #import "DYYYSettingViewController.h"
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import "AwemeHeaders.h"
 #import "DYYYConstants.h"
 #import "DYYYFloatClearButton.h"
 #import "DYYYFloatSpeedButton.h"
 
-typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYYYSettingItemTypeTextField, DYYYSettingItemTypePicker };
+typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYYYSettingItemTypeTextField, DYYYSettingItemTypePicker, DYYYSettingItemTypeAction };
 
 @interface DYYYSettingItem : NSObject
 
@@ -391,12 +392,17 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"清屏隐藏滑条" key:@"DYYYHideSlider" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"清屏隐藏底栏" key:@"DYYYHideTabBar" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"清屏隐藏倍速按钮" key:@"DYYYHideSpeed" type:DYYYSettingItemTypeSwitch]
+        ],
+        @[
+            [DYYYSettingItem itemWithTitle:@"自检报告" key:@"DYYIShowAuditReport" type:DYYYSettingItemTypeAction],
+            [DYYYSettingItem itemWithTitle:@"导出运行日志" key:@"DYYIExportRuntimeLog" type:DYYYSettingItemTypeAction],
+            [DYYYSettingItem itemWithTitle:@"头像保存探针" key:@"DYYYEnableAvatarProbe" type:DYYYSettingItemTypeSwitch]
         ]
     ];
 }
 
 - (void)setupSectionTitles {
-    self.sectionTitles = [@[ @"基本设置", @"界面设置", @"隐藏设置", @"顶栏移除", @"隐藏面板", @"面板设置", @"功能设置", @"悬浮按钮" ] mutableCopy];
+    self.sectionTitles = [@[ @"基本设置", @"界面设置", @"隐藏设置", @"顶栏移除", @"隐藏面板", @"面板设置", @"功能设置", @"悬浮按钮", @"诊断工具" ] mutableCopy];
 }
 
 - (void)setupFooterLabel {
@@ -561,6 +567,8 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             return @"功能设置";
         case 7:
             return @"悬浮按钮";
+        case 8:
+            return @"诊断工具";
         default:
             return @"";
     }
@@ -685,6 +693,8 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
         ]];
 
         cell.accessoryView = containerView;
+    } else if (item.type == DYYYSettingItemTypeAction) {
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     }
 
     return cell;
@@ -701,6 +711,12 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
     DYYYSettingItem *item = self.settingSections[indexPath.section][indexPath.row];
     if (item.type == DYYYSettingItemTypePicker) {
         [self showUniversalPickerForIndexPath:indexPath];
+    } else if (item.type == DYYYSettingItemTypeAction) {
+        if ([item.key isEqualToString:@"DYYIShowAuditReport"]) {
+            [DYYYDiagnostics showAuditReportFromViewController:self];
+        } else if ([item.key isEqualToString:@"DYYIExportRuntimeLog"]) {
+            [DYYYDiagnostics exportRuntimeLogFromViewController:self];
+        }
     }
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
 }

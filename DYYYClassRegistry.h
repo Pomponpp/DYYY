@@ -16,8 +16,11 @@ typedef NS_ENUM(NSInteger, DYYYClassAuditStatus) {
 + (DYYYClassAuditStatus)auditClass:(NSString *)className
                    outResolvedName:(NSString * _Nullable * _Nullable)outResolvedName;
 
-// 启动自检：探测注册表内全部类，缺失项经 DYYYNSLog 汇总输出。返回缺失数量。
+// 启动自检：探测注册表内全部类，缺失的输出一行汇总日志。返回缺失数量。
 + (NSInteger)runStartupAudit;
+
+// 可读自检报告（中文，逐条列出关键类状态与对应功能），结果缓存。
++ (NSString *)auditReportText;
 
 // 供 Hook 代码使用的安全取类：先点号名，再 mangled 名。
 + (Class _Nullable)resolveSwiftClassDotName:(const char *)dotName

@@ -32,20 +32,6 @@
 static const void *kLabelColorStateKey = &kLabelColorStateKey;
 static const NSTimeInterval kDYYYUtilsDefaultFrameDelay = 0.1f;
 
-static NSString *DYYYRuntimeLogFilePath(void) {
-    static NSString *logPath = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-      NSString *logsDirectory = [NSTemporaryDirectory() stringByAppendingPathComponent:@"DYYYLogs"];
-      [[NSFileManager defaultManager] createDirectoryAtPath:logsDirectory
-                                withIntermediateDirectories:YES
-                                                 attributes:nil
-                                                      error:nil];
-      logPath = [logsDirectory stringByAppendingPathComponent:@"runtime.log"];
-    });
-    return logPath;
-}
-
 void DYYYNSLog(NSString *format, ...) {
     if (format.length == 0) {
         return;
@@ -73,38 +59,9 @@ void DYYYNSLog(NSString *format, ...) {
         fflush(stderr);
     }
 
-    static dispatch_queue_t logQueue = nil;
-    static dispatch_once_t queueOnceToken;
-    dispatch_once(&queueOnceToken, ^{
-      logQueue = dispatch_queue_create("com.dyyy.runtime-log.queue", DISPATCH_QUEUE_SERIAL);
-    });
-
-    dispatch_async(logQueue, ^{
-      @autoreleasepool {
-          NSString *line = [NSString stringWithFormat:@"[%@][pid:%d] %@\n", [NSDate date], getpid(), message];
-          NSData *lineData = [line dataUsingEncoding:NSUTF8StringEncoding];
-          if (lineData.length == 0) {
-              return;
-          }
-
-          NSString *logPath = DYYYRuntimeLogFilePath();
-          NSFileManager *fileManager = [NSFileManager defaultManager];
-          if (![fileManager fileExistsAtPath:logPath]) {
-              [fileManager createFileAtPath:logPath contents:nil attributes:nil];
-          }
-
-          NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logPath];
-          if (!fileHandle) {
-              return;
-          }
-          @try {
-              [fileHandle seekToEndOfFile];
-              [fileHandle writeData:lineData];
-          } @catch (NSException *exception) {
-          }
-          [fileHandle closeFile];
-      }
-    });
+    // 统一经 DYYYDiagnostics 串行写入（带时间戳、4MB 轮转），供设置页导出。
+    NSString *line = [NSString stringWithFormat:@"[%@][pid:%d] %@\n", [NSDate date], getpid(), message];
+    [DYYYDiagnostics appendRuntimeLogLine:line];
 }
 
 static inline CGFloat DYYYUtilsNormalizedDelay(CGFloat delay) {

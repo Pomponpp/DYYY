@@ -39,6 +39,18 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 };
 
 @class AWEPlayInteractionContext;
+
+// DYYY 诊断：运行日志导出到"文件" + 可读自检报告面板
+@interface DYYYDiagnostics : NSObject
+// 运行日志文件路径（带大小轮转）。
++ (NSString *)runtimeLogPath;
+// 追加一行运行日志（内部串行队列 + 4MB 轮转）。
++ (void)appendRuntimeLogLine:(NSString *)line;
+// 把运行日志拷贝到 Documents/DYYY/logs 并弹出分享面板（可"存储到文件"）。
++ (void)exportRuntimeLogFromViewController:(UIViewController *)presenter;
+// 弹出可读自检报告面板（中文，逐条列出关键类状态与对应功能），附"复制报告"。
++ (void)showAuditReportFromViewController:(UIViewController *)presenter;
+@end
 @class _TtC33AWECommentPanelContainerSwiftImpl31CommentViewControllerStateModel;
 
 @interface UIView (DYYYGlobalAlpha)
@@ -749,6 +761,8 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEFamiliarSkylightBubbleView : UIView
 @end
 @interface AWEProfileAvatarFunctionManager : NSObject
+- (BOOL)shouldShowSaveAvatarItem;
+- (BOOL)allowsAvatarDownload;
 @end
 @interface AWEProfileTaskCardStyleListItemCell : UIView
 @end

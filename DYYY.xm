@@ -4732,6 +4732,14 @@ static BOOL isGestureActive = NO;
     }
     return %orig;
 }
+
+// 40.9：仅放行菜单项不够，下载本身还被 allowsAvatarDownload 拦截（表现为菜单可见但点了没反应）。
+- (BOOL)allowsAvatarDownload {
+    if (DYYYGetBool(@"DYYYEnableSaveAvatar")) {
+        return YES;
+    }
+    return %orig;
+}
 %end
 
 %hook AWECommentMediaDownloadConfigLivePhoto
