@@ -12,6 +12,7 @@
 
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <dlfcn.h>
 #import <string.h>
 
 #import "AwemeHeaders.h"
@@ -95,7 +96,7 @@ static void DYYYProbeDumpClassMethods(NSMutableString *out, Class cls, BOOL clas
 
 static void DYYYProbeDumpAvatarInventory(void) {
     @autoreleasepool {
-        int classCount = 0;
+        unsigned int classCount = 0;
         Class *classes = objc_copyClassList(&classCount);
         if (!classes) {
             return;
@@ -107,7 +108,7 @@ static void DYYYProbeDumpAvatarInventory(void) {
         NSUInteger emittedLines = 0;
         const NSUInteger maxLines = 400;
 
-        for (int index = 0; index < classCount && emittedLines < maxLines; index++) {
+        for (unsigned int index = 0; index < classCount && emittedLines < maxLines; index++) {
             Class cls = classes[index];
             if (!cls || !DYYYProbeNameMatches(cls)) {
                 continue;
