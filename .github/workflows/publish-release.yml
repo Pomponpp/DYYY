@@ -161,12 +161,14 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           version="$RELEASE_VERSION"
-          suffix="#${BUILD_RUN_NUMBER}"
-          echo "Renaming release assets to carry ${suffix} (matching tag DYYY_${version}${suffix})"
+          # GitHub Release 上传接口会过滤文件名里的 '#'，故资源名用 '-N' 后缀，
+          # 与 tag DYYY_<version>#N 一一对应。
+          suffix="-${BUILD_RUN_NUMBER}"
+          echo "Renaming release assets with suffix ${suffix} (tag is DYYY_${version}#${BUILD_RUN_NUMBER})"
           for file in packages/*.deb; do
             [ -f "$file" ] || continue
             base=$(basename "$file")
-            # com.huami.dyyy_<version>_<arch>-<scheme>.deb -> 版本段追加 #N
+            # com.huami.dyyy_<version>_<arch>-<scheme>.deb -> 版本段追加 -N
             if [[ "$base" == *"${version}_"* ]]; then
               renamed="${base/${version}_/${version}${suffix}_}"
               if [ "$renamed" != "$base" ]; then
@@ -178,7 +180,7 @@ jobs:
           for file in packages/*.dylib; do
             [ -f "$file" ] || continue
             base=$(basename "$file")
-            # DYYY_<version>.dylib -> DYYY_<version>#N.dylib
+            # DYYY_<version>.dylib -> DYYY_<version>-N.dylib
             if [[ "$base" == "DYYY_${version}.dylib" ]]; then
               renamed="DYYY_${version}${suffix}.dylib"
               mv "$file" "packages/$renamed"
