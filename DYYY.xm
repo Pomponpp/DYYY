@@ -1665,8 +1665,14 @@ static void DYYYApplySDRDynamicRangeToImageView(UIImageView *imageView) {
         return;
     }
 
+    // iOS 17 的 preferredImageDynamicRange 在 16.5 SDK 头文件中不存在，
+    // 直接编译会报符号缺失。改用运行时 setter（KVC 兼容路径），
+    // 行为不变：仅在 iOS 17+ 实际设置。
     if (@available(iOS 17.0, *)) {
-        imageView.preferredImageDynamicRange = UIImageDynamicRangeStandard;
+        SEL sel = NSSelectorFromString(@"setPreferredImageDynamicRange:");
+        if ([imageView respondsToSelector:sel]) {
+            ((void (*)(id, SEL, long long))objc_msgSend)(imageView, sel, 0 /* standard */);
+        }
     }
 }
 
