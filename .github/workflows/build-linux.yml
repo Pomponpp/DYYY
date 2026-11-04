@@ -78,7 +78,9 @@ jobs:
           export THEOS="$GITHUB_WORKSPACE/theos"
           export PATH="$THEOS/bin:$PATH"
           rm -rf packages && mkdir -p packages
-          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j$(nproc)
+          # Linux 交叉工具链（clang-11，非 Apple ABI）编不了 arm64e
+          # （链接器拒收 ABI 不匹配的 object）。巨魔注入 arm64 完全可用。
+          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 ARCHS=arm64 -j$(nproc)
           for f in packages/*.deb; do
             [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
           done
