@@ -7216,34 +7216,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 - (void)viewDidLayoutSubviews {
-    // 全屏下详情表高与窗口对齐（原生表被扣了底栏 83pt，与推荐页行高不一致，
-    // 切换页面时因行高/表高差异产生位移帧）。参考 DYKiller 详情表处理思路。
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        UITableView *table = nil;
-        if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
-            @try {
-                table = [(AWEAwemeDetailTableViewController *)self tableView];
-            } @catch (__unused NSException *e) {
-                table = nil;
-            }
-        }
-        if (table.window &&
-            fabs(CGRectGetHeight(table.frame) - CGRectGetHeight(table.bounds)) < 0.5 &&
-            fabs(CGRectGetHeight(table.bounds) - CGRectGetHeight(table.window.bounds)) > 0.5) {
-            CGRect frame = table.frame;
-            frame.size.height = CGRectGetHeight(table.window.bounds);
-            table.frame = frame;
-        }
-    }
+    // 40.9 拔河根修：停用「表高对齐窗口」。表高 926 与抖音内部认知
+    // （表高 = 窗口 - 底栏 83）互相矛盾是 cell 高度 843↔926 拔河的另一半
+    // 来源。表高也交还原生，全屏视觉由媒体容器在 cell 内撑满补偿。
     %orig;
-    // 行高统一交给两条已验证的路径：
-    //   1) 行高 hook（fixedCellHeight / cellHeightAtIndex: / heightForRow）让
-    //      新建/重建的 cell 直接以窗口高建行
-    //   2) reconcileDetailPaging（下方）在检测到行高与表视口不一致时，
-    //      用原生 beginUpdates/endUpdates 刷新并恢复分页位置
-    // 不要在这里遍历 visibleCells 强改 cell.frame：播放器 Metal 层会因
-    // frame 抖动停止渲染（画面不动、弹幕正常），且行高缓存与实际 frame
-    // 失配会让 reconcile 每帧空转，产生滑动卡顿。
     [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
 
@@ -7816,63 +7792,19 @@ static NSHashTable *processedParentViews = nil;
 %end
 
 // ===== 详情页行高统一（参考 DYKiller DKVideoDetailTable 思路）=====
-// 背景：详情页（AWEAwemeDetailTableView）原生行高 843（扣了底栏 83），
-// 推荐页行高 926。从详情页切回推荐页（或反向）时，媒体容器按窗口高 926
-// 计算，而详情页 cell 仍是 843，两者错位造成"位移"。
-// 做法：与 DYKiller 相同，把详情页行高统一为表视口高度。
+// 40.9 实测（#14 日志）：详情页 cell 高度在一秒内 843↔926 交替 46 次，
+// 用户感知为"上一页与下一页拔河"。根因：DYYY 行高 hook 返回窗口高(926)
+// 与抖音内部布局（窗口高 - 底栏 83 = 843）每帧互斥写入，Auto Layout 与
+// 内部缓存持续把 cell 压回 843，形成拉锯。
+// 结论：对抗式写入无法获胜（内部写入路径不经过行高询问点），
+// 改为停止对抗——行高完全交还抖音原生（843），全屏视觉由
+// DYYYFullscreenCoordinator 的容器撑满补偿（容器在 cell 内铺满窗口，
+// cell 与窗口的 83pt 差由下一页 cell 顶上来遮挡，与原生观感一致）。
+// 这与 DYKiller「HUD 钉位回原高」的哲学一致：不改抖音的布局，只钉自己的视图。
 static const CGFloat kDYYYDetailHeightTolerance = 0.5;
 
-static double DYYYDetailRowHeight(UITableView *table, double nativeHeight) {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
-    if (!isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
-    CGFloat target = CGRectGetHeight(table.bounds);
-    if (target <= 0 || fabs(nativeHeight - target) <= kDYYYDetailHeightTolerance) return nativeHeight;
-    // 只修正"被底栏压缩过的整页行高"（native = 窗口高 - 底栏），设备无关：
-    // 用 bottomOccupiedHeight 反推原生值，而不是硬编码 843/926（换机型即错）。
-    static CGFloat cachedNativeFullHeight = 0;
-    if (cachedNativeFullHeight <= 0) {
-        cachedNativeFullHeight = target;
-    }
-    CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
-    CGFloat nativeFull = target + occupied;
-    if (fabs(nativeHeight - nativeFull) > kDYYYDetailHeightTolerance) return nativeHeight;
-    return target;
-}
-
-%hook AWEAwemeDetailTableViewController
-
-- (double)fixedCellHeight {
-    double nativeHeight = %orig;
-    UITableView *table = nil;
-    if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
-        @try {
-            table = [(AWEAwemeDetailTableViewController *)self tableView];
-        } @catch (__unused NSException *e) {
-            table = nil;
-        }
-    }
-    return table ? DYYYDetailRowHeight(table, nativeHeight) : nativeHeight;
-}
-
-- (double)cellHeightAtIndex:(long long)index {
-    double nativeHeight = %orig;
-    UITableView *table = nil;
-    if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
-        @try {
-            table = [(AWEAwemeDetailTableViewController *)self tableView];
-        } @catch (__unused NSException *e) {
-            table = nil;
-        }
-    }
-    return table ? DYYYDetailRowHeight(table, nativeHeight) : nativeHeight;
-}
-
-- (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    double nativeHeight = %orig;
-    return DYYYDetailRowHeight(table, nativeHeight);
-}
-
-%end
+// 40.9 拔河根修：原「详情页行高统一」三 hook 已移除——行高交还原生，
+// 全屏视觉由容器撑满补偿（说明见上方注释块）。
 // 背景：抖音 40.9 删除了头像预览页的长按保存入口（原生实测无反应），
 // 旧 hook（shouldShowSaveAvatarItem / allowsAvatarDownload 等）永远等不到调用。
 // 因此不再复活原生功能，改为 DYYY 自行实现：
