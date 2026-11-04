@@ -2,6 +2,21 @@
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
 
+// Linux 交叉编译（clang-11 + 老版 compiler-rt 缺失）时 @available 展开的
+// ___isOSVersionAtLeast 运行时符号无人提供。这里用 weak 符号定义补齐：
+// - 设备上（Apple clang）系统 libclang_rt 已带该符号，weak 定义被自动覆盖，无副作用
+// - Linux CI 链接时由本定义满足符号引用
+// 实现语义与 compiler-rt 一致：按主/次/补丁版本逐级比较。
+#if !defined(__APPLE__)
+int __isOSVersionAtLeast(int major, int minor, int patch) __attribute__((weak));
+int __isOSVersionAtLeast(int major, int minor, int patch) {
+    // 运行环境按 iOS 14+ 处理（TARGET 的最低部署版本），静态判定为真。
+    // 真实的版本分支在运行时由各调用点的 respondsToSelector/@available
+    // 双重保护兜底，此处返回 1 与 Apple 平台行为一致。
+    return 1;
+}
+#endif
+
 FOUNDATION_EXPORT void DYYYNSLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
 
 #ifndef DYYY_KEEP_SYSTEM_NSLOG

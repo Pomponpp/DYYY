@@ -47,10 +47,6 @@ DYYY_FILES += DYYYProgressUnderlineFix.xm
 DYYY_FILES += DYYYProbe.xm
 DYYY_CFLAGS = -fobjc-arc -w
 DYYY_LDFLAGS = -weak_framework AVFAudio
-# Linux 交叉编译（clang-11）：@available 展开需要 clang 运行时符号
-ifneq ($(wildcard $(THEOS)/toolchain/linux/iphone/bin/clang),)
-    DYYY_LDFLAGS += -rtlib=compiler-rt -unwindlib=none
-endif
 DYYY_FRAMEWORKS = CoreAudio
 CXXFLAGS += -std=c++11
 CCFLAGS += -std=c++11
