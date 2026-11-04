@@ -769,6 +769,14 @@
     UIView *pager = [self pagingViewForCell:cell];
     if (!pager || pager.window != cell.window) return NO;
 
+    // 横向偏移保护：#10 日志显示精选页等横向 feed 的 cell 会出现 X=-128 的
+    // 非对齐状态，这类页面不参与纵向撑满（其视频由原生逻辑自行布局）。
+    CGRect cellWindowRect = [cell convertRect:cell.bounds toView:cell.window];
+    if (fabs(CGRectGetMinX(cellWindowRect)) > 1.0 ||
+        fabs(CGRectGetWidth(cellWindowRect) - CGRectGetWidth(cell.window.bounds)) > 1.0) {
+        return NO;
+    }
+
     BOOL isCurrent = NO;
     if ([pager isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)pager;
@@ -877,17 +885,9 @@
             host.frame = target;
             state.applying = NO;
         }
-
-        // 关键：容器撑满后必须把承载它的 cell 也撑到同一高度，
-        // 否则容器会溢出 cell 边界、盖到相邻页上，看起来就是"两个视频叠在一起"。
-        UIView *hostCell = [self cellForPlayer:host owner:controller];
-        if (hostCell && [hostCell isKindOfClass:[UITableViewCell class]]) {
-            CGRect cellFrame = hostCell.frame;
-            if (fabs(CGRectGetHeight(cellFrame) - CGRectGetHeight(target)) > 0.5) {
-                cellFrame.size.height = CGRectGetHeight(target);
-                hostCell.frame = cellFrame;
-            }
-        }
+        // 注意：不要改 cell 的高度。实测（#10 日志）显示同步撑满 cell 会与
+        // 抖音原生布局冲突：cell 高度在 926/843 间跳动、表格横向偏移 -128，
+        // 造成整页错位。容器本身在 cell 内铺满即可，cell 尺寸归抖音管。
     }
 }
 
