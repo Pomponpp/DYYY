@@ -39,48 +39,24 @@ jobs:
       - name: Install SDK
         run: |
           set -e
-          SDK_DIR="$GITHUB_WORKSPACE/theos/sdks"
-          mkdir -p "$SDK_DIR"
-          # 缓存里可能只有残缺目录（无 SDK），必须按"有没有 .sdk"判断而非目录非空
-          if [ -z "$(find "$SDK_DIR" -maxdepth 1 -type d -name "*.sdk" 2>/dev/null)" ]; then
-            rm -rf "$SDK_DIR" && mkdir -p "$SDK_DIR"
-            curl -fsSL -o /tmp/sdks.zip https://github.com/theos/sdks/archive/refs/heads/master.zip
-            rm -rf /tmp/sdks && mkdir -p /tmp/sdks
-            unzip -q /tmp/sdks.zip -d /tmp/sdks
-            FOUND=$(find /tmp/sdks -maxdepth 3 -type d -name "iPhoneOS*.sdk" | head -1)
-            if [ -n "$FOUND" ]; then
-              mv "$FOUND" "$SDK_DIR/"
-            else
-              echo "目录结构异常，列出内容："
-              find /tmp/sdks -maxdepth 3 | head -15
-              exit 1
-            fi
-          fi
-          ls "$SDK_DIR"
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          export PATH="$THEOS/bin:$PATH"
+          chmod +x "$THEOS/bin/install-sdk"
+          # 官方脚本安装（latest = iPhoneOS 最新 + tvOS）
+          "$THEOS/bin/install-sdk" latest
+          ls "$THEOS/sdks" | head -6
 
       - name: Install toolchain
         run: |
           set -e
-          TC="$GITHUB_WORKSPACE/theos/toolchain"
-          # theos 期望 toolchain/linux/iphone/bin/clang
-          if [ ! -f "$TC/linux/iphone/bin/clang" ]; then
-            rm -rf "$TC" && mkdir -p "$TC" /tmp/tc
-            curl -fsSL -o /tmp/tc.tar.xz https://github.com/theos/toolchain/releases/download/2024.05.24/toolchain_linux_x86_64.tar.xz
-            tar -xf /tmp/tc.tar.xz -C /tmp/tc
-            # tar 解包结构可能是 toolchain/linux/iphone 或直接 linux/iphone
-            if [ -d "/tmp/tc/toolchain/linux/iphone" ]; then
-              mkdir -p "$TC"
-              cp -a /tmp/tc/toolchain/* "$TC/"
-            elif [ -d "/tmp/tc/linux/iphone" ]; then
-              mkdir -p "$TC"
-              cp -a /tmp/tc/linux "$TC/"
-            else
-              mkdir -p "$TC/linux/iphone"
-              cp -a /tmp/tc/* "$TC/linux/iphone/"
-            fi
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          # 官方安装脚本指定的 Linux toolchain 源（L1ghtmann/llvm-project）
+          if [ ! -f "$THEOS/toolchain/linux/iphone/bin/clang" ]; then
+            rm -rf "$THEOS/toolchain" && mkdir -p "$THEOS/toolchain"
+            curl -sL https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz | tar -xJvf - -C "$THEOS/toolchain/"
           fi
-          echo "=== clang 确认 ==="; ls "$TC/linux/iphone/bin/" | head -6
-          test -f "$TC/linux/iphone/bin/clang" && echo "TOOLCHAIN OK"
+          echo "=== clang 确认 ==="; ls "$THEOS/toolchain/linux/iphone/bin/" | head -6
+          test -f "$THEOS/toolchain/linux/iphone/bin/clang" && echo "TOOLCHAIN OK"
 
       - name: Install dependencies
         run: |
