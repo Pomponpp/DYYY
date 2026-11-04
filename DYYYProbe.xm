@@ -94,6 +94,43 @@ static void DYYYProbeDumpClassMethods(NSMutableString *out, Class cls, BOOL clas
     free(methods);
 }
 
+// 无条件 dump 某个类的全部方法（用于定位头像预览页的保存入口）
+static void DYYYProbeDumpClassFull(Class cls) {
+    if (!cls) {
+        return;
+    }
+    NSMutableString *out = [NSMutableString string];
+    const char *name = class_getName(cls);
+    Class superClass = class_getSuperclass(cls);
+    [out appendFormat:@"[probe] ===== 全量方法 dump: %s (super: %s) =====\n", name,
+                      superClass ? class_getName(superClass) : "(root)"];
+
+    unsigned int count = 0;
+    Method *methods = class_copyMethodList(cls, &count);
+    if (methods) {
+        for (unsigned int i = 0; i < count && i < 300; i++) {
+            SEL sel = method_getName(methods[i]);
+            const char *types = method_getTypeEncoding(methods[i]);
+            [out appendFormat:@"[probe]   - %@  types=%s\n", NSStringFromSelector(sel), types ?: "?"];
+        }
+        free(methods);
+    }
+
+    Class meta = object_getClass(cls);
+    unsigned int ccount = 0;
+    Method *cmethods = class_copyMethodList(meta, &ccount);
+    if (cmethods) {
+        for (unsigned int i = 0; i < ccount && i < 100; i++) {
+            SEL sel = method_getName(cmethods[i]);
+            [out appendFormat:@"[probe]   + %@\n", NSStringFromSelector(sel)];
+        }
+        free(cmethods);
+    }
+
+    [out appendFormat:@"[probe] ===== dump 结束: %s =====\n", name];
+    DYYYProbeLog(@"%@", out);
+}
+
 static void DYYYProbeDumpAvatarInventory(void) {
     @autoreleasepool {
         unsigned int classCount = 0;
@@ -223,7 +260,7 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
 
 %end
 
-// 3) 页面弹出：确认头像预览页的真实控制器类
+// 3) 页面弹出：确认头像预览页，并立即 dump 该页全部方法（保存按钮就在这一页）
 %hook UIViewController
 
 - (void)presentViewController:(UIViewController *)viewControllerToPresent
@@ -234,6 +271,7 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
         const char *name = class_getName(presentedClass);
         if (name && (strstr(name, "Avatar") || strstr(name, "Preview") || strstr(name, "Head"))) {
             DYYYProbeLog(@"弹出页面 %s（由 %s 发起）", name, class_getName(self.class));
+            DYYYProbeDumpClassFull(presentedClass);
         }
     }
     %orig;
@@ -241,14 +279,16 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
 
 %end
 
-// 4) 控制器 push：抓头像预览页（主页头像通常走 push 而非 present）
+// 4) 控制器 push：抓头像预览页（主页大头像走 push），并 dump 全部方法
 %hook UINavigationController
 
 - (void)pushViewController:(UIViewController *)viewController animated:(BOOL)animated {
     if (DYYYProbeEnabled() && viewController) {
-        const char *name = class_getName([viewController class]);
+        Class cls = [viewController class];
+        const char *name = class_getName(cls);
         if (name && (strstr(name, "Avatar") || strstr(name, "Preview") || strstr(name, "Head"))) {
             DYYYProbeLog(@"push 页面 %s", name);
+            DYYYProbeDumpClassFull(cls);
         }
     }
     %orig;
