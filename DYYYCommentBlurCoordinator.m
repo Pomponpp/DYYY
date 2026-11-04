@@ -114,10 +114,29 @@
     if (!state.panel || objc_getAssociatedObject(state.panel, @selector(updatePanel:)) != state || ![view isDescendantOfView:state.panel]) {
         state = nil;
         objc_setAssociatedObject(view, @selector(layoutListView:), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        // 40.9 评论面板嵌套层级比以前深（cell/collectionView/container 多层包裹），
+        // 16 层会够不到带状态的祖先，导致清理逻辑整条跳过、原生不透明底色残留，
+        // 表现为「一会黑块一会毛玻璃」。这里加深到 64 层。
         UIView *ancestor = view.superview;
-        for (NSUInteger depth = 0; ancestor && depth < 16; depth++, ancestor = ancestor.superview) {
+        for (NSUInteger depth = 0; ancestor && depth < 64; depth++, ancestor = ancestor.superview) {
             state = objc_getAssociatedObject(ancestor, @selector(updatePanel:));
             if (state) break;
+        }
+        // 兜底：视图树被临时摘下（scroll 复用瞬间）时，从窗口根视图向下找已注册面板。
+        if (!state) {
+            UIWindow *window = view.window;
+            if (window) {
+                NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:window];
+                for (NSUInteger index = 0; index < queue.count && index < 512; index++) {
+                    UIView *node = queue[index];
+                    DYYYCommentBlurState *candidate = objc_getAssociatedObject(node, @selector(updatePanel:));
+                    if (candidate && candidate.panel) {
+                        state = candidate;
+                        break;
+                    }
+                    [queue addObjectsFromArray:node.subviews];
+                }
+            }
         }
         if (state) objc_setAssociatedObject(view, @selector(layoutListView:), state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
