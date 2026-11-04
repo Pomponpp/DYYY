@@ -4,6 +4,25 @@
 #import <os/lock.h>
 #import <string.h>
 
+#if !defined(__APPLE__)
+// Linux 交叉编译（clang-11）时 @available 展开引用 compiler-rt 的
+// ___isOSVersionAtLeast，Linux 工具链不附带该库。此处提供强定义。
+// 语义：运行系统版本与调用方传入的部署目标比较（与 compiler-rt 一致）。
+// 真机端（Apple）此文件不参与编译，由系统 libclang_rt 提供，无冲突。
+int ___isOSVersionAtLeast(int major, int minor, int patch) {
+    static int cachedMajor = -1;
+    if (cachedMajor < 0) {
+        @autoreleasepool {
+            NSOperatingSystemVersion v = [[[NSProcessInfo alloc] init] operatingSystemVersion];
+            cachedMajor = (int)v.majorVersion;
+        }
+    }
+    if (cachedMajor > major) return 1;
+    if (cachedMajor < major) return 0;
+    return 1; // major 相等时系统版本 >= 部署目标
+}
+#endif
+
 static os_unfair_lock gDYYYConfigCacheLock = OS_UNFAIR_LOCK_INIT;
 static CFMutableDictionaryRef gDYYYConfigCacheDict = NULL;
 static BOOL gDYYYConfigCacheObserverInstalled = NO;
