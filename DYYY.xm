@@ -7236,30 +7236,16 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
         }
     }
     %orig;
-    // 40.9：行高 hook 是"按需调用"，复用池里已建好的 cell 不会重新问行高，
-    // 切页瞬间它们仍带原生 843 行高上屏，造成一帧位移。这里在布局完成后
-    // 主动把可见 cell 的高度统一刷到表视口高（对应 DYKiller 的
-    // "布局后补正"阶段）。
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        UITableView *table = nil;
-        if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
-            @try {
-                table = [(AWEAwemeDetailTableViewController *)self tableView];
-            } @catch (__unused NSException *e) {
-                table = nil;
-            }
-        }
-        CGFloat target = table.window ? CGRectGetHeight(table.window.bounds) : 0;
-        if (table.window && target > 0) {
-            for (UITableViewCell *cell in table.visibleCells) {
-                CGRect cellFrame = cell.frame;
-                if (fabs(CGRectGetHeight(cellFrame) - target) > 0.5) {
-                    cellFrame.size.height = target;
-                    cell.frame = cellFrame;
-                }
-            }
-        }
-    }
+    // 行高统一交给两条已验证的路径：
+    //   1) 行高 hook（fixedCellHeight / cellHeightAtIndex: / heightForRow）让
+    //      新建/重建的 cell 直接以窗口高建行
+    //   2) reconcileDetailPaging（下方）在检测到行高与表视口不一致时，
+    //      用原生 beginUpdates/endUpdates 刷新并恢复分页位置
+    // 不要在这里遍历 visibleCells 强改 cell.frame：播放器 Metal 层会因
+    // frame 抖动停止渲染（画面不动、弹幕正常），且行高缓存与实际 frame
+    // 失配会让 reconcile 每帧空转，产生滑动卡顿。
+    [DYYYFullscreenCoordinator reconcileDetailPaging:self];
+}
     [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
 
