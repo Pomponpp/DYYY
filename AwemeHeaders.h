@@ -12,10 +12,21 @@ FOUNDATION_EXPORT void DYYYNSLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2)
 #endif
 
 // 获取指定类型设置
-#define DYYYGetBool(key) [[NSUserDefaults standardUserDefaults] boolForKey:key]
-#define DYYYGetFloat(key) [[NSUserDefaults standardUserDefaults] floatForKey:key]
-#define DYYYGetInteger(key) [[NSUserDefaults standardUserDefaults] integerForKey:key]
-#define DYYYGetString(key) [[NSUserDefaults standardUserDefaults] stringForKey:key]
+// 40.9 优化：热路径（layoutSubviews/setFrame 等）高频读取 NSUserDefaults，
+// 统一改走 DYYYConfigCache：值缓存在内存，设置页变更经 NSUserDefaultsDidChangeNotification 失效。
+// 未命中缓存的键自动回退直读，行为与旧宏完全一致。
+@interface DYYYConfigCache : NSObject
++ (BOOL)boolForBoolKey:(NSString *)key;
++ (float)floatForKey:(NSString *)key;
++ (NSInteger)integerForKey:(NSString *)key;
++ (NSString *)stringForKey:(NSString *)key;
++ (void)invalidate;
+@end
+
+#define DYYYGetBool(key) [DYYYConfigCache boolForBoolKey:key]
+#define DYYYGetFloat(key) [DYYYConfigCache floatForKey:key]
+#define DYYYGetInteger(key) [DYYYConfigCache integerForKey:key]
+#define DYYYGetString(key) [DYYYConfigCache stringForKey:key]
 #define DYYY_IGNORE_GLOBAL_ALPHA_TAG 114514
 
 typedef NS_ENUM(NSInteger, MediaType) { MediaTypeVideo, MediaTypeImage, MediaTypeAudio, MediaTypeHeic };
@@ -332,8 +343,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)setType:(long long)arg0;
 @end
 
-@interface XIGDanmakuPlayerView : UIView
-@end
 @interface DDanmakuPlayerView : UIView
 @end
 
@@ -669,7 +678,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (AWECommentLongPressPanelContext *)commentPageContext;
 @end
 
-@interface _TtC21AWEIncentiveSwiftImpl29IncentivePendantContainerView : UIView
+@interface _TtC21AWEIncentiveSwiftImpl20PendantContainerView : UIView
 @end
 
 @interface AWECommentLongPressPanelSwiftImpl_CommentLongPressPanelReportElement : NSObject
@@ -736,9 +745,20 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, assign, getter=isHidden) BOOL hidden;
 @end
 
-@interface AFDSkylightCellBubble : UIView
-@property(nonatomic, strong, readonly) UIView *superview;
-@property(nonatomic, assign, getter=isHidden) BOOL hidden;
+// 抖音 40.9 适配：旧类改名/迁移后的继任类
+@interface AWEFamiliarSkylightBubbleView : UIView
+@end
+@interface AWEProfileAvatarFunctionManager : NSObject
+@end
+@interface AWEProfileTaskCardStyleListItemCell : UIView
+@end
+@interface AWEAwesomeSplashLiveCellAccessoryView : UIView
+@end
+@interface IESLLLivePurchaseAtmosphereView : UIView
+@end
+@interface AWEIMCommentShareTableViewCell : UITableViewCell
+@end
+@interface AWEProfilePublishGuideCollectionViewCell : UIView
 @end
 
 @interface LOTAnimationView : UIView
@@ -777,9 +797,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEProfileMixItemCollectionViewCell : UICollectionViewCell
-@end
-
-@interface AWEProfileTaskCardStyleListCollectionViewCell : UIView
 @end
 
 @interface AWEProfileUserDetailComponent : NSObject
@@ -1266,8 +1283,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 @interface IESLiveGameCPExplainCardContainerImpl : UIView
 @end
-@interface AWEPOILivePurchaseAtmosphereView : UIView
-@end
 @interface IESLiveHotMessageView : UIView
 @end
 @interface AWEHomePageBubbleLiveHeadLabelContentView : UIView
@@ -1313,7 +1328,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEAwemeHotSpotTableViewController : UIViewController
 - (BOOL)prefersStatusBarHidden;
 @end
-@interface AWEFullPageFeedNewContainerViewController : UIViewController
+@interface AWEFullPageFeedContainerViewController : UIViewController
 - (BOOL)prefersStatusBarHidden;
 @end
 @interface AFDPureModePageContainerViewController : UIViewController
@@ -1338,8 +1353,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)setVideoControllerPlaybackRate:(double)arg0;
 @end
 
-@interface AWEPlayInteractionElementMaskView : UIView
-@end
 @interface AWEGradientView : UIView
 @end
 @interface AWEHotSpotBlurView : UIView
@@ -1849,10 +1862,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)setEnablePlayHDR:(BOOL)enable;
 @end
 
-@interface AWEECOMIMAppSettingsService : NSObject
-+ (BOOL)enableVideoPreviewSupportHDR;
-@end
-
 @interface IESLivePlayerController : NSObject
 - (BOOL)isVideoSDR2HDRSupport;
 - (void)setEnableVideoSDR2HDR:(BOOL)enable callTrace:(id)callTrace;
@@ -1888,16 +1897,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @interface TVLSettingsManager : NSObject
 - (BOOL)enableMetalRenderHDR;
-@end
-
-@interface AWEFeedPauseVideoRelatedWordView : UIView
-@end
-
-@interface AWEFeedPauseRelatedWordComponent : NSObject
-@property(nonatomic, strong) AWEFeedPauseVideoRelatedWordView *relatedView;
-@property(nonatomic, strong) AWEAwemeModel *currentAweme;
-@property(nonatomic, assign) long long pauseContentNum;
-
 @end
 
 @interface YYAnimatedImageView : UIImageView

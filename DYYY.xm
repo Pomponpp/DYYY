@@ -34,6 +34,7 @@
 #import "DYYYFullscreenCoordinator.h"
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
+#import "DYYYClassRegistry.h"
 
 static CGFloat gStartY = 0.0;
 static CGFloat gStartVal = 0.0;
@@ -1143,13 +1144,8 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
     return models;
 }
 
-- (void)setBitrateRawData:(NSArray *)bitrateRawData {
-    if (DYYYShouldDisableAllHDR()) {
-        %orig(DYYYFilteredSDRRawBitrateData(bitrateRawData));
-        return;
-    }
-    %orig;
-}
+// 40.9 移除：AWEVideoModel 的 bitrateRawData setter 已不存在（属性只读化），
+// getter hook 保留，HDR 码率过滤走读取路径。
 
 - (NSArray *)bitrateRawData {
     NSArray *rawData = %orig;
@@ -1191,6 +1187,12 @@ static char kDYYYHDRStrippedAwemeModelKey;
 static char kDYYYHDRStrippedVideoModelKey;
 static char kDYYYHDROnlyAwemeModelKey;
 static char kDYYYHDROnlyVideoModelKey;
+
+// 抖音 40.9：Swift 类运行时注册名为 mangled（_TtC…），Module.Class 点号名不再可查。
+// 先按点号名取（兼容旧版本），失败再按 mangled 名取（兼容 40.9+）。统一实现见 DYYYClassRegistry。
+static Class DYYYResolveSwiftClass(const char *dotName, const char *mangledName) {
+    return [DYYYClassRegistry resolveSwiftClassDotName:dotName mangledName:mangledName];
+}
 
 static void DYYYMigrateCombinedHDRModeIfNeeded(void) {
     static dispatch_once_t onceToken;
@@ -2119,16 +2121,8 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook AWEECOMIMAppSettingsService
-
-+ (BOOL)enableVideoPreviewSupportHDR {
-    if (DYYYShouldDisableAllHDR()) {
-        return NO;
-    }
-    return %orig;
-}
-
-%end
+// 40.9 移除：AWEECOMIMAppSettingsService.enableVideoPreviewSupportHDR 方法已删除，
+// 空 hook 只会产生安装警告日志；商城私信预览的 HDR 由 AVPlayerItem/CALayer 等其余 hook 覆盖。
 
 %hook IESLiveAudienceHDRController
 
@@ -2625,10 +2619,20 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
         return;
     }
 
-    NSError *error = nil;
-    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"^(\\d{10,13})([\\s\\S]*)" options:0 error:&error];
-    
-    NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
+    // 40.9 优化：正则 static 化（原实现每次 setText 现场编译），首字符非数字快速排除。
+    unichar first = [text characterAtIndex:0];
+    if (first < '0' || first > '9') {
+        %orig(text);
+        return;
+    }
+
+    static NSRegularExpression *s_timestampRegex = nil;
+    static dispatch_once_t regexOnce;
+    dispatch_once(&regexOnce, ^{
+      s_timestampRegex = [NSRegularExpression regularExpressionWithPattern:@"^(\\d{10,13})([\\s\\S]*)" options:0 error:nil];
+    });
+
+    NSTextCheckingResult *match = [s_timestampRegex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
 
     if (match) {
         NSString *rawTs = [text substringWithRange:[match rangeAtIndex:1]];
@@ -2754,9 +2758,19 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
     NSString *plainText = [attributedText string];
 
-    NSError *error = nil;
-    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"^(\\d{10,13})" options:0 error:&error];
-    NSTextCheckingResult *match = [regex firstMatchInString:plainText options:0 range:NSMakeRange(0, plainText.length)];
+    // 40.9 优化：正则 static 化 + 首字符快速排除（原每次赋值现场编译正则）。
+    unichar firstChar = [plainText characterAtIndex:0];
+    if (firstChar < '0' || firstChar > '9') {
+        %orig(attributedText);
+        return;
+    }
+
+    static NSRegularExpression *s_attrTimestampRegex = nil;
+    static dispatch_once_t attrRegexOnce;
+    dispatch_once(&attrRegexOnce, ^{
+      s_attrTimestampRegex = [NSRegularExpression regularExpressionWithPattern:@"^(\\d{10,13})" options:0 error:nil];
+    });
+    NSTextCheckingResult *match = [s_attrTimestampRegex firstMatchInString:plainText options:0 range:NSMakeRange(0, plainText.length)];
 
     if (match) {
         NSString *rawTs = [plainText substringWithRange:[match rangeAtIndex:1]];
@@ -3168,26 +3182,6 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
         %orig(nil);
     } else {
         %orig(strokeColor);
-    }
-}
-
-%end
-
-%hook XIGDanmakuPlayerView
-
-- (id)initWithFrame:(CGRect)frame {
-    id orig = %orig;
-
-    ((UIView *)orig).tag = DYYY_IGNORE_GLOBAL_ALPHA_TAG;
-
-    return orig;
-}
-
-- (void)setAlpha:(CGFloat)alpha {
-    if (DYYYGetBool(@"DYYYCommentShowDanmaku") && alpha == 0.0) {
-        return;
-    } else {
-        %orig(alpha);
     }
 }
 
@@ -4730,7 +4724,7 @@ static BOOL isGestureActive = NO;
 %end
 
 // 强制启用保存他人头像
-%hook AFDProfileAvatarFunctionManager
+%hook AWEProfileAvatarFunctionManager
 - (BOOL)shouldShowSaveAvatarItem {
     BOOL shouldEnable = DYYYGetBool(@"DYYYEnableSaveAvatar");
     if (shouldEnable) {
@@ -4886,7 +4880,9 @@ static BOOL dyyyShouldUseLastStickerURL = NO;
             UIViewController *topVC = [DYYYUtils topView];
             
             // 获取 Ivar 定义的类和目标控制器类
-            Class ivarClass = NSClassFromString(@"AWECommentMediaFeedSwfitImpl.CommentMediaFeedCellViewController");
+            // 40.9: CommentMediaFeedCellViewController 点号名不可查，mangled 名回退
+            Class ivarClass = DYYYResolveSwiftClass("AWECommentMediaFeedSwfitImpl.CommentMediaFeedCellViewController",
+                                                    "_TtC28AWECommentMediaFeedSwfitImpl34CommentMediaFeedCellViewController");
             Class targetClass = NSClassFromString(@"AWECommentMediaFeedSwfitImpl.CommentMediaFeedCommonImageCellViewController");
             
             if (ivarClass && targetClass && topVC) {
@@ -5971,7 +5967,7 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 
 
 // 隐藏消息页顶栏头像气泡
-%hook AFDSkylightCellBubble
+%hook AWEFamiliarSkylightBubbleView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideAvatarBubble")) {
         [self removeFromSuperview];
@@ -6304,16 +6300,6 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
     }
 }
 
-%end
-
-%hook AWEPlayInteractionElementMaskView
-- (void)layoutSubviews {
-    if (DYYYGetBool(@"DYYYHideGradient")) {
-        self.hidden = YES;
-        return;
-    }
-    %orig;
-}
 %end
 
 %hook AWEGradientView
@@ -7204,7 +7190,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %end
 
 // 图文状态栏
-%hook AWEFullPageFeedNewContainerViewController
+%hook AWEFullPageFeedContainerViewController
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {
         return YES;
@@ -7213,7 +7199,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
         return YES;
     }
     if (class_getInstanceMethod([self class], @selector(prefersStatusBarHidden)) !=
-        class_getInstanceMethod([%c(AWEFullPageFeedNewContainerViewController) class], @selector(prefersStatusBarHidden))) {
+        class_getInstanceMethod([%c(AWEFullPageFeedContainerViewController) class], @selector(prefersStatusBarHidden))) {
         return %orig;
     }
     return NO;
@@ -7263,48 +7249,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %end
 
-
-// 隐藏暂停关键词
-%hook AWEFeedPauseRelatedWordComponent
-
-- (id)updateViewWithModel:(id)arg0 {
-    if (DYYYGetBool(@"DYYYHidePauseVideoRelatedWord")) {
-        return nil;
-    }
-    return %orig;
-}
-
-- (id)pauseContentWithModel:(id)arg0 {
-    if (DYYYGetBool(@"DYYYHidePauseVideoRelatedWord")) {
-        return nil;
-    }
-    return %orig;
-}
-
-- (id)recommendsWords {
-    if (DYYYGetBool(@"DYYYHidePauseVideoRelatedWord")) {
-        return nil;
-    }
-    return %orig;
-}
-
-- (void)showRelatedRecommendPanelControllerWithSelectedText:(id)arg0 {
-    if (DYYYGetBool(@"DYYYHidePauseVideoRelatedWord")) {
-        return;
-    }
-    %orig;
-}
-
-- (void)setupUI {
-    %orig;
-    if (DYYYGetBool(@"DYYYHidePauseVideoRelatedWord")) {
-        if (self.relatedView) {
-            self.relatedView.hidden = YES;
-        }
-    }
-}
-
-%end
 
 // 隐藏视频顶部搜索框、隐藏搜索框背景、应用全局透明
 %hook AWESearchEntranceView
@@ -7616,25 +7560,24 @@ static NSHashTable *processedParentViews = nil;
 }
 %end
 
-%hook AWEProfilePostEmptyPublishGuideCollectionViewCell
-
-- (void)didMoveToSuperview {
-    %orig;
-    if (DYYYGetBool(@"DYYYHidePostView")) {
-        if ([(UIView *)self superview]) {
-            [(UIView *)self setHidden:YES];
-        }
-    }
-}
-
-%end
-
-%hook AWEProfileTaskCardStyleListCollectionViewCell
+%hook AWEProfileTaskCardStyleListItemCell
 - (BOOL)shouldShowPublishGuide {
     if (DYYYGetBool(@"DYYYHidePostView")) {
         return NO;
     }
     return %orig;
+}
+%end
+
+// 40.9: 空主页发布引导单元格（替代已删除的 AWEProfilePostEmptyPublishGuideCollectionViewCell）
+%hook AWEProfilePublishGuideCollectionViewCell
+- (void)didMoveToSuperview {
+    %orig;
+    if (DYYYGetBool(@"DYYYHidePostView")) {
+        if ([self superview]) {
+            [self setHidden:YES];
+        }
+    }
 }
 %end
 
@@ -8090,7 +8033,7 @@ static NSHashTable *processedParentViews = nil;
 }
 %end
 
-%hook AWEPOILivePurchaseAtmosphereView
+%hook IESLLLivePurchaseAtmosphereView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveGoodsMsg") && self.superview) {
         self.superview.hidden = YES;
@@ -9437,15 +9380,13 @@ static NSHashTable *processedParentViews = nil;
 %end
 
 // 去除启动视频广告
-%hook AWEAwesomeSplashFeedCellOldAccessoryView
+%hook AWEAwesomeSplashLiveCellAccessoryView
 
-// 在方法入口处添加控制逻辑
 - (id)ddExtraView {
 	if (DYYYGetBool(@"DYYYNoAds")) {
-		return NULL; // 返回空视图
+		return NULL;
 	}
 
-	// 正常模式调用原始方法
 	return %orig;
 }
 
@@ -10030,10 +9971,8 @@ static NSHashTable *processedParentViews = nil;
     DYYYApplyAvatarFollowPromptSettingsWithRetry(self);
 }
 
-- (void)setIsCommentVCShowing:(BOOL)showing {
-    %orig(showing);
-    DYYYApplyAvatarFollowPromptSettingsWithRetry(self);
-}
+// 40.9 移除：AWEPlayInteractionViewController.setIsCommentVCShowing: 已不存在（Swift 属性合成名变更）。
+// 该 hook 仅做评论开关后的头像提示重试，同文件 performCommentAction 路径已覆盖，行为不丢失。
 
 - (void)onPlayer:(id)arg0 didDoubleClick:(id)arg1 {
     BOOL isPopupEnabled = DYYYGetBool(@"DYYYEnableDoubleTapMenu");
@@ -11022,8 +10961,37 @@ static Class tabBarButtonClass = nil;
     if (!DYYYGetBool(@"DYYYEnableCommentBlur"))
         return;
 
-    Class containerViewClass = NSClassFromString(@"AWECommentInputViewSwiftImpl.CommentInputContainerView");
-    NSArray<UIView *> *containerViews = [DYYYUtils findAllSubviewsOfClass:containerViewClass inContainer:self.view];
+    // 40.9 优化：全树遍历结果按控制器缓存，仅在缓存视图脱离视图树时重扫；
+    // 面板打开后结构稳定，逐帧全树 BFS 是主要浪费。
+    static char kDYYYCommentBlurScanKey;
+    NSDictionary *scanCache = objc_getAssociatedObject(self, &kDYYYCommentBlurScanKey);
+    NSArray<UIView *> *containerViews = nil;
+    NSArray<UIView *> *middleContainers = nil;
+    BOOL cacheValid = NO;
+    if (scanCache) {
+        containerViews = scanCache[@"containers"];
+        middleContainers = scanCache[@"middle"];
+        cacheValid = YES;
+        for (UIView *view in containerViews) {
+            if (!view.superview) { cacheValid = NO; break; }
+        }
+        if (cacheValid) {
+            for (UIView *view in middleContainers) {
+                if (!view.superview) { cacheValid = NO; break; }
+            }
+        }
+    }
+
+    if (!cacheValid) {
+        Class containerViewClass = NSClassFromString(@"AWECommentInputViewSwiftImpl.CommentInputContainerView");
+        containerViews = [DYYYUtils findAllSubviewsOfClass:containerViewClass inContainer:self.view];
+        Class middleContainerClass = NSClassFromString(@"AWECommentInputViewSwiftImpl.CommentInputViewMiddleContainer");
+        middleContainers = [DYYYUtils findAllSubviewsOfClass:middleContainerClass inContainer:self.view];
+        objc_setAssociatedObject(self, &kDYYYCommentBlurScanKey,
+                                 @{ @"containers": containerViews ?: @[], @"middle": middleContainers ?: @[] },
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+
     for (UIView *containerView in containerViews) {
         for (UIView *subview in containerView.subviews) {
             if (subview.hidden == NO && subview.backgroundColor && CGColorGetAlpha(subview.backgroundColor.CGColor) == 1) {
@@ -11036,8 +11004,6 @@ static Class tabBarButtonClass = nil;
         }
     }
 
-    Class middleContainerClass = NSClassFromString(@"AWECommentInputViewSwiftImpl.CommentInputViewMiddleContainer");
-    NSArray<UIView *> *middleContainers = [DYYYUtils findAllSubviewsOfClass:middleContainerClass inContainer:self.view];
     for (UIView *middleContainer in middleContainers) {
         BOOL containsDanmu = NO;
         for (UIView *innerSubviewCheck in middleContainer.subviews) {
@@ -11074,6 +11040,12 @@ static Class tabBarButtonClass = nil;
 %hook UIView
 
 - (void)setHidden:(BOOL)hidden {
+    // 40.9 优化：两个头像功能开关都关闭时直接透传，省掉两次关联对象查询。
+    // 标记视图在开关关闭时本就返回 NO，提前返回与旧行为一致。
+    if (!DYYYAvatarFollowOptionsEnabled() && !DYYYGetBool(@"DYYYHideAvatarButton")) {
+        %orig(hidden);
+        return;
+    }
     BOOL shouldForceHidden = DYYYShouldForceAvatarActionViewHidden(self) || DYYYShouldForceAvatarSurroundingViewHidden(self);
     %orig(shouldForceHidden ? YES : hidden);
 }
@@ -11356,23 +11328,8 @@ static Class tabBarButtonClass = nil;
         }
     }
 
-    if (!useFullHeight && [currentReferString isEqualToString:@"chat"]) {
-        NSString *currentVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-        if (currentVersion.length == 0) {
-            Class managerClass = %c(AWEVersionUpdateManager);
-            if (managerClass && [managerClass respondsToSelector:@selector(sharedInstance)]) {
-                AWEVersionUpdateManager *manager = [managerClass sharedInstance];
-                if ([manager respondsToSelector:@selector(currentVersion)]) {
-                    currentVersion = manager.currentVersion;
-                }
-            }
-        }
-
-        // 39.2.0 及更早版本的私信播放页以完整高度布局信息区，否则底部约束会整体上移。 （靠版本号判断不靠谱，这个是 abtest 的）
-        if (currentVersion.length > 0 && [DYYYUtils compareVersion:currentVersion toVersion:@"39.2.0"] != NSOrderedDescending) {
-            useFullHeight = YES;
-        }
-    }
+    // 40.9 清理：原 "chat 来源 + 版本号 <= 39.2.0 走全高" 分支已删除。
+    // 目标版本固定 40.9，版本条件恒为假，整段为死代码（且注释自述依赖 abtest 不可靠）。
 
     if (useFullHeight) {
         frame.size.height = superviewHeight;
@@ -12193,7 +12150,10 @@ static Class TagViewClass = nil;
 %hook AWEStoryProgressContainerView
 - (void)setCenter:(CGPoint)center {
     UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
-    if ([vc isKindOfClass:NSClassFromString(@"AWEFeedPlayControlImpl.PureModePageCellViewController")] && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    // 40.9: PureModePageCellViewController 点号名不可查，用 mangled 名回退
+    Class pureModeCellClass = DYYYResolveSwiftClass("AWEFeedPlayControlImpl.PureModePageCellViewController",
+                                                    "_TtC22AWEFeedPlayControlImpl30PureModePageCellViewController");
+    if ([vc isKindOfClass:pureModeCellClass] && DYYYGetBool(@"DYYYEnableFullScreen")) {
         center.y -= gCurrentTabBarHeight;
     }
     %orig(center);
@@ -12462,7 +12422,7 @@ static Class TagViewClass = nil;
 }
 %end
 
-%hook _TtC21AWEIncentiveSwiftImpl29IncentivePendantContainerView
+%hook _TtC21AWEIncentiveSwiftImpl20PendantContainerView
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHidePendantGroup")) {
@@ -12653,18 +12613,6 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 }
 %end
 
-// 极速版红包激励挂件容器视图类组（移除逻辑）
-%group IncentivePendantGroup
-%hook AWEIncentiveSwiftImplDOUYINLite_IncentivePendantContainerView
-- (void)layoutSubviews {
-    %orig;
-    if (DYYYGetBool(@"DYYYHidePendantGroup")) {
-        [self removeFromSuperview];
-    }
-}
-%end
-%end
-
 // View scaling fix when comment blur is enabled
 %group BDMultiContentImageViewGroup
 %hook BDMultiContentContainer_ImageContentView
@@ -12782,7 +12730,11 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %ctor {
-    Class fullscreenCommentClass = objc_getClass("AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController");
+    // 40.9 优化：启动自检关键 hook 类存在性，改版失效时日志直接给出缺失类清单。
+    [DYYYClassRegistry runStartupAudit];
+
+    Class fullscreenCommentClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController",
+                                                        "_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
     if (fullscreenCommentClass && [fullscreenCommentClass isSubclassOfClass:[UIViewController class]]) {
         %init(DYYYFullscreenCommentGroup, AWECommentPanelContainerSwiftImpl_CommentContainerInnerViewController = fullscreenCommentClass);
     }
@@ -12792,7 +12744,8 @@ static void findTargetViewInView(UIView *view) {
 
     DYYYMigrateCombinedHDRModeIfNeeded();
 
-    Class interactionBaseLabelClass = objc_getClass("AWECommentSwiftBizUI.CommentInteractionBaseLabel");
+    Class interactionBaseLabelClass = DYYYResolveSwiftClass("AWECommentSwiftBizUI.CommentInteractionBaseLabel",
+                                                            "_TtC20AWECommentSwiftBizUI27CommentInteractionBaseLabel");
     if (interactionBaseLabelClass) {
         %init(DYYYCommentExactTimeGroup, AWECommentSwiftBizUI_CommentInteractionBaseLabel = interactionBaseLabelClass);
     }
@@ -12854,28 +12807,25 @@ static void findTargetViewInView(UIView *view) {
             %init(DYYYLongPressControlCallback);
         }
 
-        // 初始化红包激励挂件容器视图类组
-        Class incentivePendantClass = objc_getClass("AWEIncentiveSwiftImplDOUYINLite.IncentivePendantContainerView");
-        if (incentivePendantClass) {
-            %init(IncentivePendantGroup, AWEIncentiveSwiftImplDOUYINLite_IncentivePendantContainerView = incentivePendantClass);
-        }
-
         Class imageContentClass = objc_getClass("BDMultiContentContainer.ImageContentView");
         if (imageContentClass) {
             %init(BDMultiContentImageViewGroup, BDMultiContentContainer_ImageContentView = imageContentClass);
         }
 
-        // 动态获取 Swift 类并初始化对应的组
-        Class commentHeaderGeneralClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGeneralView");
+        // 40.9: CommentHeaderGeneralView/GoodsView 迁移到 AWECommentCommerceSwiftImpl 模块（mangled 名），旧模块点号名保留作回退
+        Class commentHeaderGeneralClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGeneralView",
+                                                                "_TtC27AWECommentCommerceSwiftImpl24CommentHeaderGeneralView");
         if (commentHeaderGeneralClass) {
             %init(CommentHeaderGeneralGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderGeneralView = commentHeaderGeneralClass);
         }
 
-        Class commentHeaderGoodsClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGoodsView");
+        Class commentHeaderGoodsClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGoodsView",
+                                                              "_TtC27AWECommentCommerceSwiftImpl22CommentHeaderGoodsView");
         if (commentHeaderGoodsClass) {
             %init(CommentHeaderGoodsGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderGoodsView = commentHeaderGoodsClass);
         }
-        Class commentHeaderTemplateClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderTemplateAnchorView");
+        Class commentHeaderTemplateClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderTemplateAnchorView",
+                                                                 "_TtC30AWECommentPanelHeaderSwiftImpl31CommentHeaderTemplateAnchorView");
         if (commentHeaderTemplateClass) {
             %init(CommentHeaderTemplateGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderTemplateAnchorView = commentHeaderTemplateClass);
         }

@@ -2,7 +2,7 @@ Package: com.huami.dyyy
 Name: DYYY
 Version: 2.2-9
 Description: 仅供学习交流，请在 24 小时内自觉删除。
-Homepage: https://github.com/huami1314/DYYY
+Homepage: https://github.com/Pomponpp/DYYY
 Section: Tweaks
 Depends: firmware (>= 5.0), mobilesubstrate
 Priority: optional

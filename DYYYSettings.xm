@@ -2162,14 +2162,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
               @"imageName" : @"ic_eyeslash_outlined_16"
           },
           @{
-              @"identifier" : @"DYYYHidePauseVideoRelatedWord",
-              @"title" : @"隐藏暂停相关",
-              @"subTitle" : @"隐藏暂停视频后出现的相关词条",
-              @"detail" : @"",
-              @"cellType" : @37,
-              @"imageName" : @"ic_eyeslash_outlined_16"
-          },
-          @{
               @"identifier" : @"DYYYHideKeyboardAI",
               @"title" : @"隐藏键盘 AI",
               @"subTitle" : @"隐藏搜索下方的 AI 和语音搜索按钮",

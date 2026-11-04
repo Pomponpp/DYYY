@@ -1477,34 +1477,15 @@
 
 // 隐藏评论分享功能
 
-%hook AWEIMCommentShareUserHorizontalCollectionViewCell
+// 40.9: AWEIMCommentShareUserHorizontal* 迁移为 AWEIMCommentShareTableViewCell
+%hook AWEIMCommentShareTableViewCell
 
 - (void)layoutSubviews {
     %orig;
 
     if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideCommentShareToFriends"]) {
         self.hidden = YES;
-    } else {
-        self.hidden = NO;
     }
-}
-
-%end
-
-%hook AWEIMCommentShareUserHorizontalSectionController
-
-- (CGSize)sizeForItemAtIndex:(NSInteger)index model:(id)model collectionViewSize:(CGSize)size {
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideCommentShareToFriends"]) {
-        return CGSizeZero;
-    }
-    return %orig;
-}
-
-- (void)configCell:(id)cell index:(NSInteger)index model:(id)model {
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideCommentShareToFriends"]) {
-        return;
-    }
-    %orig;
 }
 
 %end
