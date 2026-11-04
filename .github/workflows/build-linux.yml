@@ -41,18 +41,18 @@ jobs:
           set -e
           SDK_DIR="$GITHUB_WORKSPACE/theos/sdks"
           mkdir -p "$SDK_DIR"
-          if [ -z "$(ls -A "$SDK_DIR" 2>/dev/null)" ]; then
+          # 缓存里可能只有残缺目录（无 SDK），必须按"有没有 .sdk"判断而非目录非空
+          if [ -z "$(find "$SDK_DIR" -maxdepth 1 -type d -name "*.sdk" 2>/dev/null)" ]; then
+            rm -rf "$SDK_DIR" && mkdir -p "$SDK_DIR"
             curl -fsSL -o /tmp/sdks.zip https://github.com/theos/sdks/archive/refs/heads/master.zip
             rm -rf /tmp/sdks && mkdir -p /tmp/sdks
             unzip -q /tmp/sdks.zip -d /tmp/sdks
-            # 目录名可能是 sdks-master 或带 hash 后缀，用 find 兜底
             FOUND=$(find /tmp/sdks -maxdepth 3 -type d -name "iPhoneOS*.sdk" | head -1)
             if [ -n "$FOUND" ]; then
               mv "$FOUND" "$SDK_DIR/"
             else
               echo "目录结构异常，列出内容："
-              find /tmp/sdks -maxdepth 2 | head -10
-              find /tmp/sdks -maxdepth 4 -type d -name "*.sdk" | head -5
+              find /tmp/sdks -maxdepth 3 | head -15
               exit 1
             fi
           fi
