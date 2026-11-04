@@ -1,5 +1,6 @@
 #import "DYYYCommentPlaybackCoordinator.h"
 #import "AwemeHeaders.h"
+#import "AWMSafeDispatchTimer.h"
 #import "DYYYFloatingButtonCoordinator.h"
 
 @interface DYYYCommentPlaybackCoordinator ()
