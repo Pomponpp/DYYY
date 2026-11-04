@@ -26,7 +26,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/theos
-          key: linux-theos-${{ matrix.scheme }}-v3
+          key: linux-theos-v4-final
 
       - name: Install theos on Linux
         run: |
@@ -62,13 +62,15 @@ jobs:
         run: |
           set -e
           VENDOR="$GITHUB_WORKSPACE/theos/vendor"
-          mkdir -p "$VENDOR"
-          # toolchain（iOS 交叉编译器）
-          if [ -z "$(ls -A "$VENDOR" 2>/dev/null)" ]; then
+          # 按 theos 的实际要求（vendor/include 与 vendor/lib）判断，缺则强制重装
+          if [ ! -d "$VENDOR/include" ] || [ ! -d "$VENDOR/lib" ]; then
+            rm -rf "$VENDOR" && mkdir -p "$VENDOR"
             curl -fsSL -o /tmp/toolchain.tar.xz https://github.com/theos/toolchain/releases/download/2024.05.24/toolchain_linux_x86_64.tar.xz
             tar -xf /tmp/toolchain.tar.xz -C "$VENDOR"
           fi
-          ls "$VENDOR" | head -6
+          ls "$VENDOR" | head -8
+          ls "$VENDOR/include" 2>/dev/null | head -4
+          ls "$VENDOR/lib" 2>/dev/null | head -4
 
       - name: Install dependencies
         run: |
