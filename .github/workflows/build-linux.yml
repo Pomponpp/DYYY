@@ -58,21 +58,29 @@ jobs:
           fi
           ls "$SDK_DIR"
 
-      - name: Install vendor (toolchain + includes)
+      - name: Install toolchain
         run: |
           set -e
-          export THEOS="$GITHUB_WORKSPACE/theos"
-          export PATH="$THEOS/bin:$PATH"
-          # vendor/include 与 vendor/lib 是 theos 的 submodule，clone --recursive
-          # 已拉全；此处只校验。
-          echo "=== vendor/include ==="; ls "$THEOS/vendor/include" 2>/dev/null | head -5
-          echo "=== vendor/lib ==="; ls "$THEOS/vendor/lib" 2>/dev/null | head -5
-          test -d "$THEOS/vendor/include" && test -d "$THEOS/vendor/lib" && echo "VENDOR OK" || {
-            echo "vendor 残缺，用 update-theos 补拉"
-            chmod +x "$THEOS/bin/update-theos" 2>/dev/null || true
-            "$THEOS/bin/update-theos"
-            ls "$THEOS/vendor/include" | head -3
-          }
+          TC="$GITHUB_WORKSPACE/theos/toolchain"
+          # theos 期望 toolchain/linux/iphone/bin/clang
+          if [ ! -f "$TC/linux/iphone/bin/clang" ]; then
+            rm -rf "$TC" && mkdir -p "$TC" /tmp/tc
+            curl -fsSL -o /tmp/tc.tar.xz https://github.com/theos/toolchain/releases/download/2024.05.24/toolchain_linux_x86_64.tar.xz
+            tar -xf /tmp/tc.tar.xz -C /tmp/tc
+            # tar 解包结构可能是 toolchain/linux/iphone 或直接 linux/iphone
+            if [ -d "/tmp/tc/toolchain/linux/iphone" ]; then
+              mkdir -p "$TC"
+              cp -a /tmp/tc/toolchain/* "$TC/"
+            elif [ -d "/tmp/tc/linux/iphone" ]; then
+              mkdir -p "$TC"
+              cp -a /tmp/tc/linux "$TC/"
+            else
+              mkdir -p "$TC/linux/iphone"
+              cp -a /tmp/tc/* "$TC/linux/iphone/"
+            fi
+          fi
+          echo "=== clang 确认 ==="; ls "$TC/linux/iphone/bin/" | head -6
+          test -f "$TC/linux/iphone/bin/clang" && echo "TOOLCHAIN OK"
 
       - name: Install dependencies
         run: |
