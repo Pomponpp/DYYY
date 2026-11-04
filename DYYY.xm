@@ -4791,6 +4791,15 @@ static BOOL isGestureActive = NO;
     }
     return %orig;
 }
+
+// 40.9 实测（探针日志）：头像预览页功能项显示由该方法控制，
+// AWEProfileAvatarFunctionModel title=保存头像 对应 type == 1。
+- (BOOL)p_shouldShowFunctionWithType:(long long)type {
+    if (type == 1 && DYYYGetBool(@"DYYYEnableSaveAvatar")) {
+        return YES;
+    }
+    return %orig;
+}
 %end
 
 %hook AWECommentMediaDownloadConfigLivePhoto
