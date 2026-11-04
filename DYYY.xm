@@ -7236,6 +7236,30 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
         }
     }
     %orig;
+    // 40.9：行高 hook 是"按需调用"，复用池里已建好的 cell 不会重新问行高，
+    // 切页瞬间它们仍带原生 843 行高上屏，造成一帧位移。这里在布局完成后
+    // 主动把可见 cell 的高度统一刷到表视口高（对应 DYKiller 的
+    // "布局后补正"阶段）。
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        UITableView *table = nil;
+        if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
+            @try {
+                table = [(AWEAwemeDetailTableViewController *)self tableView];
+            } @catch (__unused NSException *e) {
+                table = nil;
+            }
+        }
+        CGFloat target = table.window ? CGRectGetHeight(table.window.bounds) : 0;
+        if (table.window && target > 0) {
+            for (UITableViewCell *cell in table.visibleCells) {
+                CGRect cellFrame = cell.frame;
+                if (fabs(CGRectGetHeight(cellFrame) - target) > 0.5) {
+                    cellFrame.size.height = target;
+                    cell.frame = cellFrame;
+                }
+            }
+        }
+    }
     [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
 
