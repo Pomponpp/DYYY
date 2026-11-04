@@ -349,6 +349,15 @@
         player.frame = state.nativeHostFrame;
         state.applying = NO;
         state.mediaHost = NO;
+        // 冻结根修（41.0 实测）：frame 还原后 Metal 层可能仍持有旧尺寸的
+        // drawable，表现为布局全对但画面定格（弹幕动、画面不动）。
+        // 对渲染层显式触发一次重布局+重绘，迫使 Metal 重新提交缓冲。
+        UIView *render = [self renderView:player];
+        if (render) {
+            [render setNeedsLayout];
+            [render setNeedsDisplay];
+            [render.layer setNeedsDisplay];
+        }
     }
 
     static BOOL scheduled = NO;
