@@ -328,18 +328,31 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
                                                        (unsigned long)[models count]];
                                      for (id model in (NSArray *)models) {
                                          NSString *cls = NSStringFromClass([model class]);
-                                         NSString *title = nil;
-                                         NSInteger type = NSNotFound;
-                                         @try {
-                                             title = [model valueForKey:@"title"];
-                                         } @catch (__unused NSException *e) {
+                                         [buf appendFormat:@"[probe]   --- %@ ---\n", cls];
+                                         // 遍历模型的全部 ivar，找出可能的开关字段
+                                         unsigned int ivarCount = 0;
+                                         Ivar *ivars = class_copyIvarList([model class], &ivarCount);
+                                         for (unsigned int i = 0; i < ivarCount && i < 40; i++) {
+                                             const char *name = ivar_getName(ivars[i]);
+                                             if (!name) continue;
+                                             NSString *key = [NSString stringWithUTF8String:name];
+                                             id value = nil;
+                                             @try {
+                                                 value = [model valueForKey:key];
+                                             } @catch (__unused NSException *e) {
+                                                 value = @"<不可读>";
+                                             }
+                                             [buf appendFormat:@"[probe]     %@ = %@\n", key, value ?: @"(nil)"];
                                          }
-                                         @try {
-                                             type = [[model valueForKey:@"type"] integerValue];
-                                         } @catch (__unused NSException *e) {
+                                         if (ivars) free(ivars);
+                                         // 同时列出该类所有方法，便于找 enable/hidden/show 之类
+                                         unsigned int mCount = 0;
+                                         Method *methods = class_copyMethodList([model class], &mCount);
+                                         for (unsigned int i = 0; i < mCount && i < 40; i++) {
+                                             SEL sel = method_getName(methods[i]);
+                                             [buf appendFormat:@"[probe]     method: %@\n", NSStringFromSelector(sel)];
                                          }
-                                         [buf appendFormat:@"[probe]   %@  title=%@  type=%ld\n",
-                                                           cls, title ?: @"(nil)", (long)type];
+                                         if (methods) free(methods);
                                      }
                                      DYYYProbeLog(@"%@", buf);
                                  }
@@ -410,6 +423,40 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
         DYYYProbeLog(@"[功能项Cell] type=%lld -> %s", type, cell ? class_getName([cell class]) : "nil");
     }
     return cell;
+}
+
+// 渲染入口：记录功能项按钮视图构建时的模型数量
+- (void)p_setupViews {
+    %orig;
+    if (DYYYProbeEnabled()) {
+        id models = nil;
+        @try {
+            models = [(id)self valueForKey:@"functionModels"];
+        } @catch (__unused NSException *e) {
+            models = nil;
+        }
+        NSUInteger count = [models isKindOfClass:[NSArray class]] ? [models count] : 0;
+        DYYYProbeLog(@"[setupViews] 功能项模型数=%lu", (unsigned long)count);
+        // 记录 actionButtonsView 的子视图数量，判断是否真的没渲染
+        id buttonsView = nil;
+        @try {
+            buttonsView = [(id)self valueForKey:@"actionButtonsView"];
+        } @catch (__unused NSException *e) {
+            buttonsView = nil;
+        }
+        if ([buttonsView isKindOfClass:[UIView class]]) {
+            UIView *bv = (UIView *)buttonsView;
+            DYYYProbeLog(@"[setupViews] actionButtonsView=%s frame=%@ subviews=%lu",
+                         class_getName([bv class]), NSStringFromCGRect(bv.frame),
+                         (unsigned long)bv.subviews.count);
+            for (UIView *sub in bv.subviews) {
+                DYYYProbeLog(@"[setupViews]   子视图 %s frame=%@ hidden=%d",
+                             class_getName([sub class]), NSStringFromCGRect(sub.frame), sub.hidden ? 1 : 0);
+            }
+        } else {
+            DYYYProbeLog(@"[setupViews] actionButtonsView 不存在");
+        }
+    }
 }
 
 - (void)updateActionViewWithType:(long long)type status:(BOOL)status animated:(BOOL)animated {

@@ -338,6 +338,19 @@
     return controllers;
 }
 + (void)invalidateGuides {
+    // 页面切换（Tab 切换、推荐页↔我的作品页）时，旧页面的撑满标记会残留，
+    // 导致切回来时布局位移。这里把不在当前窗口可见范围内的承载区状态一并清掉。
+    for (UIView *player in [self players].allObjects) {
+        if (!player.window) continue;
+        DYYYFullscreenPlayerState *state = objc_getAssociatedObject(player, @selector(state:));
+        if (!state || !state.mediaHost) continue;
+        if ([self visible:player]) continue;
+        state.applying = YES;
+        player.frame = state.nativeHostFrame;
+        state.applying = NO;
+        state.mediaHost = NO;
+    }
+
     static BOOL scheduled = NO;
     if (scheduled) return;
     scheduled = YES;
@@ -624,6 +637,10 @@
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || ![self visible:player]) return native;
     UIWindow *window = player.window;
     UIViewController *owner = [self owner:player state:state];
+    // 与 layoutPlayerContainer 同一道闸门：只有当前页才允许改变播放器尺寸。
+    // visible: 只判几何相交，滑动/预加载时相邻页也会命中，必须再确认页身份，
+    // 否则相邻两页的播放器都按满屏计算，表现为两个作品同时铺开（图文页尤其明显）。
+    if (![self hostIsCurrentPage:player owner:owner]) return native;
     BOOL recommended = [self usesRecommendedLayoutForController:owner];
     if (![self usesFullscreenLayoutForController:owner]) return native;
     if ([self isImageContentController:owner]) {
@@ -743,29 +760,18 @@
 #pragma mark - 媒体容器
 
 // 判断该视图所在的分页 cell 是否就是"当前页"。
-// 不再用几何包含关系（滑动瞬间两页都与窗口相交，判定必然有竞态），改为：
-//   1) 滚动进行中一律不切换（返回上一次结果），避免中途反复撑满/还原
-//   2) 停稳后从 pager 取"可见 cell 中离内容偏移最近的那一个"，用对象身份比较
-// 对象身份比较没有浮点误差，也不会因为页面边缘相交而误判。
+// 用对象身份比较（visibleCells 里离内容中心最近的那个），避免几何相交的竞态。
+// 注意：结果不缓存。页面切换（推荐页 ↔ 我的作品页等）时 cell 会被复用，
+// 缓存会沿用旧值导致该撑满的没撑满、不该撑满的撑满，表现为布局位移。
 + (BOOL)hostIsCurrentPage:(UIView *)host owner:(UIViewController *)owner {
     UIView *cell = [self cellForPlayer:host owner:owner];
     if (!cell || !cell.window) return NO;
     UIView *pager = [self pagingViewForCell:cell];
     if (!pager || pager.window != cell.window) return NO;
 
-    // 滚动进行中：冻结判定，沿用上一次的结论（由调用方缓存）。
-    if ([pager isKindOfClass:[UIScrollView class]]) {
-        UIScrollView *scroll = (UIScrollView *)pager;
-        if (scroll.isTracking || scroll.isDragging || scroll.isDecelerating) {
-            NSNumber *cached = objc_getAssociatedObject(cell, @selector(hostIsCurrentPage:owner:));
-            if (cached) return cached.boolValue;
-        }
-    }
-
     BOOL isCurrent = NO;
     if ([pager isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)pager;
-        // 可见 cell 中，取中心点离表格可视区中心最近的
         CGFloat midY = table.contentOffset.y + CGRectGetHeight(table.bounds) * 0.5;
         UIView *best = nil;
         CGFloat bestDistance = CGFLOAT_MAX;
@@ -793,13 +799,10 @@
         }
         isCurrent = (best == cell);
     } else {
-        // 兜底：几何判定
         CGRect cellRect = [cell convertRect:cell.bounds toView:cell.window];
         CGPoint windowCenter = CGPointMake(CGRectGetMidX(cell.window.bounds), CGRectGetMidY(cell.window.bounds));
         isCurrent = CGRectContainsPoint(cellRect, windowCenter);
     }
-
-    objc_setAssociatedObject(cell, @selector(hostIsCurrentPage:owner:), @(isCurrent), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return isCurrent;
 }
 
