@@ -7216,6 +7216,25 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 - (void)viewDidLayoutSubviews {
+    // 全屏下详情表高与窗口对齐（原生表被扣了底栏 83pt，与推荐页行高不一致，
+    // 切换页面时因行高/表高差异产生位移帧）。参考 DYKiller 详情表处理思路。
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        UITableView *table = nil;
+        if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
+            @try {
+                table = [(AWEAwemeDetailTableViewController *)self tableView];
+            } @catch (__unused NSException *e) {
+                table = nil;
+            }
+        }
+        if (table.window &&
+            fabs(CGRectGetHeight(table.frame) - CGRectGetHeight(table.bounds)) < 0.5 &&
+            fabs(CGRectGetHeight(table.bounds) - CGRectGetHeight(table.window.bounds)) > 0.5) {
+            CGRect frame = table.frame;
+            frame.size.height = CGRectGetHeight(table.window.bounds);
+            table.frame = frame;
+        }
+    }
     %orig;
     [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
@@ -7788,7 +7807,58 @@ static NSHashTable *processedParentViews = nil;
 
 %end
 
-// ===== 保存他人头像（40.9 重写版）=====
+// ===== 详情页行高统一（参考 DYKiller DKVideoDetailTable 思路）=====
+// 背景：详情页（AWEAwemeDetailTableView）原生行高 843（扣了底栏 83），
+// 推荐页行高 926。从详情页切回推荐页（或反向）时，媒体容器按窗口高 926
+// 计算，而详情页 cell 仍是 843，两者错位造成"位移"。
+// 做法：与 DYKiller 相同，把详情页行高统一为表视口高度。
+static const CGFloat kDYYYDetailHeightTolerance = 0.5;
+
+static double DYYYDetailRowHeight(UITableView *table, double nativeHeight) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
+    if (!isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
+    CGFloat target = CGRectGetHeight(table.bounds);
+    if (target <= 0 || fabs(nativeHeight - target) <= kDYYYDetailHeightTolerance) return nativeHeight;
+    // 行高只有两种合法值（原生值与目标值），其余（半成品/特殊行）放行
+    if (fabs(nativeHeight - 843.0) > kDYYYDetailHeightTolerance &&
+        fabs(nativeHeight - 926.0) > kDYYYDetailHeightTolerance) return nativeHeight;
+    return target;
+}
+
+%hook AWEAwemeDetailTableViewController
+
+- (double)fixedCellHeight {
+    double nativeHeight = %orig;
+    UITableView *table = nil;
+    if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
+        @try {
+            table = [(AWEAwemeDetailTableViewController *)self tableView];
+        } @catch (__unused NSException *e) {
+            table = nil;
+        }
+    }
+    return table ? DYYYDetailRowHeight(table, nativeHeight) : nativeHeight;
+}
+
+- (double)cellHeightAtIndex:(long long)index {
+    double nativeHeight = %orig;
+    UITableView *table = nil;
+    if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
+        @try {
+            table = [(AWEAwemeDetailTableViewController *)self tableView];
+        } @catch (__unused NSException *e) {
+            table = nil;
+        }
+    }
+    return table ? DYYYDetailRowHeight(table, nativeHeight) : nativeHeight;
+}
+
+- (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    double nativeHeight = %orig;
+    return DYYYDetailRowHeight(table, nativeHeight);
+}
+
+%end
 // 背景：抖音 40.9 删除了头像预览页的长按保存入口（原生实测无反应），
 // 旧 hook（shouldShowSaveAvatarItem / allowsAvatarDownload 等）永远等不到调用。
 // 因此不再复活原生功能，改为 DYYY 自行实现：
