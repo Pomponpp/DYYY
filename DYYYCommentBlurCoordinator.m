@@ -206,7 +206,7 @@
     // 40.9：Swift 类点号名已不可查，必须回退 mangled 名，否则整条毛玻璃清理逻辑直接跳过
     // （表现为评论列表部分 cell 保留不透明背景、透出视频画面）。
     Class innerClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController");
-    if (!innerClass) innerClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
+    if (!innerClass) innerClass = NSClassFromString("_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
     if (!innerClass) {
         static BOOL warnedOnce = NO;
         if (!warnedOnce) {
@@ -215,12 +215,17 @@
         }
         return;
     }
-    static BOOL loggedOnce = NO;
-    if (!loggedOnce && DYYYGetBool(@"DYYYEnableCommentBlur")) {
-        loggedOnce = YES;
-        NSLog(@"[DYYY][blur] 毛玻璃协调激活（面板类命中）");
-    }
-    if ([controller isKindOfClass:innerClass]) {
+    // 41.0：外层面板类。首次从 Feed 打开评论区走 Panel 而不经过 Inner，
+    // #17 新 hook 传进来的 controller 是 Panel 类型——必须同样执行布局。
+    static Class panelClass = nil;
+    static dispatch_once_t panelOnce;
+    dispatch_once(&panelOnce, ^{
+      panelClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentPanelViewController");
+      if (!panelClass) panelClass = NSClassFromString("_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
+    });
+    // 诊断日志：每次布局都打（带类名与路径），观察打开评论时的触发链。
+    NSLog(@"[DYYY][blur] layoutController vc=%s", class_getName([controller class]));
+    if ([controller isKindOfClass:innerClass] || (panelClass && [controller isKindOfClass:panelClass])) {
         [self updatePanel:controller];
         return;
     }
@@ -230,7 +235,7 @@
     NSMutableArray<UIViewController *> *pending = [controller.childViewControllers mutableCopy];
     for (NSUInteger index = 0; index < pending.count && index < 32; index++) {
         UIViewController *child = pending[index];
-        if ([child isKindOfClass:innerClass]) {
+        if ([child isKindOfClass:innerClass] || (panelClass && [child isKindOfClass:panelClass])) {
             [self updatePanel:child];
             [DYYYFullscreenCoordinator commentController:child visible:child.viewIfLoaded.window != nil];
         } else if (pending.count < 32) {
