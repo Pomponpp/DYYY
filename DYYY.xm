@@ -7827,9 +7827,15 @@ static double DYYYDetailRowHeight(UITableView *table, double nativeHeight) {
     if (!isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
     CGFloat target = CGRectGetHeight(table.bounds);
     if (target <= 0 || fabs(nativeHeight - target) <= kDYYYDetailHeightTolerance) return nativeHeight;
-    // 行高只有两种合法值（原生值与目标值），其余（半成品/特殊行）放行
-    if (fabs(nativeHeight - 843.0) > kDYYYDetailHeightTolerance &&
-        fabs(nativeHeight - 926.0) > kDYYYDetailHeightTolerance) return nativeHeight;
+    // 只修正"被底栏压缩过的整页行高"（native = 窗口高 - 底栏），设备无关：
+    // 用 bottomOccupiedHeight 反推原生值，而不是硬编码 843/926（换机型即错）。
+    static CGFloat cachedNativeFullHeight = 0;
+    if (cachedNativeFullHeight <= 0) {
+        cachedNativeFullHeight = target;
+    }
+    CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
+    CGFloat nativeFull = target + occupied;
+    if (fabs(nativeHeight - nativeFull) > kDYYYDetailHeightTolerance) return nativeHeight;
     return target;
 }
 
