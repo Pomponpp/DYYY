@@ -140,10 +140,8 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
 }
 
 + (NSString *)auditReportText {
-    static NSString *cachedReport = nil;
-    static dispatch_once_t reportOnce;
-    dispatch_once(&reportOnce, ^{
-      NSMutableString *report = [NSMutableString string];
+    // 每次调用都重新探测：类可能在启动后才完成注册，缓存会固化误报。
+    NSMutableString *report = [NSMutableString string];
       NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"未知";
       NSString *tweakVersion = @"2.2-9";
       NSDateFormatter *timeFormatter = [[NSDateFormatter alloc] init];
@@ -178,9 +176,7 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
           }
           [report appendString:@"\n如功能异常与上表无关，请把本页下方运行日志一并发给作者。\n"];
       }
-      cachedReport = [report copy];
-    });
-    return cachedReport;
+    return report;
 }
 
 @end

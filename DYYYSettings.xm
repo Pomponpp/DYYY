@@ -4385,14 +4385,64 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                 onConfirm:nil];
     };
     [aboutItems addObject:licenseItem];
+    // 【诊断工具】分类：自检报告 / 导出运行日志 / 头像探针开关
+    NSMutableArray<AWESettingItemModel *> *diagnosticItems = [NSMutableArray array];
+
+    AWESettingItemModel *auditReportItem = [[%c(AWESettingItemModel) alloc] init];
+    auditReportItem.identifier = @"DYYYShowAuditReport";
+    auditReportItem.title = @"自检报告";
+    auditReportItem.detail = @"检查关键功能是否因抖音改版失效";
+    auditReportItem.type = 0;
+    auditReportItem.svgIconImageName = @"ic_shieldcheck_outlined_20";
+    auditReportItem.cellType = 26;
+    auditReportItem.colorStyle = 0;
+    auditReportItem.isEnable = YES;
+    auditReportItem.cellTappedBlock = ^{
+      // 诊断类只依赖 UIKit，这里直接找顶层控制器弹出。
+      UIViewController *presenter = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      [DYYYDiagnostics showAuditReportFromViewController:presenter];
+    };
+    [diagnosticItems addObject:auditReportItem];
+
+    AWESettingItemModel *exportLogItem = [[%c(AWESettingItemModel) alloc] init];
+    exportLogItem.identifier = @"DYYYExportRuntimeLog";
+    exportLogItem.title = @"导出运行日志";
+    exportLogItem.detail = @"保存到「文件」App，可发给作者定位问题";
+    exportLogItem.type = 0;
+    exportLogItem.svgIconImageName = @"ic_doc_text_outlined_20";
+    exportLogItem.cellType = 26;
+    exportLogItem.colorStyle = 0;
+    exportLogItem.isEnable = YES;
+    exportLogItem.cellTappedBlock = ^{
+      UIViewController *presenter = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      [DYYYDiagnostics exportRuntimeLogFromViewController:presenter];
+    };
+    [diagnosticItems addObject:exportLogItem];
+
+    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
+                             @"identifier" : @"DYYYEnableAvatarProbe",
+                             @"title" : @"头像保存探针",
+                             @"detail" : @"记录头像菜单的类信息到运行日志，排查完可关闭",
+                             @"cellType" : @6,
+                             @"imageName" : @"ic_bug_outlined_20"
+                         }]];
+
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;
 
+    AWESettingSectionModel *diagnosticSection = [[%c(AWESettingSectionModel) alloc] init];
+    diagnosticSection.sectionHeaderTitle = @"诊断工具";
+    diagnosticSection.sectionHeaderHeight = 40;
+    diagnosticSection.type = 0;
+    diagnosticSection.itemArray = diagnosticItems;
+
     DYYYResetSettingsSearchIndex();
     DYYYBuildSettingsSearchIndexIfNeeded(mainItems);
-    DYYYRegisterSearchSections(@"DYYY", @[ cleanupSection, backupSection, aboutSection ]);
+    DYYYRegisterSearchSections(@"DYYY", @[ diagnosticSection, cleanupSection, backupSection, aboutSection ]);
 
-    NSArray *rootSections = @[ mainSection, cleanupSection, backupSection, aboutSection ];
+    NSArray *rootSections = @[ mainSection, diagnosticSection, cleanupSection, backupSection, aboutSection ];
     viewModel.sectionDataArray = rootSections;
     objc_setAssociatedObject(settingsVC, &kViewModelKey, viewModel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     DYYYAttachSettingsSearchHeader(settingsVC, viewModel, rootSections);

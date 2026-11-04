@@ -751,6 +751,19 @@
         UIView *parent = host.superview;
         if (!parent || CGRectIsEmpty(parent.bounds) || !CGAffineTransformIsIdentity(host.transform)) continue;
         if (!state.mediaHost && ![self view:host spansWidthOf:parent]) continue;
+        // 40.9：预加载/复用的离屏 cell 也会走这里。若把它们的容器也撑成全屏，
+        // 相邻两页的播放器会重叠显示并同时播放（表现为上下两个视频叠在一起）。
+        // 只有当前可见页才允许撑满；离屏页还原为原生尺寸。
+        BOOL hostVisible = [self visible:host];
+        if (!hostVisible) {
+            if (state.mediaHost) {
+                state.applying = YES;
+                host.frame = state.nativeHostFrame;
+                state.applying = NO;
+                state.mediaHost = NO;
+            }
+            continue;
+        }
         state = [self state:host];
         if (!state.mediaHost || state.normalWindow != view.window || !CGRectEqualToRect(state.mediaHostParentBounds, parent.bounds)) {
             state.nativeHostFrame = current;
