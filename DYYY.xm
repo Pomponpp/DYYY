@@ -12912,6 +12912,7 @@ static void findTargetViewInView(UIView *view) {
     [DYYYFloatingButtonCoordinator commentController:self visible:NO];
 }
 %end
+%end
 
 %group DYYYFullscreenCommentPanelGroup
 // 41.0：评论区外层面板是 CommentPanelViewController（38 字符类），
