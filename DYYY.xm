@@ -4740,6 +4740,22 @@ static BOOL isGestureActive = NO;
     }
     return %orig;
 }
+
+// 40.9：主页大头像预览页的下载按钮由 allowsRoleHeadDownload 控制，
+// 该属性位于预览数据模型上，故在管理器一侧一并放行。
+- (BOOL)allowsRoleHeadDownload {
+    if (DYYYGetBool(@"DYYYEnableSaveAvatar")) {
+        return YES;
+    }
+    return %orig;
+}
+
+- (BOOL)currentAllowsRoleHeadDownload {
+    if (DYYYGetBool(@"DYYYEnableSaveAvatar")) {
+        return YES;
+    }
+    return %orig;
+}
 %end
 
 %hook AWECommentMediaDownloadConfigLivePhoto
@@ -12739,7 +12755,12 @@ static void findTargetViewInView(UIView *view) {
 
 %ctor {
     // 40.9 优化：启动自检关键 hook 类存在性，改版失效时日志直接给出缺失类清单。
-    [DYYYClassRegistry runStartupAudit];
+    // 注意：%ctor 执行时抖音自己的 ObjC 类可能尚未全部注册（dyld 尚未完成其初始化），
+    // 立即检查会产生"类未找到"误报。延后到启动完成后执行，保证结果可信。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                     [DYYYClassRegistry runStartupAudit];
+                   });
 
     Class fullscreenCommentClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController",
                                                         "_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
