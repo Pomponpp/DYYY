@@ -318,6 +318,33 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
                          }
                          DYYYProbeDumpClassFull([strongSelf class]);
                          DYYYProbeDumpControls(strongSelf.view, NSStringFromClass([strongSelf class]));
+                         // 头像页：把功能项模型逐条打印（含标题/类型），可直接看到"保存"
+                         if ([NSStringFromClass([strongSelf class]) containsString:@"ProfileAvatarViewController"]) {
+                             if ([strongSelf respondsToSelector:NSSelectorFromString(@"functionModels")]) {
+                                 id models = [strongSelf valueForKey:@"functionModels"];
+                                 if ([models isKindOfClass:[NSArray class]]) {
+                                     NSMutableString *buf = [NSMutableString string];
+                                     [buf appendFormat:@"[probe] ===== 功能项模型 %lu 条 =====\n",
+                                                       (unsigned long)[models count]];
+                                     for (id model in (NSArray *)models) {
+                                         NSString *cls = NSStringFromClass([model class]);
+                                         NSString *title = nil;
+                                         NSInteger type = NSNotFound;
+                                         @try {
+                                             title = [model valueForKey:@"title"];
+                                         } @catch (__unused NSException *e) {
+                                         }
+                                         @try {
+                                             type = [[model valueForKey:@"type"] integerValue];
+                                         } @catch (__unused NSException *e) {
+                                         }
+                                         [buf appendFormat:@"[probe]   %@  title=%@  type=%ld\n",
+                                                           cls, title ?: @"(nil)", (long)type];
+                                     }
+                                     DYYYProbeLog(@"%@", buf);
+                                 }
+                             }
+                         }
                        });
     }
 }
@@ -351,6 +378,50 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
         }
     }
     %orig;
+}
+
+%end
+
+// 5) 头像预览页的功能项判定：记录传入的功能类型与返回结果。
+//    40.9 用 p_shouldShowFunctionWithType:(long long) 替代旧的 shouldShowSaveAvatarItem，
+//    打出每个 type 的返回值即可确定"保存"对应的枚举值。
+%hook AWEProfileAvatarViewController
+
+- (BOOL)p_shouldShowFunctionWithType:(long long)type {
+    BOOL result = %orig;
+    if (DYYYProbeEnabled()) {
+        DYYYProbeLog(@"[功能项] type=%lld 显示=%d  user=%@", type, result ? 1 : 0,
+                     [self respondsToSelector:@selector(user)] ? [self valueForKey:@"user"] : @"?");
+    }
+    return result;
+}
+
+- (id)p_collectionViewCellWithType:(long long)type {
+    id cell = %orig;
+    if (DYYYProbeEnabled()) {
+        DYYYProbeLog(@"[功能项Cell] type=%lld -> %s", type, cell ? class_getName([cell class]) : "nil");
+    }
+    return cell;
+}
+
+- (void)updateActionViewWithType:(long long)type status:(BOOL)status animated:(BOOL)animated {
+    %orig;
+    if (DYYYProbeEnabled()) {
+        DYYYProbeLog(@"[功能项状态] type=%lld status=%d", type, status ? 1 : 0);
+    }
+}
+
+%end
+
+// 6) 功能管理器：记录它给出的功能项模型（含类型与标题）
+%hook AWEProfileAvatarFunctionManager
+
+- (BOOL)p_shouldShowFunctionWithType:(long long)type {
+    BOOL result = %orig;
+    if (DYYYProbeEnabled()) {
+        DYYYProbeLog(@"[Manager功能项] type=%lld 显示=%d", type, result ? 1 : 0);
+    }
+    return result;
 }
 
 %end
