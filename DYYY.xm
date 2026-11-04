@@ -7246,8 +7246,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     // 失配会让 reconcile 每帧空转，产生滑动卡顿。
     [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
-    [DYYYFullscreenCoordinator reconcileDetailPaging:self];
-}
 
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
