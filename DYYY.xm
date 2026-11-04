@@ -3212,6 +3212,33 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
+// 双指长按唤起设置的手势代理：允许与页面内手势同时识别，
+// 避免头像预览等全屏覆盖层吞掉触摸导致手势失效。
+@interface DYYYGesturePassthroughDelegate : NSObject <UIGestureRecognizerDelegate>
++ (instancetype)shared;
+@end
+
+@implementation DYYYGesturePassthroughDelegate
++ (instancetype)shared {
+    static DYYYGesturePassthroughDelegate *instance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      instance = [[DYYYGesturePassthroughDelegate alloc] init];
+    });
+    return instance;
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+    shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    return YES;
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    return NO;
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    return NO;
+}
+@end
+
 %group DYYYSettingsGesture
 
 %hook UIWindow
@@ -3220,6 +3247,14 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
     if (window) {
         UILongPressGestureRecognizer *doubleFingerLongPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleDoubleFingerLongPressGesture:)];
         doubleFingerLongPressGesture.numberOfTouchesRequired = 2;
+        // 40.9：头像预览页等全屏覆盖层会自带手势识别器并吞掉触摸，
+        // 这里不拦截其它手势，且允许同时识别，保证任意页面双指长按都能唤起设置。
+        doubleFingerLongPressGesture.cancelsTouchesInView = NO;
+        doubleFingerLongPressGesture.delaysTouchesEnded = NO;
+        // 允许与页面内手势并发识别（iOS 7+ 的 UIGestureRecognizer 属性）
+        if ([doubleFingerLongPressGesture respondsToSelector:@selector(setDelegate:)]) {
+            doubleFingerLongPressGesture.delegate = (id<UIGestureRecognizerDelegate>)DYYYGesturePassthroughDelegate.shared;
+        }
         [window addGestureRecognizer:doubleFingerLongPressGesture];
     }
     return window;

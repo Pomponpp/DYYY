@@ -730,6 +730,31 @@
 }
 #pragma mark - 媒体容器
 
+// 判断该视图所在的分页 cell 是否就是"当前页"。
+// 不能用 CGRectIntersectsRect：滑动切换时上一页与下一页都与窗口相交，
+// 两边容器都会被撑满，表现为上下两个视频叠在一起且位置随滑动偏移不固定。
+// 这里用"窗口中心点落在该 cell 内"作为唯一判定，保证任一时刻只有一页被撑满。
++ (BOOL)hostIsCurrentPage:(UIView *)host owner:(UIViewController *)owner {
+    UIView *cell = [self cellForPlayer:host owner:owner];
+    if (!cell || !cell.window) return NO;
+    UIView *pager = [self pagingViewForCell:cell];
+    if (!pager || pager.window != cell.window) return NO;
+    UIScrollView *scroll = (UIScrollView *)pager;
+    CGRect cellRect = [cell convertRect:cell.bounds toView:cell.window];
+    CGPoint windowCenter = CGPointMake(CGRectGetMidX(cell.window.bounds), CGRectGetMidY(cell.window.bounds));
+
+    // 滑动进行中：不改变撑满对象，避免两页交替撑满造成错位与重复播放。
+    // 保持给滚动中的那一页（手指所在页或即将停靠页）一个稳定判定。
+    if (scroll.isTracking || scroll.isDragging || scroll.isDecelerating) {
+        // 仍在滚动时，以"离窗口中心最近的那一页"为准，且必须真正包含中心点附近
+        CGFloat distance = fabs(CGRectGetMidY(cellRect) - windowCenter.y);
+        CGFloat half = CGRectGetHeight(cellRect) * 0.5;
+        // 允许中心落在 cell 边缘 half 范围内（滚动中页面未完全对位）
+        return distance <= half;
+    }
+    return CGRectContainsPoint(cellRect, windowCenter);
+}
+
 + (void)layoutPlayerContainer:(UIViewController *)controller {
     Class pureListClass = NSClassFromString(@"AFDPureModePageListViewController");
     BOOL pureModeList = pureListClass && [controller isKindOfClass:pureListClass];
@@ -751,10 +776,10 @@
         UIView *parent = host.superview;
         if (!parent || CGRectIsEmpty(parent.bounds) || !CGAffineTransformIsIdentity(host.transform)) continue;
         if (!state.mediaHost && ![self view:host spansWidthOf:parent]) continue;
-        // 40.9：预加载/复用的离屏 cell 也会走这里。若把它们的容器也撑成全屏，
-        // 相邻两页的播放器会重叠显示并同时播放（表现为上下两个视频叠在一起）。
-        // 只有当前可见页才允许撑满；离屏页还原为原生尺寸。
-        BOOL hostVisible = [self visible:host];
+        // 40.9：预加载/复用的离屏 cell 也会走这里。swipe 切换瞬间相邻两页都
+        // 与窗口相交，若两边都撑满就会上下两个视频重叠播放，且位置随滑动偏移
+        // 不固定。这里只允许"窗口中心点所在的那一页"撑满，其余页还原原生尺寸。
+        BOOL hostVisible = [self hostIsCurrentPage:host owner:controller];
         if (!hostVisible) {
             if (state.mediaHost) {
                 state.applying = YES;
@@ -775,6 +800,20 @@
         state.owner = controller;
         state.normalWindow = view.window;
         state.fullscreenHostFrame = target;
+        // 诊断：记录撑满判定（仅在开启全屏诊断时输出，便于定位双视频问题）
+        static BOOL sFullscreenDiagLogged = NO;
+        if (!sFullscreenDiagLogged && DYYYGetBool(@"DYYYFullscreenDiag")) {
+            sFullscreenDiagLogged = YES;
+            UIView *cell = [self cellForPlayer:host owner:controller];
+            UIView *pager = [self pagingViewForCell:cell];
+            NSLog(@"[DYYY][fullscreen] host=%s cell=%s pager=%s cellRect=%@ window=%@ tracking=%d",
+                  class_getName([host class]),
+                  cell ? class_getName([cell class]) : "nil",
+                  pager ? class_getName([pager class]) : "nil",
+                  NSStringFromCGRect(cell ? [cell convertRect:cell.bounds toView:cell.window] : CGRectZero),
+                  NSStringFromCGRect(host.window.bounds),
+                  [(UIScrollView *)pager isTracking]);
+        }
         // 承载区全程全高；评论避让只改内部播放器，不补背景或等待消失回调。
         if (!CGRectEqualToRect(current, target)) {
             state.applying = YES;

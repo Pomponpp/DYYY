@@ -4429,6 +4429,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                              @"imageName" : @"ic_bug_outlined_20"
                          }]];
 
+    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
+                             @"identifier" : @"DYYYFullscreenDiag",
+                             @"title" : @"全屏诊断日志",
+                             @"detail" : @"记录全屏撑满判定到运行日志，用于排查双视频问题",
+                             @"cellType" : @6,
+                             @"imageName" : @"ic_bug_outlined_20"
+                         }]];
+
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;
 

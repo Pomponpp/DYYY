@@ -131,6 +131,40 @@ static void DYYYProbeDumpClassFull(Class cls) {
     DYYYProbeLog(@"%@", out);
 }
 
+// dump 某个视图层级内所有按钮/控件及其点击动作（用于定位保存按钮）
+static void DYYYProbeDumpControls(UIView *root, NSString *tag) {
+    if (!root) {
+        return;
+    }
+    NSMutableString *out = [NSMutableString string];
+    [out appendFormat:@"[probe] ===== 控件清单 %@ =====\n", tag];
+    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:root];
+    NSUInteger limit = 600;
+    for (NSUInteger i = 0; i < queue.count && i < limit; i++) {
+        UIView *v = queue[i];
+        if ([v isKindOfClass:[UIControl class]]) {
+            UIControl *c = (UIControl *)v;
+            NSMutableArray<NSString *> *targets = [NSMutableArray array];
+            for (id t in c.allTargets) {
+                [targets addObject:NSStringFromClass([t class])];
+            }
+            NSString *label = v.accessibilityLabel ?: @"";
+            [out appendFormat:@"[probe]   %s  frame=%@  label=%@  targets=%@  tags=%lu\n",
+                              class_getName([v class]), NSStringFromCGRect(v.frame), label,
+                              [targets componentsJoinedByString:@","], (unsigned long)c.allControlEvents];
+        }
+        if ([v isKindOfClass:[UILabel class]]) {
+            UILabel *l = (UILabel *)v;
+            if (l.text.length > 0 && l.text.length < 40) {
+                [out appendFormat:@"[probe]   UILabel \"%@\"\n", l.text];
+            }
+        }
+        [queue addObjectsFromArray:v.subviews];
+    }
+    [out appendFormat:@"[probe] ===== 控件清单结束 %@ =====\n", tag];
+    DYYYProbeLog(@"%@", out);
+}
+
 static void DYYYProbeDumpAvatarInventory(void) {
     @autoreleasepool {
         unsigned int classCount = 0;
@@ -260,8 +294,33 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
 
 %end
 
-// 3) 页面弹出：确认头像预览页，并立即 dump 该页全部方法（保存按钮就在这一页）
+// 3) 页面出现/弹出：确认头像预览页，dump 该类全部方法与控件（保存按钮就在这一页）
 %hook UIViewController
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    if (!DYYYProbeEnabled()) {
+        return;
+    }
+    const char *name = class_getName([self class]);
+    if (!name) {
+        return;
+    }
+    // 头像预览页出现后，延迟一点等待布局完成，再抓控件与类方法
+    if (strstr(name, "Avatar") || strstr(name, "Preview") || strstr(name, "Head")) {
+        DYYYProbeLog(@"页面出现 %s", name);
+        __weak UIViewController *weakSelf = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+                         UIViewController *strongSelf = weakSelf;
+                         if (!strongSelf) {
+                             return;
+                         }
+                         DYYYProbeDumpClassFull([strongSelf class]);
+                         DYYYProbeDumpControls(strongSelf.view, NSStringFromClass([strongSelf class]));
+                       });
+    }
+}
 
 - (void)presentViewController:(UIViewController *)viewControllerToPresent
                      animated:(BOOL)flag
