@@ -2,16 +2,9 @@
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
 
-// Linux 交叉编译（clang-11）时 @available 展开引用 clang 运行时符号
-// ___isOSVersionAtLeast（注意：C 层符号名带三下划线前缀），该符号由
-// compiler-rt 提供，Linux theos 的工具链不带。这里提供 weak 定义补齐：
-// - Apple 真机端：系统 libclang_rt 存在同名符号；weak 定义若与之共存
-//   取系统版本，无行为差异
-// - Linux CI 端：由本定义满足链接
-#if !defined(__APPLE__)
-// 声明（强定义在 DYYYConfigCache.m，全工程唯一，避免多 TU 重复符号）
-int ___isOSVersionAtLeast(int major, int minor, int patch);
-#endif
+// 注：Linux 交叉编译时 @available 展开的 ___isOSVersionAtLeast 符号
+// 由 Makefile 的 -Wl,--defsym 在链接期提供（恒真语义，所有调用点均有
+// respondsToSelector 运行时保护）。Apple 端构建不受影响。
 
 FOUNDATION_EXPORT void DYYYNSLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
 
