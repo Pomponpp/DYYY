@@ -468,7 +468,32 @@ static NSString *DYYYProbeChainDescription(UIView *view, NSUInteger depth) {
 
 %end
 
-// 6) 功能管理器：记录它给出的功能项模型（含类型与标题）
+// 7) 头像长按菜单：用户确认"长按大头像出现保存"，
+//    该类名为 ProfileAvatarLongPressAlert（Swift，需 mangled 名）。
+//    这里在它出现时 dump 全部方法与属性，并在其构建菜单时记录条目。
+%hook _TtC17AWEStorySwiftImpl27ProfileAvatarLongPressAlert
+
+- (instancetype)init {
+    id obj = %orig;
+    if (DYYYProbeEnabled() && obj) {
+        DYYYProbeLog(@"[长按菜单] init -> %s", class_getName([obj class]));
+        DYYYProbeDumpClassFull([obj class]);
+    }
+    return obj;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    id obj = %orig;
+    if (DYYYProbeEnabled() && obj) {
+        DYYYProbeLog(@"[长按菜单] initWithFrame -> %s", class_getName([obj class]));
+        DYYYProbeDumpClassFull([obj class]);
+    }
+    return obj;
+}
+
+%end
+
+// 8) 功能管理器：记录它给出的功能项判断结果
 %hook AWEProfileAvatarFunctionManager
 
 - (BOOL)p_shouldShowFunctionWithType:(long long)type {
