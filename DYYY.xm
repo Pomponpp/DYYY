@@ -12913,6 +12913,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
+%group DYYYFullscreenCommentPanelGroup
 // 41.0：评论区外层面板是 CommentPanelViewController（38 字符类），
 // 首次从 Feed 打开评论区走它而不经过 InnerViewController，
 // 旧 hook 全部旁路（用户实测毛玻璃不透 + 日志无第二次 [DYYY][blur]）。
@@ -12950,7 +12951,7 @@ static void findTargetViewInView(UIView *view) {
     Class commentPanelClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentPanelViewController",
                                                     "_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
     if (commentPanelClass && [commentPanelClass isSubclassOfClass:[UIViewController class]]) {
-        %init(DYYYFullscreenCommentGroup, AWECommentPanelContainerSwiftImpl_CommentPanelViewController = commentPanelClass);
+        %init(DYYYFullscreenCommentPanelGroup, AWECommentPanelContainerSwiftImpl_CommentPanelViewController = commentPanelClass);
     }
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
         @"DYYYDisableFeedNowPlayingInfo" : @YES
