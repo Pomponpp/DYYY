@@ -11683,16 +11683,9 @@ static Class tabBarButtonClass = nil;
     %orig;
 
     if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        // 41.0 全屏异常根修：从详情页返回 Feed 的瞬间，抖音把表直接设回
-        // "y=0 高=窗口-底栏(843)"（绕过行高询问，只有 layoutSubviews 能拦）。
-        // 全屏分支必须同时校正 y 与 height，否则表残留 843 → 全屏异常定格。
         CGRect frame = self.frame;
-        CGFloat target = self.superview.frame.size.height;
-        if (fabs(frame.size.height - target) > 0.5 || fabs(frame.origin.y) > 0.5) {
-            frame.origin.y = 0;
-            frame.size.height = target;
-            self.frame = frame;
-        }
+        frame.size.height = self.superview.frame.size.height;
+        self.frame = frame;
     } else if (gCurrentTabBarHeight > 0) {
         UIWindow *keyWindow = [DYYYUtils getActiveWindow];
         if (keyWindow && keyWindow.safeAreaInsets.bottom == 0) {
@@ -11796,11 +11789,6 @@ static Class tabBarButtonClass = nil;
         [hideButton hideUIElements];
     }
     %orig;
-    // 冻结/全屏异常根修（41.0 实测日志）：详情页(offset=15742)返回 Feed 的
-    // 瞬间，媒体容器保持详情页撑满态（mediaHost 未重置），Metal 层在错误
-    // frame 下停止渲染 → 画面定格；Feed cell 被压成 843 且残留全屏标记。
-    // 切页最早时机强制还原全部离屏容器的撑满状态（含详情页残留）。
-    [DYYYFullscreenCoordinator invalidateGuides];
 }
 
 - (void)aweme:(id)arg1 currentIndexDidChange:(NSInteger)arg2 {

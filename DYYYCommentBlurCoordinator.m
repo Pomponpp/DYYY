@@ -207,25 +207,26 @@
     // （表现为评论列表部分 cell 保留不透明背景、透出视频画面）。
     Class innerClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController");
     if (!innerClass) innerClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
-    if (!innerClass) {
-        static BOOL warnedOnce = NO;
-        if (!warnedOnce) {
-            warnedOnce = YES;
-            NSLog(@"[DYYY][blur] 评论面板类未找到（点号与 mangled 名均失败），毛玻璃清理跳过");
-        }
-        return;
-    }
     // 41.0：外层面板类。首次从 Feed 打开评论区走 Panel 而不经过 Inner，
-    // #17 新 hook 传进来的 controller 是 Panel 类型——必须同样执行布局。
+    // 必须同样执行布局。二进制里还有多个不同长度后缀的 CommentViewController
+    // 变体（31/33/35/36/40/42/47），只认两个精确类名会再次漏掉真实持有者。
     static Class panelClass = nil;
     static dispatch_once_t panelOnce;
     dispatch_once(&panelOnce, ^{
       panelClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentPanelViewController");
       if (!panelClass) panelClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
     });
-    // 诊断日志：每次布局都打（带类名与路径），观察打开评论时的触发链。
-    NSLog(@"[DYYY][blur] layoutController vc=%s", class_getName([controller class]));
-    if ([controller isKindOfClass:innerClass] || (panelClass && [controller isKindOfClass:panelClass])) {
+    // 兜底判定：类名里含 CommentPanelContainerSwiftImpl 或 Comment 且是面板级 VC，
+    // 一律视为评论面板处理（41.0 版本类名后缀不确定，不能依赖精确匹配）。
+    NSString *vcName = [NSString stringWithUTF8String:class_getName([controller class])];
+    BOOL looksLikePanel = [vcName containsString:@"CommentPanelContainerSwiftImpl"] ||
+                          [vcName containsString:@"CommentContainerInner"] ||
+                          [vcName containsString:@"CommentPanelViewController"] ||
+                          [vcName containsString:@"AWECommentContainerViewController"];
+    // 诊断日志：每次布局都打（带类名与命中路径），观察打开评论时的触发链。
+    NSLog(@"[DYYY][blur] layoutController vc=%@ panelHit=%d inner=%d", vcName,
+          looksLikePanel ? 1 : 0, innerClass && [controller isKindOfClass:innerClass] ? 1 : 0);
+    if (looksLikePanel) {
         [self updatePanel:controller];
         return;
     }
@@ -233,12 +234,16 @@
     if (!containerClass || ![controller isKindOfClass:containerClass]) return;
     // 宿主回调覆盖新版 Swift 面板没有调用旧父类布局方法的情况。
     NSMutableArray<UIViewController *> *pending = [controller.childViewControllers mutableCopy];
-    for (NSUInteger index = 0; index < pending.count && index < 32; index++) {
+    for (NSUInteger index = 0; index < pending.count && index < 64; index++) {
         UIViewController *child = pending[index];
-        if ([child isKindOfClass:innerClass] || (panelClass && [child isKindOfClass:panelClass])) {
+        NSString *childName = [NSString stringWithUTF8String:class_getName([child class])];
+        BOOL childIsPanel = [childName containsString:@"CommentPanelContainerSwiftImpl"] ||
+                            [childName containsString:@"CommentContainerInner"] ||
+                            [childName containsString:@"CommentPanelViewController"];
+        if (childIsPanel) {
             [self updatePanel:child];
             [DYYYFullscreenCoordinator commentController:child visible:child.viewIfLoaded.window != nil];
-        } else if (pending.count < 32) {
+        } else if (pending.count < 64) {
             [pending addObjectsFromArray:child.childViewControllers];
         }
     }
