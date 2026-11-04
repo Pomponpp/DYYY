@@ -4,12 +4,12 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-iOS%2014.0%2B-black?style=flat&labelColor=black" />
-  <img src="https://img.shields.io/badge/App-%E6%8A%96%E9%9F%B3%2040.9.0-black?style=flat&labelColor=black" />
+  <img src="https://img.shields.io/badge/App-%E6%8A%96%E9%9F%B3%2041.0.0-black?style=flat&labelColor=black" />
 </p>
 
 # DYYY
 
-用于调整抖音 UI 的 Theos/Logos Tweak，当前适配 **40.9.0 版本**（旧版类名 hook 已按 40.9 迁移）。  
+用于调整抖音 UI 的 Theos/Logos Tweak，已适配 **抖音 41.0.0**（仅适配当前最新版，其他旧版本不做适配）。  
 **仅供学习交流，禁止用于商业用途。**
 
 本地 UI 修订在抖音 40.7.0 上的局部回归结果、构建命令及限制见 [布局回归记录](tests/README.md)。
