@@ -99,54 +99,27 @@ jobs:
         run: |
           echo "$(brew --prefix)/opt/make/libexec/gnubin" >> $GITHUB_PATH
 
-      - name: Build rootless only
+      - name: Build dylib only (arm64)
         run: |
           rm -rf packages && mkdir -p packages
-          # 15 分钟墙治理（第二阶段）：只编 rootless（巨魔主力）。
-          # rootful/roothide 的 dylib 与 rootless 二进制一致（scheme 仅改
-          # 安装路径前缀），待缓存彻底稳定后再评估补打。
-          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-          for f in packages/*.deb; do
-            [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
-          done
-          printf 'Built: %s\n' packages/*.deb
-
-      - name: Prepare package metadata
-        id: package
-        run: |
-          timestamp=$(TZ=Asia/Shanghai date +%Y%m%d%H%M%S)
-          version=$(awk -F': ' '$1 == "Version" { print $2; exit }' control)
-          if [ -z "$version" ]; then
-            echo "Unable to read package version from control" >&2
+          # 15 分钟墙终态：单架构 arm64 + 只编不打包。
+          # 产出物 = .theos/obj/arm64/DYYY.dylib，直接拷出上传。
+          # rootless/rootful/roothide 的 deb 打包脚本保留在 git 历史里，
+          # 需要时恢复对应步骤即可。
+          make THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 ARCHS=arm64 -j$(sysctl -n hw.ncpu)
+          DYLIB=$(find .theos/obj -name "DYYY.dylib" -type f | head -1)
+          if [ -z "$DYLIB" ]; then
+            echo "dylib not found in .theos/obj" >&2
+            find .theos -name "*.dylib" >&2 || true
             exit 1
           fi
-          echo "timestamp=$timestamp" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          ldid -S "$DYLIB" 2>/dev/null || true
+          cp "$DYLIB" packages/DYYY.dylib
+          printf 'Built: %s\n' packages/DYYY.dylib
 
-      - name: Verify Deb packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-
-          deb_files=(packages/*.deb)
-          if [ "${#deb_files[@]}" -ne 1 ]; then
-            echo "Expected 1 Deb package (rootless), found ${#deb_files[@]}:" >&2
-            printf '  %s\n' "${deb_files[@]}" >&2
-            exit 1
-          fi
-
-          printf 'Package artifact: %s\n' "${deb_files[@]}"
-
-      - name: Extract arm64e dylib
-        env:
-          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
-        run: .github/scripts/extract-release-dylib.sh
-
-      - name: Upload package artifacts
+      - name: Upload dylib artifact
         uses: actions/upload-artifact@v7
         with:
-          name: DYYY-${{ steps.package.outputs.timestamp }}
+          name: DYYY-dylib-${{ github.run_number }}
           path: |
-            ${{ github.workspace }}/packages/*.deb
-            ${{ github.workspace }}/packages/*.dylib
+            ${{ github.workspace }}/packages/DYYY.dylib
