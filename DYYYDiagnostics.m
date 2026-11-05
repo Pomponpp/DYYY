@@ -119,19 +119,22 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     });
 }
 
-// 手动清空：运行日志与轮转备份删除、导出副本全部清除。
+// 手动清空：运行日志截断（句柄仍开着，不能删——删了后续写入会落到
+// 已删除的 inode 上，表现为"清空后日志再也没内容"）；轮转备份删除；
+// 导出副本全部清除。
 + (void)clearRuntimeLogFromViewController:(UIViewController *)presenter {
     if (!presenter) {
         return;
     }
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *runtime = [self runtimeLogPath];
-    if ([fileManager fileExistsAtPath:runtime]) {
-        [fileManager removeItemAtPath:runtime error:nil];
-    }
+    // 核心：截断而非删除。NSFileHandle 写入句柄仍指向同一文件，
+    // 后续 append 正常落盘。
+    [fileManager createFileAtPath:runtime contents:[NSData data] attributes:nil];
     NSString *dir = [self runtimeLogDirectory];
     for (NSString *file in [fileManager contentsOfDirectoryAtPath:dir error:nil]) {
-        if ([file hasPrefix:@"runtime.log"]) {
+        // 只删轮转备份（runtime.log.1 等），主文件已截断
+        if ([file hasPrefix:@"runtime.log."] && ![file hasSuffix:@".log"]) {
             [fileManager removeItemAtPath:[dir stringByAppendingPathComponent:file] error:nil];
         }
     }
@@ -142,6 +145,8 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
             [fileManager removeItemAtPath:[exportDir stringByAppendingPathComponent:file] error:nil];
         }
     }
+    // 清空后立刻写入新会话头，保证导出永远有版本指纹可对
+    [self appendRuntimeLogLine:@"—— 日志已清空，以下为新会话 ——"];
     [DYYYToast showSuccessToastWithMessage:@"运行日志已清空"];
 }
 
@@ -160,6 +165,17 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     // 导出前先清理过期日志（3 天前的运行日志与导出副本）
     [self cleanupStaleLogs];
     [self rotateRuntimeLogIfNeeded];
+
+    // 版本指纹：导出时刻强制写入当前开关状态到运行日志头部。
+    // 不再依赖启动时机（清空/轮转都可能把启动行冲掉），导出的日志
+    // 永远自带状态可对——治"测了不知道测没测到"。
+    [self appendRuntimeLogLine:@"—— 导出时刻开关状态 ——"];
+    [self appendRuntimeLogLine:[NSString stringWithFormat:
+        @"[DYYY][fullscreen] 导出状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
+        DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
+        DYYYGetBool(@"DYYYFullNewDetailTable") ? 1 : 0,
+        DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
+        DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0]];
 
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *sourcePath = [self runtimeLogPath];
