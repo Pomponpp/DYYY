@@ -4,6 +4,7 @@
 // 用"存储到文件"落到"文件"App，或 AirDrop/复制到其他设备。
 #import "AwemeHeaders.h"
 #import "DYYYClassRegistry.h"
+#import "DYYYToast.h"
 #import <UIKit/UIKit.h>
 
 static NSString *const kDYYYRuntimeLogSubdir = @"DYYYLogs";
@@ -116,6 +117,32 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
           }
       }
     });
+}
+
+// 手动清空：运行日志与轮转备份删除、导出副本全部清除。
++ (void)clearRuntimeLogFromViewController:(UIViewController *)presenter {
+    if (!presenter) {
+        return;
+    }
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSString *runtime = [self runtimeLogPath];
+    if ([fileManager fileExistsAtPath:runtime]) {
+        [fileManager removeItemAtPath:runtime error:nil];
+    }
+    NSString *dir = [self runtimeLogDirectory];
+    for (NSString *file in [fileManager contentsOfDirectoryAtPath:dir error:nil]) {
+        if ([file hasPrefix:@"runtime.log"]) {
+            [fileManager removeItemAtPath:[dir stringByAppendingPathComponent:file] error:nil];
+        }
+    }
+    NSString *exportDir = [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject]
+        stringByAppendingPathComponent:@"DYYY/logs"];
+    for (NSString *file in [fileManager contentsOfDirectoryAtPath:exportDir error:nil]) {
+        if ([file hasSuffix:@".txt"] || [file hasSuffix:@".log"]) {
+            [fileManager removeItemAtPath:[exportDir stringByAppendingPathComponent:file] error:nil];
+        }
+    }
+    [DYYYToast showSuccessToastWithMessage:@"运行日志已清空"];
 }
 
 + (NSString *)exportedLogPathWithName:(NSString *)name {

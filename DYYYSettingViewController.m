@@ -396,8 +396,8 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"导出运行日志" key:@"DYYYExportRuntimeLog" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"头像保存探针" key:@"DYYYEnableAvatarProbe" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"全屏诊断日志" key:@"DYYYFullscreenDiag" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"全屏旧机制回退·底栏inset" key:@"DYYYFullLegacyInset" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"全屏旧机制回退·强制刷新" key:@"DYYYFullLegacyReload" type:DYYYSettingItemTypeSwitch]
+            [DYYYSettingItem itemWithTitle:@"详情页新机制(实验)" key:@"DYYYFullNewDetailTable" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"清空运行日志" key:@"DYYYClearRuntimeLog" type:DYYYSettingItemTypeAction]
         ]
     ];
 }
@@ -717,6 +717,8 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYDiagnostics showAuditReportFromViewController:self];
         } else if ([item.key isEqualToString:@"DYYYExportRuntimeLog"]) {
             [DYYYDiagnostics exportRuntimeLogFromViewController:self];
+        } else if ([item.key isEqualToString:@"DYYYClearRuntimeLog"]) {
+            [DYYYDiagnostics clearRuntimeLogFromViewController:self];
         }
     }
     [tableView deselectRowAtIndexPath:indexPath animated:YES];

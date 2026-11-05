@@ -231,8 +231,7 @@
     NSString *vcName = [NSString stringWithUTF8String:class_getName([controller class])];
     BOOL looksLikePanel = [vcName containsString:@"CommentPanelContainerSwiftImpl"] ||
                           [vcName containsString:@"CommentContainerInner"] ||
-                          [vcName containsString:@"CommentPanelViewController"] ||
-                          [vcName containsString:@"AWECommentContainerViewController"];
+                          [vcName containsString:@"CommentPanelViewController"];
     // 诊断日志：每次布局都打（带类名与命中路径），观察打开评论时的触发链。
     NSLog(@"[DYYY][blur] layoutController vc=%@ panelHit=%d inner=%d", vcName,
           looksLikePanel ? 1 : 0, innerClass && [controller isKindOfClass:innerClass] ? 1 : 0);

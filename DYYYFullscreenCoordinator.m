@@ -123,9 +123,10 @@
 }
 + (void)reconcileDetailPaging:(UIViewController *)controller {
     // 重构全屏·病灶②退路：beginUpdates/endUpdates 强制重载会打断
-    // 他人主页→详情页的播放器交接（冻结根）。默认关闭（借 DYKiller
-    // "不强制刷新"手法）；旧行为可用开关回退。
-    if (!DYYYGetBool(@"DYYYFullLegacyReload")) return;
+    // #20 教训：默认停用 reconcile 与 inset 归零造成他人主页作品页
+    // 底栏不透明/不满屏。旧机制恢复默认开启；仅当实验档
+    // DYYYFullNewDetailTable 打开时才停用（配合新 setFrame/行高手法）。
+    if (DYYYGetBool(@"DYYYFullNewDetailTable")) return;
     if (![NSThread isMainThread] || !DYYYGetBool(@"DYYYEnableFullScreen") || ![self usesDetailLayoutForController:controller]) return;
     if (![controller respondsToSelector:@selector(tableView)] || ![controller respondsToSelector:@selector(currentVisibleCellIndex)] ||
         ![controller respondsToSelector:@selector(updateTableViewLayoutForTargetPageIndex:)]) return;
