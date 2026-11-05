@@ -7235,6 +7235,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
+    // 新机制主路径并入此 hook（同 hook 块内不可重复定义 viewDidAppear）
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
     [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
 
@@ -7319,7 +7323,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     }
 }
 
-- (void)viewDidAppear:(BOOL)animated {
+- (void)viewWillLayoutSubviews {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
