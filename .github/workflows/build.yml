@@ -67,32 +67,32 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - name: Check cache
-        run: |
-          echo upstream_heads=`git ls-remote https://github.com/roothide/theos | head -n 1 | cut -f 1`-`git ls-remote https://github.com/theos/sdks | head -n 1 | cut -f 1` >> $GITHUB_ENV
-
       - name: Use cache
         id: cache
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/theos
-          key: ${{ runner.os }}-${{ env.upstream_heads }}
-
-      - name: Remove unused Homebrew taps
-        env:
-          HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
-          HOMEBREW_NO_AUTOREMOVE: "1"
-        run: |
-          if brew list --formula | grep -Fxq "bicep"; then
-            brew uninstall --formula --ignore-dependencies bicep
-          fi
-          for tap in aws/tap azure/bicep; do
-            if brew tap | grep -Fxq "$tap"; then
-              brew untap "$tap"
-            fi
-          done
+          # 固定 key：不再跟随 theos 上游版本（上游一更新旧缓存全作废，
+          # 每次 7 分钟重装顶穿 15 分钟墙）。theos 月级更新即可手动改 key。
+          key: ${{ runner.os }}-theos-stable-v1
 
       - name: Prepare Theos
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: huami1314/theos-action@main
+
+      - name: Verify cached theos
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: |
+          # 缓存恢复后自检：关键件缺失（缓存损坏/半成品）时重建
+          if [ ! -d "$GITHUB_WORKSPACE/theos/vendor/include" ] || [ ! -f "$GITHUB_WORKSPACE/theos/bin/logos" ]; then
+            echo "缓存残缺，标记重建"
+            echo "CACHE_INVALID=1" >> $GITHUB_ENV
+          else
+            echo "缓存完好：theos 就绪（跳过安装）"
+          fi
+
+      - name: Prepare Theos (cache invalid rebuild)
+        if: env.CACHE_INVALID == '1'
         uses: huami1314/theos-action@main
 
       - name: Setup GNU Make
