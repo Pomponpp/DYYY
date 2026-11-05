@@ -21,17 +21,6 @@ on:
       - 'Resources/**'
       - 'layout/**'
   workflow_dispatch:
-    inputs:
-      scheme:
-        description: '打包方案（留空则全打）'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - rootful
-          - rootless
-          - roothide
 
 permissions:
   actions: read
@@ -62,17 +51,15 @@ jobs:
             echo "Only non-build Makefile settings changed; skipping Deb build."
           fi
 
-  # 单 scheme 编译的公共步骤抽成复合动作式模板（此处用矩阵并行）。
-  # 背景：三个 scheme 串行编译曾跑满 15 分钟被 macOS runner 强制回收；
-  # 拆成 3 个并行 job 后单个 job 约 5 分钟，避开回收线。
+  # 单 job 单次编译：arm64/arm64e 两个架构一次 make 完成，
+  # 三 scheme（rootful/rootless/roothide）共享同一 dylib，仅打包路径不同，
+  # 用 theos 连续三次 make package（对象缓存复用，二三次只重打包，秒级）。
+  # 背景：三矩阵并行时每个 job 都要完整装 theos（6-7 分钟）+ 编译，
+  # 缓存未命中时合计擦线 15 分钟被 macOS runner 整批回收。
   build:
     needs: changes
     if: needs.changes.outputs.should_build == 'true'
     runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        scheme: [rootful, rootless, roothide]
 
     steps:
       - uses: actions/checkout@v6
@@ -100,7 +87,9 @@ jobs:
             brew uninstall --formula --ignore-dependencies bicep
           fi
           for tap in aws/tap azure/bicep; do
-            brew untap "$tap"
+            if brew tap | grep -Fxq "$tap"; then
+              brew untap "$tap"
+            fi
           done
 
       - name: Prepare Theos
@@ -110,53 +99,25 @@ jobs:
         run: |
           echo "$(brew --prefix)/opt/make/libexec/gnubin" >> $GITHUB_PATH
 
-      - name: Build package
-        env:
-          MATRIX_SCHEME: ${{ matrix.scheme }}
+      - name: Build all schemes
         run: |
           rm -rf packages && mkdir -p packages
-          if [[ "$MATRIX_SCHEME" == "rootful" ]]; then
-            make package FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-            for f in packages/*.deb; do
-              [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootful.deb"
-            done
-          elif [[ "$MATRIX_SCHEME" == "rootless" ]]; then
-            make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-            for f in packages/*.deb; do
-              [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
-            done
-          else
-            make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-            for f in packages/*.deb; do
-              [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-roothide.deb"
-            done
-          fi
+          # rootless 先编（巨魔主力），对象缓存随后复用
+          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          for f in packages/*.deb; do
+            [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
+          done
+          # rootful（对象缓存命中，只重链接打包）
+          make package FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          for f in packages/*.deb; do
+            [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootful.deb"
+          done
+          # roothide（同上）
+          make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          for f in packages/*.deb; do
+            [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-roothide.deb"
+          done
           printf 'Built: %s\n' packages/*.deb
-
-      - name: Upload scheme artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: DYYY-${{ matrix.scheme }}-${{ github.run_number }}
-          path: |
-            ${{ github.workspace }}/packages/*.deb
-          retention-days: 5
-
-  # 汇总三个 scheme 的产物并抽取 dylib（沿用原命名与校验规则）
-  package:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Download scheme artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: DYYY-*-*
-          merge-multiple: true
-          path: packages
 
       - name: Prepare package metadata
         id: package
