@@ -11210,6 +11210,28 @@ static Class tabBarButtonClass = nil;
 
 %end
 
+// 毛玻璃黑色真凶拦截（41.0 视图树实锤）：评论列表区的不透明分区背景
+// AWEBaseListSectionBackgroundView（rgba(0.086,0.086,0.086,1.0)）盖在原生
+// 毛玻璃层之上。一次性 BFS 清理会被 ListKit 复用/重绘写回（"偶发不透"的
+// 机制），改为在写入点拦截：挂在评论面板状态下的视图，底色写入直接改
+// clear， opaque 写入直接改 NO；非评论面板视图原样透传。
+%hook AWEBaseListSectionBackgroundView
+
+- (void)setBackgroundColor:(UIColor *)color {
+    %orig([DYYYCommentBlurCoordinator backgroundColorForTextView:self proposed:color]);
+}
+
+- (void)setOpaque:(BOOL)opaque {
+    %orig([DYYYCommentBlurCoordinator opaqueForTextView:self proposed:opaque]);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    [DYYYCommentBlurCoordinator layoutTextView:self];
+}
+
+%end
+
 %hook UIView
 
 - (void)setHidden:(BOOL)hidden {
