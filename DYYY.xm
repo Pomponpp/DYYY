@@ -7341,6 +7341,29 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     }
 }
 
+// #26 主修：adjustTableViewHeightForTargetIndex: 是 41.0 详情页
+// 分页切换的必经之路（抖音每次翻页/建行都调它）。#25 日志实锤：
+// 建行后抖音的分页调整会把表拉回 843 重建——在它前后都顶高，
+// 等于在必经之路上设卡，843 没有机会重建（DYKiller 同款位置）。
+- (void)adjustTableViewHeightForTargetIndex:(long long)index {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+    %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+}
+
+// 分页偏移计算前也顶一次：contentOffset 依赖行高，行高在此刻
+// 必须已是 926，否则分页位置按 843 算 → 切页位移（错乱帧来源）。
+- (double)contentOffsetYForCellAtIndex:(long long)index {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+    return %orig;
+}
+
 %end
 
 // 重构全屏·招①setFrame 写入拦截：详情表被写回"视口-底栏"的那一刻当场顶回
