@@ -1,0 +1,90 @@
+name: build deb linux
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Cache theos
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/theos
+          key: linux-theos-v6-full
+
+      - name: Install theos (recursive, with vendor submodules)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$GITHUB_WORKSPACE/theos"
+          # toolchain：官方安装脚本指定的 Linux 源
+          if [ ! -f "$GITHUB_WORKSPACE/theos/toolchain/linux/iphone/bin/clang" ]; then
+            mkdir -p "$GITHUB_WORKSPACE/theos/toolchain"
+            curl -sL https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz | tar -xJf - -C "$GITHUB_WORKSPACE/theos/toolchain/"
+          fi
+          # SDK：官方 install-sdk
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          chmod +x "$THEOS/bin/install-sdk" || true
+          "$THEOS/bin/install-sdk" latest
+          echo "=== 校验 ==="
+          test -d "$THEOS/vendor/include" && echo "vendor/include OK"
+          test -d "$THEOS/vendor/lib" && echo "vendor/lib OK"
+          test -f "$THEOS/toolchain/linux/iphone/bin/clang" && echo "clang OK"
+          ls "$THEOS/sdks" | head -3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xz-utils make perl
+          sudo curl -fsSL -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_linux_x86_64
+          sudo chmod +x /usr/local/bin/ldid
+          sudo curl -fsSL -o "$GITHUB_WORKSPACE/theos/bin/dm.pl" https://raw.githubusercontent.com/theos/theos/master/bin/dm.pl 2>/dev/null || true
+          sudo chmod +x "$GITHUB_WORKSPACE/theos/bin/dm.pl" 2>/dev/null || true
+
+      - name: Build all schemes
+        run: |
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          export PATH="$THEOS/bin:$PATH"
+          # Linux 交叉工具链编不了 arm64e（非 Apple ABI），巨魔注入 arm64 可用
+          rm -rf packages && mkdir -p packages
+          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 ARCHS=arm64 -j$(nproc)
+          for f in packages/*.deb; do
+            [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
+          done
+          printf 'Built: %s\n' packages/*.deb
+
+      - name: Extract dylib from deb
+        run: |
+          set -e
+          DEB=$(ls packages/*.deb | head -1)
+          WORK=$(mktemp -d)
+          cd "$WORK"
+          ar p "$OLDPWD/$DEB" data.tar.xz > data.tar.xz 2>/dev/null || ar p "$OLDPWD/$DEB" data.tar.zst > data.tar.zst 2>/dev/null || ar p "$OLDPWD/$DEB" data.tar.gz > data.tar.gz 2>/dev/null
+          if [ -f data.tar.xz ]; then xz -d data.tar.xz; fi
+          if [ -f data.tar.zst ]; then zstd -d data.tar.zst -o data.tar; fi
+          if [ -f data.tar.gz ]; then gunzip data.tar.gz; fi
+          tar -xf data.tar -C .
+          DYLIB=$(find . -name "*.dylib" -type f | head -1)
+          echo "found: $DYLIB"
+          cp "$DYLIB" "$OLDPWD/packages/DYYY-linux-arm64.dylib"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: DYYY-linux-rootless-${{ github.run_number }}
+          path: |
+            ${{ github.workspace }}/packages/*.deb
+            ${{ github.workspace }}/packages/*.dylib
+          retention-days: 5
