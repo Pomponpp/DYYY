@@ -7218,6 +7218,9 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %hook AWEAwemeDetailTableViewController
 - (CGFloat)baseTableViewBottomInset {
     CGFloat inset = %orig;
+    // 重构全屏·病灶①退路：inset 归零会制造 843/926 认知分裂（拔河/错乱根）。
+    // 默认关闭（不碰 inset，借 DYKiller 手法）；旧行为可用开关回退。
+    if (!DYYYGetBool(@"DYYYFullLegacyInset")) return inset;
     return [DYYYFullscreenCoordinator bottomInsetForDetail:inset controller:self];
 }
 
@@ -7250,6 +7253,74 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %end
 
 // 热点状态栏
+// 重构全屏·招③行高查询：行高只"回答"表视口高，不改写 cell（只答不改）。
+// 生效条件：新版模式（未回退 legacy inset）。
+%hook AWEAwemeDetailTableViewController
+
+- (double)fixedCellHeight {
+    double nativeHeight = %orig;
+    if (DYYYGetBool(@"DYYYFullLegacyInset")) return nativeHeight;
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
+    UITableView *table = nil;
+    if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
+        @try {
+            table = [(AWEAwemeDetailTableViewController *)self tableView];
+        } @catch (__unused NSException *e) {
+            table = nil;
+        }
+    }
+    CGFloat target = table ? CGRectGetHeight(table.bounds) : 0;
+    if (target <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
+    // 只统一"整页行高"（原生值或目标值），特殊行/半成品放行——与 DYKiller 同规则
+    CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
+    CGFloat nativeFull = target + occupied;
+    if (fabs(nativeHeight - target) <= 0.5) return target;
+    if (fabs(nativeHeight - nativeFull) <= 0.5) return target;
+    return nativeHeight;
+}
+
+- (double)cellHeightAtIndex:(long long)index {
+    return [self fixedCellHeight];
+}
+
+- (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    double nativeHeight = %orig;
+    if (DYYYGetBool(@"DYYYFullLegacyInset")) return nativeHeight;
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
+    CGFloat target = table ? CGRectGetHeight(table.bounds) : 0;
+    if (target <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
+    CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
+    CGFloat nativeFull = target + occupied;
+    if (fabs(nativeHeight - target) <= 0.5) return target;
+    if (fabs(nativeHeight - nativeFull) <= 0.5) return target;
+    return nativeHeight;
+}
+
+%end
+
+// 重构全屏·招①setFrame 写入拦截：详情表被写回"视口-底栏"的那一刻当场顶回
+// 满视口（DYKiller 核心手法，不留"切一下才恢复"空窗）。
+// 生效条件：新版模式 + 全屏开启；legacy 回退档下完全不介入。
+%hook AWEAwemeDetailTableView
+
+- (void)setFrame:(CGRect)frame {
+    CGRect adjusted = frame;
+    if (!DYYYGetBool(@"DYYYFullLegacyInset") && DYYYGetBool(@"DYYYEnableFullScreen") && NSThread.isMainThread && self.window) {
+        UIView *parent = self.superview;
+        CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
+        if (target > 0 && fabs(frame.size.height - target) > 0.5) {
+            CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:self];
+            // 只顶回"视口-底栏"这一种压缩写入，特殊尺寸放行（设备无关）
+            if (occupied > 0 && fabs(frame.size.height - (target - occupied)) <= 1.0) {
+                adjusted.size.height = target;
+            }
+        }
+    }
+    %orig(adjusted);
+}
+
+%end
+
 %hook AWEAwemeHotSpotTableViewController
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {

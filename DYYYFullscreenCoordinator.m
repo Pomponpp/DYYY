@@ -122,6 +122,10 @@
     return height > 0 && table.bounds.size.height > 0 ? table.bounds.size.height : height;
 }
 + (void)reconcileDetailPaging:(UIViewController *)controller {
+    // 重构全屏·病灶②退路：beginUpdates/endUpdates 强制重载会打断
+    // 他人主页→详情页的播放器交接（冻结根）。默认关闭（借 DYKiller
+    // "不强制刷新"手法）；旧行为可用开关回退。
+    if (!DYYYGetBool(@"DYYYFullLegacyReload")) return;
     if (![NSThread isMainThread] || !DYYYGetBool(@"DYYYEnableFullScreen") || ![self usesDetailLayoutForController:controller]) return;
     if (![controller respondsToSelector:@selector(tableView)] || ![controller respondsToSelector:@selector(currentVisibleCellIndex)] ||
         ![controller respondsToSelector:@selector(updateTableViewLayoutForTargetPageIndex:)]) return;
