@@ -395,7 +395,9 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"自检报告" key:@"DYYYShowAuditReport" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"导出运行日志" key:@"DYYYExportRuntimeLog" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"头像保存探针" key:@"DYYYEnableAvatarProbe" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"全屏诊断日志" key:@"DYYYFullscreenDiag" type:DYYYSettingItemTypeSwitch]
+            [DYYYSettingItem itemWithTitle:@"全屏诊断日志" key:@"DYYYFullscreenDiag" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"全屏旧机制回退·底栏inset" key:@"DYYYFullLegacyInset" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"全屏旧机制回退·强制刷新" key:@"DYYYFullLegacyReload" type:DYYYSettingItemTypeSwitch]
         ]
     ];
 }
