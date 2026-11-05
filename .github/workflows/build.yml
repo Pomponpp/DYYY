@@ -72,9 +72,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/theos
-          # 固定 key：不再跟随 theos 上游版本（上游一更新旧缓存全作废，
-          # 每次 7 分钟重装顶穿 15 分钟墙）。theos 月级更新即可手动改 key。
-          key: ${{ runner.os }}-theos-stable-v1
+          # 命中现存缓存（11月4日 164MB theos，实测可用）。
+          # key = macOS-<sdks HEAD>——上游 sdks 更新才失效，频率低。
+          key: ${{ runner.os }}-0222fd5413cf4b9af096f37b4621afa2688572f7
 
       - name: Prepare Theos
         if: steps.cache.outputs.cache-hit != 'true'
