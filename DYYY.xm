@@ -7218,9 +7218,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %hook AWEAwemeDetailTableViewController
 - (CGFloat)baseTableViewBottomInset {
     CGFloat inset = %orig;
-    // 重构全屏·病灶①退路：inset 归零会制造 843/926 认知分裂（拔河/错乱根）。
-    // 默认关闭（不碰 inset，借 DYKiller 手法）；旧行为可用开关回退。
-    if (!DYYYGetBool(@"DYYYFullLegacyInset")) return inset;
+    // #20 教训：默认停用 inset 归零导致他人主页作品页底栏不透明、
+    // 不满屏（原生 83pt 预留回来了）。旧机制恢复默认开启；
+    // 新实验档 DYYYFullNewDetailTable 打开时才停用（配合 setFrame 拦截）。
+    if (DYYYGetBool(@"DYYYFullNewDetailTable")) return inset;
     return [DYYYFullscreenCoordinator bottomInsetForDetail:inset controller:self];
 }
 
@@ -7259,7 +7260,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 - (double)fixedCellHeight {
     double nativeHeight = %orig;
-    if (DYYYGetBool(@"DYYYFullLegacyInset")) return nativeHeight;
+    if (!DYYYGetBool(@"DYYYFullNewDetailTable")) return nativeHeight;
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
     UITableView *table = nil;
     if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
@@ -7285,7 +7286,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 - (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     double nativeHeight = %orig;
-    if (DYYYGetBool(@"DYYYFullLegacyInset")) return nativeHeight;
+    if (!DYYYGetBool(@"DYYYFullNewDetailTable")) return nativeHeight;
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
     CGFloat target = table ? CGRectGetHeight(table.bounds) : 0;
     if (target <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
@@ -7305,7 +7306,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 - (void)setFrame:(CGRect)frame {
     CGRect adjusted = frame;
-    if (!DYYYGetBool(@"DYYYFullLegacyInset") && DYYYGetBool(@"DYYYEnableFullScreen") && NSThread.isMainThread && self.window) {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && NSThread.isMainThread && self.window) {
         UIView *parent = self.superview;
         CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
         if (target > 0 && fabs(frame.size.height - target) > 0.5) {

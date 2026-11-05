@@ -4437,6 +4437,30 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                              @"imageName" : @"ic_bug_outlined_20"
                          }]];
 
+    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
+                             @"identifier" : @"DYYYFullNewDetailTable",
+                             @"title" : @"详情页新机制(实验)",
+                             @"detail" : @"详情页全屏改用表高拦截+行高只答不改；关闭时使用旧机制（默认关）",
+                             @"cellType" : @6,
+                             @"imageName" : @"ic_bug_outlined_20"
+                         }]];
+
+    AWESettingItemModel *clearLogItem = [[%c(AWESettingItemModel) alloc] init];
+    clearLogItem.identifier = @"DYYYClearRuntimeLog";
+    clearLogItem.title = @"清空运行日志";
+    clearLogItem.detail = @"删除运行日志、备份与导出副本";
+    clearLogItem.type = 0;
+    clearLogItem.svgIconImageName = @"ic_doc_text_outlined_20";
+    clearLogItem.cellType = 26;
+    clearLogItem.colorStyle = 0;
+    clearLogItem.isEnable = YES;
+    clearLogItem.cellTappedBlock = ^{
+      UIViewController *presenter = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      [DYYYDiagnostics clearRuntimeLogFromViewController:presenter];
+    };
+    [diagnosticItems addObject:clearLogItem];
+
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;
 
