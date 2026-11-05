@@ -7323,16 +7323,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     }
 }
 
-- (void)viewWillLayoutSubviews {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-    %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
 %end
 
 // 重构全屏·招①setFrame 写入拦截：详情表被写回"视口-底栏"的那一刻当场顶回
