@@ -99,23 +99,15 @@ jobs:
         run: |
           echo "$(brew --prefix)/opt/make/libexec/gnubin" >> $GITHUB_PATH
 
-      - name: Build all schemes
+      - name: Build rootless only
         run: |
           rm -rf packages && mkdir -p packages
-          # rootless 先编（巨魔主力），对象缓存随后复用
+          # 15 分钟墙治理（第二阶段）：只编 rootless（巨魔主力）。
+          # rootful/roothide 的 dylib 与 rootless 二进制一致（scheme 仅改
+          # 安装路径前缀），待缓存彻底稳定后再评估补打。
           make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
           for f in packages/*.deb; do
             [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
-          done
-          # rootful（对象缓存命中，只重链接打包）
-          make package FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-          for f in packages/*.deb; do
-            [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootful.deb"
-          done
-          # roothide（同上）
-          make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-          for f in packages/*.deb; do
-            [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-roothide.deb"
           done
           printf 'Built: %s\n' packages/*.deb
 
@@ -138,19 +130,11 @@ jobs:
           shopt -s nullglob
 
           deb_files=(packages/*.deb)
-          if [ "${#deb_files[@]}" -ne 3 ]; then
-            echo "Expected 3 Deb packages, found ${#deb_files[@]}:" >&2
+          if [ "${#deb_files[@]}" -ne 1 ]; then
+            echo "Expected 1 Deb package (rootless), found ${#deb_files[@]}:" >&2
             printf '  %s\n' "${deb_files[@]}" >&2
             exit 1
           fi
-
-          for scheme in rootful rootless roothide; do
-            scheme_files=(packages/*-"${scheme}".deb)
-            if [ "${#scheme_files[@]}" -ne 1 ]; then
-              echo "Expected exactly one ${scheme} package, found ${#scheme_files[@]}" >&2
-              exit 1
-            fi
-          done
 
           printf 'Package artifact: %s\n' "${deb_files[@]}"
 
