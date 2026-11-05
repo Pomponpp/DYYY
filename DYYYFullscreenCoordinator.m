@@ -123,8 +123,10 @@
 }
 + (void)prepareDetailTableNew:(UIViewController *)controller {
     // 重构全屏·招①主路径（实验档专用）：详情表 frame 主动顶到 superview 高。
-    // 只处理"被底栏压缩过"的写入（高 = superview - 底栏占位），特殊尺寸不动；
-    // 与旧 inset 机制互斥（实验档开启时 inset 不归零，此处替代其效果）。
+    // 41.0 实测（日志1）：建行发生在表高还是 843 的时刻，且此后不再重写，
+    // 事后拦截永远等不到触发 → 必须在布局时机主动顶高，不给 843 建行窗口。
+    // 41.0 建行恒定 843（非时序竞态），条件从"仅压缩态"放宽为"≠目标高即顶"，
+    // 不给中间态留活路；顶完后由 reconcile 家族的行高重问把已建行刷新为 926。
     if (![NSThread isMainThread] || !DYYYGetBool(@"DYYYEnableFullScreen")) return;
     if (![self usesDetailLayoutForController:controller]) return;
     if (![controller respondsToSelector:@selector(tableView)]) return;
@@ -139,11 +141,15 @@
     CGFloat target = CGRectGetHeight(parent.bounds);
     CGFloat current = CGRectGetHeight(table.frame);
     if (target <= 0 || fabs(current - target) <= 0.5) return;
-    CGFloat occupied = [self bottomOccupiedHeightForView:table];
-    if (occupied > 0 && fabs(current - (target - occupied)) > 1.0) return; // 非压缩态，放行
     CGRect frame = table.frame;
     frame.size.height = target;
     table.frame = frame;
+    // 顶高后行高缓存与几何已失配：轻量触发行高重问（不用 beginUpdates，
+    // 避免重演 reconcile 强刷打断播放器交接的历史），复用现有 setNeedsLayout。
+    static char stateKey;
+    DYYYFullscreenPlayerState *state = objc_getAssociatedObject(table, @selector(state:));
+    (void)state; (void)stateKey;
+    [table setNeedsLayout];
 }
 
 + (void)reconcileDetailPaging:(UIViewController *)controller {
