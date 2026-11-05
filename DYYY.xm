@@ -7298,14 +7298,32 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     return nativeHeight;
 }
 
-// 重构全屏·招①主路径：详情表创建/布局时主动顶到 superview 高
-// （DYKiller Prepare 思路）。setFrame 拦截只拦"后续写回"，创建首笔
-// 发生在表还没有 window 的时刻，必须由布局时机补上，否则表停在 843。
+// 重构全屏·招①主路径：三个时机全顶（41.0 实测：建行发生在表高 843 时刻，
+// 且此后不再重写 frame，事后拦截永远等不到 → 必须"建行前就位"）。
+// DYKiller 同款时机：setupDetailTableView（表刚建）+ viewWillLayoutSubviews
+// 前后 + viewDidAppear；条件放宽为"≠目标高即顶"，不给 843 建行留窗口。
+- (void)setupDetailTableView {
+    %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+}
+
 - (void)viewWillLayoutSubviews {
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
     %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
 }
 
 %end
