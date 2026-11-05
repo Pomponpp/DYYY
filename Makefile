@@ -44,7 +44,6 @@ DYYY_FILES += DYYYLoginBypassManager.m DYYYLoginRepairHooks.m DYYYPrivacyRecordU
 # 本地修复：进度条黑线（独立文件，同步上游时只需保留本行）
 DYYY_FILES += DYYYProgressUnderlineFix.xm
 # 运行时探针：定位 40.9 头像保存新链路（测完可在设置页关闭）
-DYYY_FILES += DYYYProbe.xm
 DYYY_CFLAGS = -fobjc-arc -w
 DYYY_LDFLAGS = -weak_framework AVFAudio
 DYYY_FRAMEWORKS = CoreAudio

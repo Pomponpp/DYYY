@@ -121,6 +121,31 @@
     // 行高与 UITableView 分页视口使用同一尺寸，预加载时也不扣第二次底栏。
     return height > 0 && table.bounds.size.height > 0 ? table.bounds.size.height : height;
 }
++ (void)prepareDetailTableNew:(UIViewController *)controller {
+    // 重构全屏·招①主路径（实验档专用）：详情表 frame 主动顶到 superview 高。
+    // 只处理"被底栏压缩过"的写入（高 = superview - 底栏占位），特殊尺寸不动；
+    // 与旧 inset 机制互斥（实验档开启时 inset 不归零，此处替代其效果）。
+    if (![NSThread isMainThread] || !DYYYGetBool(@"DYYYEnableFullScreen")) return;
+    if (![self usesDetailLayoutForController:controller]) return;
+    if (![controller respondsToSelector:@selector(tableView)]) return;
+    UITableView *table = nil;
+    @try {
+        table = [(AWEAwemeDetailTableViewController *)controller tableView];
+    } @catch (__unused NSException *e) {
+        return;
+    }
+    UIView *parent = table.superview;
+    if (!parent || CGRectIsEmpty(parent.bounds)) return;
+    CGFloat target = CGRectGetHeight(parent.bounds);
+    CGFloat current = CGRectGetHeight(table.frame);
+    if (target <= 0 || fabs(current - target) <= 0.5) return;
+    CGFloat occupied = [self bottomOccupiedHeightForView:table];
+    if (occupied > 0 && fabs(current - (target - occupied)) > 1.0) return; // 非压缩态，放行
+    CGRect frame = table.frame;
+    frame.size.height = target;
+    table.frame = frame;
+}
+
 + (void)reconcileDetailPaging:(UIViewController *)controller {
     // 重构全屏·病灶②退路：beginUpdates/endUpdates 强制重载会打断
     // #20 教训：默认停用 reconcile 与 inset 归零造成他人主页作品页
@@ -419,8 +444,11 @@
     if (fabs(current.size.height - target.size.height) > 0.25 || fabs(current.origin.y - target.origin.y) > 0.25) {
         view.frame = target;
     }
-    NSString *signature = [NSString stringWithFormat:@"%@/%d/%d", NSStringFromCGRect(target),
-                           DYYYGetBool(@"DYYYEnableFullScreen"), DYYYGetBool(@"DYYYEnableCommentBlur")];
+    // 签名必须覆盖全部几何输入：避让开关改变时 panel 分支结果会变，
+    // 不加入签名会漏掉一次播放器重排。
+    NSString *signature = [NSString stringWithFormat:@"%@/%d/%d/%d", NSStringFromCGRect(target),
+                           DYYYGetBool(@"DYYYEnableFullScreen"), DYYYGetBool(@"DYYYEnableCommentBlur"),
+                           DYYYGetBool(@"DYYYCommentAvoidVideo")];
     NSString *previous = objc_getAssociatedObject(controller, @selector(layoutInteraction:));
     if (![signature isEqualToString:previous]) {
         objc_setAssociatedObject(controller, @selector(layoutInteraction:), signature, OBJC_ASSOCIATION_COPY_NONATOMIC);
@@ -626,7 +654,9 @@
     }
     BOOL activeComment = [self hasCommentInWindow:window];
     UIView *cell = [self cellForPlayer:player owner:owner];
-    if (recommended && DYYYGetBool(@"DYYYEnableCommentBlur") && activeComment && state.hasNormalWindowFrame && state.normalWindow == window &&
+    // 复查修正：此"毛玻璃记录态提前返回"分支必须让位给「评论避让视频」，
+    // 否则避让开关会被这里抢先 return 旁路掉。
+    if (recommended && DYYYGetBool(@"DYYYEnableCommentBlur") && !DYYYGetBool(@"DYYYCommentAvoidVideo") && activeComment && state.hasNormalWindowFrame && state.normalWindow == window &&
         state.normalCell == cell && cell.window == window && player.superview) {
         // 预加载下一页时记录的窗口 y 不能直接用于已滚到屏幕中心的页面。
         CGRect reference = [cell convertRect:cell.bounds toView:window];
@@ -644,7 +674,10 @@
         state.normalRenderSize = CGSizeZero;
         return native;
     }
-    CGRect panel = DYYYGetBool(@"DYYYEnableCommentBlur") ? CGRectNull : [self panelInWindow:window viewport:viewport];
+    // 上游把"毛玻璃"与"评论避让缩小"硬绑成二选一：毛玻璃开时避让被跳过。
+    // 「评论避让视频」开关解耦两者：开启后即使毛玻璃开着，也照常计算
+    // 评论面板避让区（视频缩到评论上方，官方行为）；关闭维持原二选一。
+    CGRect panel = (DYYYGetBool(@"DYYYEnableCommentBlur") && !DYYYGetBool(@"DYYYCommentAvoidVideo")) ? CGRectNull : [self panelInWindow:window viewport:viewport];
     if (!CGRectIsNull(panel)) {
         // 用满状态栏下沿到评论区顶部的空间，等比缩放时不额外预留导航栏或间距。
         CGFloat top = MAX(CGRectGetMinY(viewport), CGRectGetMinY(window.bounds) + window.safeAreaInsets.top);
@@ -834,7 +867,9 @@
     return CGRectIsNull(content) ? view.bounds : [image convertRect:content toView:view];
 }
 + (CGAffineTransform)targetForImageView:(UIView *)view native:(CGAffineTransform)native state:(DYYYFullscreenPlayerState *)state {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || DYYYGetBool(@"DYYYEnableCommentBlur") || !view.window || !view.superview) {
+    // 图文避让与视频避让同一语义：「评论避让视频」开启时，即使毛玻璃开着
+    // 也照常计算图文的评论避让变换（官方行为）；关闭维持上游二选一。
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || (DYYYGetBool(@"DYYYEnableCommentBlur") && !DYYYGetBool(@"DYYYCommentAvoidVideo")) || !view.window || !view.superview) {
         return state.imageAdjusted && state.hasClosedImageTransform ? state.closedImageTransform : native;
     }
     UIViewController *owner = [DYYYUtils firstAvailableViewControllerFromView:view];
@@ -859,7 +894,9 @@
     if (state.applying) return transform;
     [[self images] addObject:view];
     // 保留毛玻璃模式的原有冻结行为，并恢复本协调器曾缩小的图片。
-    if (DYYYGetBool(@"DYYYEnableCommentBlur")) {
+    // 与 targetForImageView 同步：「评论避让视频」开启时不拦截，
+    // 否则会把刚算好的避让 transform 在这里旁路回去。
+    if (DYYYGetBool(@"DYYYEnableCommentBlur") && !DYYYGetBool(@"DYYYCommentAvoidVideo")) {
         return state.imageAdjusted && state.hasClosedImageTransform ? state.closedImageTransform : view.transform;
     }
     state.nativeImageTransform = transform;
@@ -901,8 +938,9 @@
     }
     UIView *view = controller.viewIfLoaded;
     CGRect rect = visible && view.window ? [view convertRect:view.bounds toView:view.window] : CGRectNull;
-    NSString *signature = [NSString stringWithFormat:@"%p/%@/%d/%d/%d", view.window, NSStringFromCGRect(rect), visible,
-                           DYYYGetBool(@"DYYYEnableFullScreen"), DYYYGetBool(@"DYYYEnableCommentBlur")];
+    NSString *signature = [NSString stringWithFormat:@"%p/%@/%d/%d/%d/%d", view.window, NSStringFromCGRect(rect), visible,
+                           DYYYGetBool(@"DYYYEnableFullScreen"), DYYYGetBool(@"DYYYEnableCommentBlur"),
+                           DYYYGetBool(@"DYYYCommentAvoidVideo")];
     NSString *previous = objc_getAssociatedObject(controller, @selector(commentController:visible:));
     if ([signature isEqualToString:previous]) return;
     objc_setAssociatedObject(controller, @selector(commentController:visible:), signature, OBJC_ASSOCIATION_COPY_NONATOMIC);
