@@ -7280,8 +7280,17 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     // 此前误写为 target + occupied（926+83=1009），条件永不命中，招③形同虚设。
     CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
     CGFloat nativeCompressed = target - occupied;
-    if (fabs(nativeHeight - target) <= 0.5) return target;
-    if (occupied > 0 && fabs(nativeHeight - nativeCompressed) <= 0.5) return target;
+    // 41.0 终局修（日志 l24 实锤）：建行瞬间表还是 843 → native==target 旧条件
+    // 直接返回 843，闭环死锁在“表高谁先顶”。改为：native 是压缩整页行高时
+    // 直接答窗口高（表随后被内容撑高），绕开先后依赖。
+    UIWindow *window = table.window;
+    CGFloat windowH = window ? CGRectGetHeight(window.bounds) : 0;
+    if (windowH > 0 && occupied > 0 && fabs(nativeHeight - nativeCompressed) <= 0.5) {
+        return windowH;
+    }
+    if (fabs(nativeHeight - target) <= 0.5 && windowH > 0 && target < windowH) {
+        return windowH;
+    }
     return nativeHeight;
 }
 
@@ -7297,8 +7306,17 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (target <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
     CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
     CGFloat nativeCompressed = target - occupied;
-    if (fabs(nativeHeight - target) <= 0.5) return target;
-    if (occupied > 0 && fabs(nativeHeight - nativeCompressed) <= 0.5) return target;
+    // 41.0 终局修（日志 l24 实锤）：建行瞬间表还是 843 → native==target 旧条件
+    // 直接返回 843，闭环死锁在“表高谁先顶”。改为：native 是压缩整页行高时
+    // 直接答窗口高（表随后被内容撑高），绕开先后依赖。
+    UIWindow *window = table.window;
+    CGFloat windowH = window ? CGRectGetHeight(window.bounds) : 0;
+    if (windowH > 0 && occupied > 0 && fabs(nativeHeight - nativeCompressed) <= 0.5) {
+        return windowH;
+    }
+    if (fabs(nativeHeight - target) <= 0.5 && windowH > 0 && target < windowH) {
+        return windowH;
+    }
     return nativeHeight;
 }
 
