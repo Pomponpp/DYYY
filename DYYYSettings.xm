@@ -3331,6 +3331,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
               @"imageName" : @"ic_comment_outlined_20"
           },
           @{
+              @"identifier" : @"DYYYCommentAvoidVideo",
+              @"title" : @"评论避让视频",
+              @"subTitle" : @"打开评论区时视频缩小让位（配合毛玻璃需手动开启）",
+              @"detail" : @"",
+              @"cellType" : @37,
+              @"imageName" : @"ic_comment_outlined_20"
+          },
+          @{
               @"identifier" : @"DYYYShowExactInteractionCounts",
               @"title" : @"显示详细互动数",
               @"detail" : @"",
@@ -4420,14 +4428,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       [DYYYDiagnostics exportRuntimeLogFromViewController:presenter];
     };
     [diagnosticItems addObject:exportLogItem];
-
-    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
-                             @"identifier" : @"DYYYEnableAvatarProbe",
-                             @"title" : @"头像保存探针",
-                             @"detail" : @"记录头像菜单的类信息到运行日志，排查完可关闭",
-                             @"cellType" : @6,
-                             @"imageName" : @"ic_bug_outlined_20"
-                         }]];
 
     [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
                              @"identifier" : @"DYYYFullscreenDiag",

@@ -7255,7 +7255,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 // 热点状态栏
 // 重构全屏·招③行高查询：行高只"回答"表视口高，不改写 cell（只答不改）。
-// 生效条件：新版模式（未回退 legacy inset）。
+// 生效条件：实验档 DYYYFullNewDetailTable 开启（默认关=旧机制原样）。
 %hook AWEAwemeDetailTableViewController
 
 - (double)fixedCellHeight {
@@ -7272,11 +7272,12 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     }
     CGFloat target = table ? CGRectGetHeight(table.bounds) : 0;
     if (target <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
-    // 只统一"整页行高"（原生值或目标值），特殊行/半成品放行——与 DYKiller 同规则
+    // 只统一"整页行高"：原生整页行高 = 表视口 - 底栏占位（DYKiller 同规则）。
+    // 此前误写为 target + occupied（926+83=1009），条件永不命中，招③形同虚设。
     CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
-    CGFloat nativeFull = target + occupied;
+    CGFloat nativeCompressed = target - occupied;
     if (fabs(nativeHeight - target) <= 0.5) return target;
-    if (fabs(nativeHeight - nativeFull) <= 0.5) return target;
+    if (occupied > 0 && fabs(nativeHeight - nativeCompressed) <= 0.5) return target;
     return nativeHeight;
 }
 
@@ -7291,10 +7292,20 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     CGFloat target = table ? CGRectGetHeight(table.bounds) : 0;
     if (target <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
     CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
-    CGFloat nativeFull = target + occupied;
+    CGFloat nativeCompressed = target - occupied;
     if (fabs(nativeHeight - target) <= 0.5) return target;
-    if (fabs(nativeHeight - nativeFull) <= 0.5) return target;
+    if (occupied > 0 && fabs(nativeHeight - nativeCompressed) <= 0.5) return target;
     return nativeHeight;
+}
+
+// 重构全屏·招①主路径：详情表创建/布局时主动顶到 superview 高
+// （DYKiller Prepare 思路）。setFrame 拦截只拦"后续写回"，创建首笔
+// 发生在表还没有 window 的时刻，必须由布局时机补上，否则表停在 843。
+- (void)viewWillLayoutSubviews {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+    %orig;
 }
 
 %end
@@ -13023,6 +13034,13 @@ static void findTargetViewInView(UIView *view) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
                      [DYYYClassRegistry runStartupAudit];
+                     // 状态自证日志：导出的日志首段即可确认实验档是否生效，
+                     // 避免"拨了开关但代码没干活"与"没拨开关"两种情况混淆。
+                     NSLog(@"[DYYY][fullscreen] 启动状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
+                           DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
+                           DYYYGetBool(@"DYYYFullNewDetailTable") ? 1 : 0,
+                           DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
+                           DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0);
                    });
 
     Class fullscreenCommentClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController",

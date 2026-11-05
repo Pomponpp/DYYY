@@ -143,6 +143,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"显示进度时长" key:@"DYYYShowScheduleDisplay" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"显示详细互动数" key:@"DYYYShowExactInteractionCounts" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"查看评论暂停播放" key:@"DYYYCommentPausePlayback" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"评论避让视频" key:@"DYYYCommentAvoidVideo" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"进度时长样式" key:@"DYYYScheduleStyle" type:DYYYSettingItemTypeTextField placeholder:@"默认"],
             [DYYYSettingItem itemWithTitle:@"进度纵轴位置" key:@"DYYYTimelineVerticalPosition" type:DYYYSettingItemTypeTextField placeholder:@"-12.5"],
             [DYYYSettingItem itemWithTitle:@"进度标签颜色" key:@"DYYYProgressLabelColor" type:DYYYSettingItemTypeTextField placeholder:@"十六进制"],
@@ -394,7 +395,6 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
         @[
             [DYYYSettingItem itemWithTitle:@"自检报告" key:@"DYYYShowAuditReport" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"导出运行日志" key:@"DYYYExportRuntimeLog" type:DYYYSettingItemTypeAction],
-            [DYYYSettingItem itemWithTitle:@"头像保存探针" key:@"DYYYEnableAvatarProbe" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"全屏诊断日志" key:@"DYYYFullscreenDiag" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"详情页新机制(实验)" key:@"DYYYFullNewDetailTable" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"清空运行日志" key:@"DYYYClearRuntimeLog" type:DYYYSettingItemTypeAction]
