@@ -45,11 +45,6 @@
 @implementation DYYYFullscreenPlayerState
 @end
 
-// 前向声明：供 keepsMediaHostFullscreen 提前调用（实现位于文件后部媒体容器区）
-@interface DYYYFullscreenCoordinator (DYYYPageIdentity)
-+ (BOOL)hostIsCurrentPage:(UIView *)host owner:(UIViewController *)owner;
-@end
-
 @implementation DYYYFullscreenCoordinator
 + (NSString *)buildIdentifier { return @"fullscreen-creator-native-20261024.2"; }
 + (NSString *)contentSourceForController:(UIViewController *)controller {
@@ -338,19 +333,6 @@
     return controllers;
 }
 + (void)invalidateGuides {
-    // 页面切换（Tab 切换、推荐页↔我的作品页）时，旧页面的撑满标记会残留，
-    // 导致切回来时布局位移。这里把不在当前窗口可见范围内的承载区状态一并清掉。
-    for (UIView *player in [self players].allObjects) {
-        if (!player.window) continue;
-        DYYYFullscreenPlayerState *state = objc_getAssociatedObject(player, @selector(state:));
-        if (!state || !state.mediaHost) continue;
-        if ([self visible:player]) continue;
-        state.applying = YES;
-        player.frame = state.nativeHostFrame;
-        state.applying = NO;
-        state.mediaHost = NO;
-    }
-
     static BOOL scheduled = NO;
     if (scheduled) return;
     scheduled = YES;
@@ -486,11 +468,6 @@
     state.normalWindow = view.window;
 }
 + (BOOL)keepsMediaHostFullscreen:(UIView *)view state:(DYYYFullscreenPlayerState *)state {
-    // 回归撤回（用户确认冻结非原生）：会话起点基线只凭 mediaHost 标记维持撑满。
-    // 40.9 加的 hostIsCurrentPage 闸门在滑动中反复翻转，bounds/center 在
-    // 全屏与原区间来回切换，正是画面冻结（Metal 被打停、需手动暂停再播）的源头。
-    // 已撑满的页保持撑满、不再写回，frame 零抖动；离屏页不新增撑满由
-    // layoutPlayerContainer 的 hostVisible 分支负责（只跳过、不还原）。
     return state.mediaHost && !state.applying && state.normalWindow == view.window &&
         CGRectEqualToRect(state.mediaHostParentBounds, view.superview.bounds) &&
         DYYYGetBool(@"DYYYEnableFullScreen") && [self usesFullscreenLayoutForController:state.owner];
@@ -635,9 +612,6 @@
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || ![self visible:player]) return native;
     UIWindow *window = player.window;
     UIViewController *owner = [self owner:player state:state];
-    // 回归撤回：会话起点基线只用 visible: 几何判定。40.9 加的 hostIsCurrentPage
-    // 闸门在滑动中反复翻转，播放器尺寸在原生与全屏间来回切，同样是 frame 抖动源。
-    // 离屏页不再被"新撑满"由 layoutPlayerContainer 的 hostVisible 分支负责。
     BOOL recommended = [self usesRecommendedLayoutForController:owner];
     if (![self usesFullscreenLayoutForController:owner]) return native;
     if ([self isImageContentController:owner]) {
@@ -756,61 +730,6 @@
 }
 #pragma mark - 媒体容器
 
-// 判断该视图所在的分页 cell 是否就是"当前页"。
-// 用对象身份比较（visibleCells 里离内容中心最近的那个），避免几何相交的竞态。
-// 注意：结果不缓存。页面切换（推荐页 ↔ 我的作品页等）时 cell 会被复用，
-// 缓存会沿用旧值导致该撑满的没撑满、不该撑满的撑满，表现为布局位移。
-+ (BOOL)hostIsCurrentPage:(UIView *)host owner:(UIViewController *)owner {
-    UIView *cell = [self cellForPlayer:host owner:owner];
-    if (!cell || !cell.window) return NO;
-    UIView *pager = [self pagingViewForCell:cell];
-    if (!pager || pager.window != cell.window) return NO;
-
-    // 横向偏移保护：#10 日志显示精选页等横向 feed 的 cell 会出现 X=-128 的
-    // 非对齐状态，这类页面不参与纵向撑满（其视频由原生逻辑自行布局）。
-    CGRect cellWindowRect = [cell convertRect:cell.bounds toView:cell.window];
-    if (fabs(CGRectGetMinX(cellWindowRect)) > 1.0 ||
-        fabs(CGRectGetWidth(cellWindowRect) - CGRectGetWidth(cell.window.bounds)) > 1.0) {
-        return NO;
-    }
-
-    BOOL isCurrent = NO;
-    if ([pager isKindOfClass:[UITableView class]]) {
-        UITableView *table = (UITableView *)pager;
-        CGFloat midY = table.contentOffset.y + CGRectGetHeight(table.bounds) * 0.5;
-        UIView *best = nil;
-        CGFloat bestDistance = CGFLOAT_MAX;
-        for (UITableViewCell *visible in table.visibleCells) {
-            CGRect rect = [visible convertRect:visible.bounds toView:table];
-            CGFloat distance = fabs(CGRectGetMidY(rect) - midY);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = visible;
-            }
-        }
-        isCurrent = (best == cell);
-    } else if ([pager isKindOfClass:[UICollectionView class]]) {
-        UICollectionView *collection = (UICollectionView *)pager;
-        CGFloat midY = collection.contentOffset.y + CGRectGetHeight(collection.bounds) * 0.5;
-        UIView *best = nil;
-        CGFloat bestDistance = CGFLOAT_MAX;
-        for (UICollectionViewCell *visible in collection.visibleCells) {
-            CGRect rect = [visible convertRect:visible.bounds toView:collection];
-            CGFloat distance = fabs(CGRectGetMidY(rect) - midY);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = visible;
-            }
-        }
-        isCurrent = (best == cell);
-    } else {
-        CGRect cellRect = [cell convertRect:cell.bounds toView:cell.window];
-        CGPoint windowCenter = CGPointMake(CGRectGetMidX(cell.window.bounds), CGRectGetMidY(cell.window.bounds));
-        isCurrent = CGRectContainsPoint(cellRect, windowCenter);
-    }
-    return isCurrent;
-}
-
 + (void)layoutPlayerContainer:(UIViewController *)controller {
     Class pureListClass = NSClassFromString(@"AFDPureModePageListViewController");
     BOOL pureModeList = pureListClass && [controller isKindOfClass:pureListClass];
@@ -832,13 +751,6 @@
         UIView *parent = host.superview;
         if (!parent || CGRectIsEmpty(parent.bounds) || !CGAffineTransformIsIdentity(host.transform)) continue;
         if (!state.mediaHost && ![self view:host spansWidthOf:parent]) continue;
-        // 40.9 起曾用「非当前页就把已撑满的 host 还原回 nativeHostFrame」来防
-        // 双视频叠加，但实测这正是画面冻结的回归源：滚动/切页时判定反复翻转，
-        // 承载区 frame 被逐帧来回写，播放器 Metal 渲染被中断（画面定格、弹幕照常，
-        // 需手动暂停再播放才恢复）。用户确认原版无此问题——这里只保留判定，
-        // 不再对离屏页写回 frame：非当前页保持原样，杜绝 frame 抖动。
-        BOOL hostVisible = [self hostIsCurrentPage:host owner:controller];
-        if (!hostVisible) continue;
         state = [self state:host];
         if (!state.mediaHost || state.normalWindow != view.window || !CGRectEqualToRect(state.mediaHostParentBounds, parent.bounds)) {
             state.nativeHostFrame = current;
@@ -850,7 +762,8 @@
         state.owner = controller;
         state.normalWindow = view.window;
         state.fullscreenHostFrame = target;
-        // 诊断：完整记录每次撑满判定，用于定位滑动时多页同时撑满的问题。
+        // 诊断：完整记录每次撑满判定（纯打印，不改行为），用于定位滑动时
+        // 多页同时撑满/新旧页状态打架的问题。开关：设置→诊断工具→全屏诊断日志。
         if (DYYYGetBool(@"DYYYFullscreenDiag")) {
             UIView *diagCell = [self cellForPlayer:host owner:controller];
             UIView *diagPager = [self pagingViewForCell:diagCell];
@@ -876,9 +789,6 @@
             host.frame = target;
             state.applying = NO;
         }
-        // 注意：不要改 cell 的高度。实测（#10 日志）显示同步撑满 cell 会与
-        // 抖音原生布局冲突：cell 高度在 926/843 间跳动、表格横向偏移 -128，
-        // 造成整页错位。容器本身在 cell 内铺满即可，cell 尺寸归抖音管。
     }
 }
 
