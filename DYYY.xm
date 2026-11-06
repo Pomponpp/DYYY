@@ -7271,32 +7271,15 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     double nativeHeight = %orig;
     if (!DYYYGetBool(@"DYYYFullNewDetailTable")) return nativeHeight;
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
-    UITableView *table = nil;
-    if ([self respondsToSelector:NSSelectorFromString(@"tableView")]) {
-        @try {
-            table = [(AWEAwemeDetailTableViewController *)self tableView];
-        } @catch (__unused NSException *e) {
-            table = nil;
-        }
-    }
-    CGFloat target = table ? CGRectGetHeight(table.bounds) : 0;
-    if (target <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
-    // 只统一"整页行高"：原生整页行高 = 表视口 - 底栏占位（DYKiller 同规则）。
-    // 此前误写为 target + occupied（926+83=1009），条件永不命中，招③形同虚设。
-    CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
-    CGFloat nativeCompressed = target - occupied;
-    // 41.0 终局修（日志 l24 实锤）：建行瞬间表还是 843 → native==target 旧条件
-    // 直接返回 843，闭环死锁在“表高谁先顶”。改为：native 是压缩整页行高时
-    // 直接答窗口高（表随后被内容撑高），绕开先后依赖。
-    UIWindow *window = table.window;
+    // #28 改缓存（长期维护形态）：从表创建第一次查询起就无条件答窗口高。
+    // 抖音把 926 缓存进行高表后，落点(N×926)与建行(926)同源，
+    // 「点A弹A」与「全屏」同时成立，不再需要任何时机博弈。
+    // 旧实现的 occupied/nativeCompressed 条件会让部分查询答 843，
+    // 缓存混值 → 点A弹B / 843 回归二选一。
+    UIWindow *window = self.viewIfLoaded.window;
     CGFloat windowH = window ? CGRectGetHeight(window.bounds) : 0;
-    if (windowH > 0 && occupied > 0 && fabs(nativeHeight - nativeCompressed) <= 0.5) {
-        return windowH;
-    }
-    if (fabs(nativeHeight - target) <= 0.5 && windowH > 0 && target < windowH) {
-        return windowH;
-    }
-    return nativeHeight;
+    if (windowH <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
+    return windowH;
 }
 
 - (double)cellHeightAtIndex:(long long)index {
@@ -7307,60 +7290,19 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     double nativeHeight = %orig;
     if (!DYYYGetBool(@"DYYYFullNewDetailTable")) return nativeHeight;
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
-    CGFloat target = table ? CGRectGetHeight(table.bounds) : 0;
-    if (target <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
-    CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:table];
-    CGFloat nativeCompressed = target - occupied;
-    // 41.0 终局修（日志 l24 实锤）：建行瞬间表还是 843 → native==target 旧条件
-    // 直接返回 843，闭环死锁在“表高谁先顶”。改为：native 是压缩整页行高时
-    // 直接答窗口高（表随后被内容撑高），绕开先后依赖。
     UIWindow *window = table.window;
     CGFloat windowH = window ? CGRectGetHeight(window.bounds) : 0;
-    if (windowH > 0 && occupied > 0 && fabs(nativeHeight - nativeCompressed) <= 0.5) {
-        return windowH;
-    }
-    if (fabs(nativeHeight - target) <= 0.5 && windowH > 0 && target < windowH) {
-        return windowH;
-    }
-    return nativeHeight;
+    if (windowH <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
+    return windowH;
 }
 
-// 重构全屏·招①主路径：三个时机全顶（41.0 实测：建行发生在表高 843 时刻，
-// 且此后不再重写 frame，事后拦截永远等不到 → 必须"建行前就位"）。
-// DYKiller 同款时机：setupDetailTableView（表刚建）+ viewWillLayoutSubviews
-// 前后 + viewDidAppear；条件放宽为"≠目标高即顶"，不给 843 建行留窗口。
+// #28 后仅剩两处顶高（表创建 + viewDidAppear 兜底）：
+// 行高缓存已从第一次查询就是 926，落点与建行同源，不再需要时机博弈。
 - (void)setupDetailTableView {
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
-}
-
-- (void)viewWillLayoutSubviews {
-    %orig;
-    // 只保留 %orig 之后顶高：布局/落点先按抖音自己的体系算完，再撑到 926
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
-// #27 修「点A弹B/打开拉扯」：push 详情页时，抖音按它的行高体系
-// （843）计算初始落点。若在 %orig 前顶高（行高变 926），落点换算
-// 错位 → 点A落在别的视频上 + 打开时有一帧落点修正拉扯。
-// 改为 %orig 之后才顶高：落点先按 843 体系算对，随后表撑到 926，
-// 行高查询同步答 926，cell 内容按新行高自动重排到位。
-- (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
-// 分页偏移计算：此处不能再顶高（%orig 内正在算落点，改表高会让
-// 偏移按新行高错算 = 点A弹B/拉扯的同源）。落点交给抖音自己算，
-// 顶高统一放到 adjustTableViewHeightForTargetIndex: 的 %orig 之后。
-- (double)contentOffsetYForCellAtIndex:(long long)index {
-    return %orig;
 }
 
 %end
