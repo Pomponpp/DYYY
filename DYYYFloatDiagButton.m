@@ -16,7 +16,7 @@ static DYYYFloatDiagButton *_shared = nil;
         _shared.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.25].CGColor;
         _shared.tintColor = UIColor.whiteColor;
         _shared.titleLabel.font = [UIFont boldSystemFontOfSize:20];
-        [(_UIButton *)_shared setTitle:@"🔧" forState:UIControlStateNormal];
+        [_shared setTitle:@"🔧" forState:UIControlStateNormal];
         _shared.frame = CGRectMake(0, 0, 44, 44);
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:_shared action:@selector(dyyy_handlePan:)];
         [_shared addGestureRecognizer:pan];
