@@ -2284,6 +2284,25 @@ static void DYYYAppendViewTree(UIView *view, NSMutableString *buffer, NSUInteger
     NSString *accessibility = view.accessibilityLabel ?: @"";
     NSString *extra = @"";
 
+    // 全屏诊断三要素：背景色（谁在涂黑底）、裁剪（谁把 926 裁成 843）、不透明
+    NSString *bgDesc = @"(nil)";
+    CGColorRef bg = view.backgroundColor.CGColor;
+    if (bg) {
+        CGFloat r = 0, g = 0, b = 0, a = 0;
+        if (CGColorGetNumberOfComponents(bg) >= 3 && CGColorSpaceGetModel(CGColorGetColorSpace(bg)) == kCGColorSpaceModelRGB) {
+            CGFloat comps[4] = {0};
+            size_t n = CGColorGetNumberOfComponents(bg) < 4 ? CGColorGetNumberOfComponents(bg) : 4;
+            const CGFloat *raw = CGColorGetComponents(bg);
+            for (size_t i = 0; i < n; i++) comps[i] = raw[i];
+            r = comps[0]; g = comps[1]; b = comps[2]; a = comps[3];
+            bgDesc = [NSString stringWithFormat:@"rgba(%.3f,%.3f,%.3f,%.2f)", r, g, b, a];
+        } else {
+            bgDesc = @"(非RGB)";
+        }
+    }
+    extra = [NSString stringWithFormat:@" bg=%@ clip=%d opaque=%d",
+             bgDesc, view.clipsToBounds, view.opaque];
+
     if ([view isKindOfClass:[UILabel class]]) {
         NSString *text = ((UILabel *)view).text ?: @"";
         extra = [NSString stringWithFormat:@" text=\"%@\"", DYYYSafeDescription(text)];
