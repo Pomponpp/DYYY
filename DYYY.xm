@@ -6285,6 +6285,11 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 
 - (void)viewDidLayoutSubviews {
     %orig;
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        // 快捷回复栏（收藏/喜欢页合集视频用的浅色输入栏）也纳入统一透明化，
+        // 不再只有它一个页面透、其他页面深灰不一致。
+        [DYYYFullscreenCoordinator layoutBottomInput:self.view controller:self];
+    }
 
     if (DYYYGetBool(@"DYYYHideReply")) {
         [self.view removeFromSuperview];
@@ -7332,35 +7337,29 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 - (void)viewWillLayoutSubviews {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
     %orig;
+    // 只保留 %orig 之后顶高：布局/落点先按抖音自己的体系算完，再撑到 926
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
 
-// #26 主修：adjustTableViewHeightForTargetIndex: 是 41.0 详情页
-// 分页切换的必经之路（抖音每次翻页/建行都调它）。#25 日志实锤：
-// 建行后抖音的分页调整会把表拉回 843 重建——在它前后都顶高，
-// 等于在必经之路上设卡，843 没有机会重建（DYKiller 同款位置）。
+// #27 修「点A弹B/打开拉扯」：push 详情页时，抖音按它的行高体系
+// （843）计算初始落点。若在 %orig 前顶高（行高变 926），落点换算
+// 错位 → 点A落在别的视频上 + 打开时有一帧落点修正拉扯。
+// 改为 %orig 之后才顶高：落点先按 843 体系算对，随后表撑到 926，
+// 行高查询同步答 926，cell 内容按新行高自动重排到位。
 - (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
 
-// 分页偏移计算前也顶一次：contentOffset 依赖行高，行高在此刻
-// 必须已是 926，否则分页位置按 843 算 → 切页位移（错乱帧来源）。
+// 分页偏移计算：此处不能再顶高（%orig 内正在算落点，改表高会让
+// 偏移按新行高错算 = 点A弹B/拉扯的同源）。落点交给抖音自己算，
+// 顶高统一放到 adjustTableViewHeightForTargetIndex: 的 %orig 之后。
 - (double)contentOffsetYForCellAtIndex:(long long)index {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
     return %orig;
 }
 
