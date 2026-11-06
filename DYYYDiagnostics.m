@@ -157,6 +157,102 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     return [dir stringByAppendingPathComponent:name];
 }
 
+// 一键诊断包：日志 + 视图树 + 环境/开关状态 + 截图，四样时间戳天然对齐。
+// 导出为单个目录（Documents/DYYY/logs/DYYY-diag-时间戳/）后弹分享。
++ (void)exportDiagnosticsBundleFromViewController:(UIViewController *)presenter {
+    if (!presenter) {
+        return;
+    }
+    [self cleanupStaleLogs];
+    [self rotateRuntimeLogIfNeeded];
+
+    // 状态指纹（与单导日志一致，诊断包自带可对性）
+    [self appendRuntimeLogLine:@"—— 导出时刻开关状态 ——"];
+    [self appendRuntimeLogLine:[NSString stringWithFormat:
+        @"[DYYY][fullscreen] 导出状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
+        DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
+        DYYYGetBool(@"DYYYFullNewDetailTable") ? 1 : 0,
+        DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
+        DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0]];
+
+    NSDateFormatter *nameFormatter = [[NSDateFormatter alloc] init];
+    nameFormatter.dateFormat = @"yyyyMMdd-HHmmss";
+    NSString *stamp = [nameFormatter stringFromDate:[NSDate date]];
+    NSString *bundleDir = [[self exportedLogPathWithName:@""] stringByAppendingString:
+        [NSString stringWithFormat:@"DYYY-diag-%@", stamp]];
+    [[NSFileManager defaultManager] createDirectoryAtPath:bundleDir
+                              withIntermediateDirectories:YES attributes:nil error:nil];
+
+    // ① runtime.log
+    NSString *logSrc = [self runtimeLogPath];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:logSrc]) {
+        [[NSString stringWithFormat:@"DYYY 诊断包 %@\n（运行日志为空）\n", [NSDate date]]
+            writeToFile:logSrc atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    }
+    [[NSFileManager defaultManager] copyItemAtPath:logSrc
+                                           toPath:[bundleDir stringByAppendingPathComponent:@"runtime.log"]
+                                            error:nil];
+
+    // ② 视图树快照（主线程采集——UIView 属性必须主线程读）
+    NSString *treePath = [bundleDir stringByAppendingPathComponent:@"view-tree.txt"];
+    if ([NSThread isMainThread]) {
+        [DYYYUtils dumpAllWindowsViewTreeToFile:treePath];
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+          [DYYYUtils dumpAllWindowsViewTreeToFile:treePath];
+        });
+    }
+
+    // ③ 环境与开关状态
+    NSMutableDictionary *state = [NSMutableDictionary dictionary];
+    state[@"timestamp"] = [NSDate date];
+    state[@"deviceModel"] = [UIDevice currentDevice].model;
+    state[@"systemVersion"] = [UIDevice currentDevice].systemVersion;
+    state[@"appVersion"] = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    state[@"screenBounds"] = NSStringFromCGRect([UIScreen mainScreen].bounds);
+    state[@"screenScale"] = @([UIScreen mainScreen].scale);
+    state[@"fullScreen"] = @(DYYYGetBool(@"DYYYEnableFullScreen"));
+    state[@"fullNewDetailTable"] = @(DYYYGetBool(@"DYYYFullNewDetailTable"));
+    state[@"commentAvoidVideo"] = @(DYYYGetBool(@"DYYYCommentAvoidVideo"));
+    state[@"commentBlur"] = @(DYYYGetBool(@"DYYYEnableCommentBlur"));
+    state[@"fullscreenDiag"] = @(DYYYGetBool(@"DYYYFullscreenDiag"));
+    state[@"hideStatusbar"] = @(DYYYGetBool(@"DYYYHideStatusbar"));
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:state options:NSJSONWritingPrettyPrinted error:nil];
+    if (jsonData) {
+        [jsonData writeToFile:[bundleDir stringByAppendingPathComponent:@"state.json"]
+                  atomically:YES];
+    }
+
+    // ④ 截图（Metal 渲染内容可能是黑的，用于看 UI 布局层）
+    UIView *snapshotRoot = presenter.view.window ?: presenter.view;
+    CGSize size = snapshotRoot.bounds.size;
+    if (size.width > 0 && size.height > 0) {
+        UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat defaultFormat];
+        fmt.scale = [UIScreen mainScreen].scale;
+        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:size format:fmt];
+        UIImage *shot = [renderer imageWithActions:^(__unused UIGraphicsImageRendererContext *ctx) {
+            BOOL ok = [snapshotRoot drawViewHierarchyInRect:snapshotRoot.bounds afterScreenUpdates:YES];
+            if (!ok) {
+                [snapshotRoot.layer renderInContext:ctx.CGContext];
+            }
+        }];
+        NSData *png = UIImagePNGRepresentation(shot);
+        if (png) {
+            [png writeToFile:[bundleDir stringByAppendingPathComponent:@"screenshot.png"] atomically:YES];
+        }
+    }
+
+    // 分享目录（UIActivityViewController 支持目录，落到"文件"App）
+    NSURL *bundleURL = [NSURL fileURLWithPath:bundleDir];
+    UIActivityViewController *share = [[UIActivityViewController alloc]
+        initWithActivityItems:@[ bundleURL ] applicationActivities:nil];
+    share.popoverPresentationController.sourceView = presenter.view;
+    share.popoverPresentationController.sourceRect =
+        CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
+    [presenter presentViewController:share animated:YES completion:nil];
+    [DYYYToast showSuccessToastWithMessage:@"诊断包已生成，请存储到文件"];
+}
+
 + (void)exportRuntimeLogFromViewController:(UIViewController *)presenter {
     if (!presenter) {
         return;

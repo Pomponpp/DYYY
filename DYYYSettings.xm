@@ -4398,7 +4398,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
     AWESettingItemModel *auditReportItem = [[%c(AWESettingItemModel) alloc] init];
     auditReportItem.identifier = @"DYYYShowAuditReport";
-    auditReportItem.title = @"自检报告";
+    auditReportItem.title = @"环境自检";
     auditReportItem.detail = @"检查关键功能是否因抖音改版失效";
     auditReportItem.type = 0;
     auditReportItem.svgIconImageName = @"ic_shieldcheck_outlined_20";
@@ -4415,7 +4415,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
     AWESettingItemModel *exportLogItem = [[%c(AWESettingItemModel) alloc] init];
     exportLogItem.identifier = @"DYYYExportRuntimeLog";
-    exportLogItem.title = @"导出运行日志";
+    exportLogItem.title = @"导出日志";
     exportLogItem.detail = @"保存到「文件」App，可发给作者定位问题";
     exportLogItem.type = 0;
     exportLogItem.svgIconImageName = @"ic_doc_text_outlined_20";
@@ -4428,6 +4428,23 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       [DYYYDiagnostics exportRuntimeLogFromViewController:presenter];
     };
     [diagnosticItems addObject:exportLogItem];
+
+    // 一键诊断包：日志 + 视图树 + 环境状态 + 截图，四样时间戳对齐
+    AWESettingItemModel *diagBundleItem = [[%c(AWESettingItemModel) alloc] init];
+    diagBundleItem.identifier = @"DYYYExportDiagBundle";
+    diagBundleItem.title = @"导出诊断包";
+    diagBundleItem.detail = @"日志+视图树+状态+截图一键打包，问题现场取证用";
+    diagBundleItem.type = 0;
+    diagBundleItem.svgIconImageName = @"ic_doc_text_outlined_20";
+    diagBundleItem.cellType = 26;
+    diagBundleItem.colorStyle = 0;
+    diagBundleItem.isEnable = YES;
+    diagBundleItem.cellTappedBlock = ^{
+      UIViewController *presenter = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      [DYYYDiagnostics exportDiagnosticsBundleFromViewController:presenter];
+    };
+    [diagnosticItems addObject:diagBundleItem];
 
     [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
                              @"identifier" : @"DYYYFullscreenDiag",
@@ -4447,7 +4464,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
     AWESettingItemModel *clearLogItem = [[%c(AWESettingItemModel) alloc] init];
     clearLogItem.identifier = @"DYYYClearRuntimeLog";
-    clearLogItem.title = @"清空运行日志";
+    clearLogItem.title = @"清空日志";
     clearLogItem.detail = @"删除运行日志、备份与导出副本";
     clearLogItem.type = 0;
     clearLogItem.svgIconImageName = @"ic_doc_text_outlined_20";

@@ -7235,6 +7235,22 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     // （表高 = 窗口 - 底栏 83）互相矛盾是 cell 高度 843↔926 拔河的另一半
     // 来源。表高也交还原生，全屏视觉由媒体容器在 cell 内撑满补偿。
     %orig;
+    // #32 取证 C 路：表高变化观察（A/B 两路 setFrame 都无记录时的裁决线）
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYFullscreenDiag") && [NSThread isMainThread]) {
+        @try {
+            UITableView *table = [(id)self tableView];
+            if (table) {
+                static CGFloat lastLoggedHeight = 0;
+                CGFloat h = CGRectGetHeight(table.frame);
+                if (fabs(h - lastLoggedHeight) > 0.5) {
+                    lastLoggedHeight = h;
+                    NSLog(@"[DYYY][table] layout[C] 表高变化 → %.1f（父视图%.1f）",
+                          h, table.superview ? CGRectGetHeight(table.superview.bounds) : -1);
+                }
+            }
+        } @catch (__unused NSException *e) {
+        }
+    }
     [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
 
@@ -7345,12 +7361,32 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
             }
             adjusted.size.height = target;
             if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                NSLog(@"[DYYY][table] setFrame 原高=%.1f → 顶高=%.1f（父视图%.1f）",
+                NSLog(@"[DYYY][table] setFrame[A] 子类出口 原高=%.1f → 顶高=%.1f（父视图%.1f）",
                       frame.size.height, adjusted.size.height, target);
             }
         }
     }
     %orig(adjusted);
+}
+
+%end
+
+// #32 取证 B 路：基类出口。详情表可能不自己实现 setFrame:（写入走基类），
+// 那样子类 hook（A 路）永远收不到写入——两路同时打点即可裁决走哪条。
+// 仅当诊断开关开启时打点，且不修改写入值（纯观察，零行为风险）。
+%hook AWEFeedDataSafeTableView
+
+- (void)setFrame:(CGRect)frame {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYFullscreenDiag") && [NSThread isMainThread]) {
+        if ([NSStringFromClass([self class]) isEqualToString:@"AWEAwemeDetailTableView"]) {
+            NSLog(@"[DYYY][table] setFrame[B] 基类出口(详情表实例) 高=%.1f y=%.1f",
+                  frame.size.height, frame.origin.y);
+        } else {
+            NSLog(@"[DYYY][table] setFrame[B] 基类出口(其他=%@) 高=%.1f",
+                  NSStringFromClass([self class]), frame.size.height);
+        }
+    }
+    %orig(frame);
 }
 
 %end
