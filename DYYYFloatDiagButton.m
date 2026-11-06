@@ -1,5 +1,5 @@
 #import "DYYYFloatDiagButton.h"
-#import "DYYYDiagnostics.h"
+#import "AwemeHeaders.h"
 #import "DYYYToast.h"
 
 static DYYYFloatDiagButton *_shared = nil;
