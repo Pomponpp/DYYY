@@ -121,37 +121,6 @@
     // 行高与 UITableView 分页视口使用同一尺寸，预加载时也不扣第二次底栏。
     return height > 0 && table.bounds.size.height > 0 ? table.bounds.size.height : height;
 }
-+ (void)prepareDetailTableNew:(UIViewController *)controller {
-    // 重构全屏·招①主路径（实验档专用）：详情表 frame 主动顶到 superview 高。
-    // 41.0 实测（日志1）：建行发生在表高还是 843 的时刻，且此后不再重写，
-    // 事后拦截永远等不到触发 → 必须在布局时机主动顶高，不给 843 建行窗口。
-    // 41.0 建行恒定 843（非时序竞态），条件从"仅压缩态"放宽为"≠目标高即顶"，
-    // 不给中间态留活路；顶完后由 reconcile 家族的行高重问把已建行刷新为 926。
-    if (![NSThread isMainThread] || !DYYYGetBool(@"DYYYEnableFullScreen")) return;
-    if (![self usesDetailLayoutForController:controller]) return;
-    if (![controller respondsToSelector:@selector(tableView)]) return;
-    UITableView *table = nil;
-    @try {
-        table = [(AWEAwemeDetailTableViewController *)controller tableView];
-    } @catch (__unused NSException *e) {
-        return;
-    }
-    UIView *parent = table.superview;
-    if (!parent || CGRectIsEmpty(parent.bounds)) return;
-    CGFloat target = CGRectGetHeight(parent.bounds);
-    CGFloat current = CGRectGetHeight(table.frame);
-    if (target <= 0 || fabs(current - target) <= 0.5) return;
-    CGRect frame = table.frame;
-    frame.size.height = target;
-    table.frame = frame;
-    // 顶高后行高缓存与几何已失配：轻量触发行高重问（不用 beginUpdates，
-    // 避免重演 reconcile 强刷打断播放器交接的历史），复用现有 setNeedsLayout。
-    static char stateKey;
-    DYYYFullscreenPlayerState *state = objc_getAssociatedObject(table, @selector(state:));
-    (void)state; (void)stateKey;
-    [table setNeedsLayout];
-}
-
 + (void)reconcileDetailPaging:(UIViewController *)controller {
     // 重构全屏·病灶②退路：beginUpdates/endUpdates 强制重载会打断
     // #20 教训：默认停用 reconcile 与 inset 归零造成他人主页作品页

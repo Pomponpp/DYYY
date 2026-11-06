@@ -7240,10 +7240,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
-    // 新机制主路径并入此 hook（同 hook 块内不可重复定义 viewDidAppear）
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
+    // #30：不在控制器方法里顶表，全屏由表的 setFrame: 出口单点负责。
     [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
 
@@ -7296,43 +7293,31 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     return windowH;
 }
 
-// #29 实锤修正（#28 日志 l28）：41.0 详情页建行走 table.frame /
-// rowHeight 原生属性，fixedCellHeight 等三个查询点不决定建行。
-// 所以「答行高」无用，真正决定全屏的是「顶表 frame」。
-// 落点保护：%orig 之前绝不顶（push 时抖音按自己体系算落点，抢跑=点A弹B）；
-// 全屏：落点算完之后（%orig 之后）顶表，两个目标互不冲突。
-- (void)setupDetailTableView {
-    %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
-// 分页调整完成后顶表（#26 全屏达成的关键时机，#27/#28 误删导致 843 回归）。
-// 只在 %orig 之后——落点已在 %orig 内算定，此时顶表不影响点A弹A。
-- (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
+// #30：全屏收敛为「表视图写入出口」单点接管，控制器侧零时机干预。
+// 落点计算（push 进详情页）与表高写入彻底解耦：
+// 抖音按自己的体系算落点，表每次被写 frame 时出口统一顶到父视图高。
+// 41.0 建行走 table.frame / rowHeight 原生属性，不受控制器方法影响。
 
 %end
 
-// 重构全屏·招①setFrame 写入拦截：详情表被写回"视口-底栏"的那一刻当场顶回
-// 满视口（写入出口拦截，不留"切一下才恢复"空窗）。
-// 生效条件：新版模式 + 全屏开启；legacy 回退档下完全不介入。
+// #30：全屏收敛为「表视图写入出口」单点接管。
+// 生效条件：新版模式 + 全屏开启；控制器侧零时机干预。
 %hook AWEAwemeDetailTableView
 
 - (void)setFrame:(CGRect)frame {
     CGRect adjusted = frame;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && NSThread.isMainThread && self.window) {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && [NSThread isMainThread]) {
         UIView *parent = self.superview;
         CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-        if (target > 0 && frame.size.height < target - 0.5 && frame.size.height > target * 0.5) {
-            // 凡是"明显小于满视口"的压缩写入都顶回（设备无关，不依赖 occupied）。
-            // 太小的值（半屏以下的小面板/键盘态）放行，避免误伤。
+        // 不依赖 window 是否已挂载、不挑写入值：表每次被写 frame，
+        // 出口一律顶到父视图满高。抖音自己算落点用的是写入意图，
+        // 与此出口改写互不干扰。目标值取父视图 bounds，设备自适应。
+        if (target > 0 && fabs(frame.size.height - target) > 0.5) {
             adjusted.size.height = target;
+            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                NSLog(@"[DYYY][table] setFrame 原高=%.1f → 顶高=%.1f（父视图%.1f）",
+                      frame.size.height, adjusted.size.height, target);
+            }
         }
     }
     %orig(adjusted);
