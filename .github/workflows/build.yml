@@ -99,6 +99,14 @@ jobs:
         run: |
           echo "$(brew --prefix)/opt/make/libexec/gnubin" >> $GITHUB_PATH
 
+      - name: Clean stale theos intermediates
+        run: |
+          # #35 真凶：theos 缓存了 #33 时代的 logos 预处理中间文件(.mm/.d)，
+          # 行号指向旧布局导致假编译错（537 行不存在）。构建前清中间产物，
+          # 保留 theos 本体（缓存 key 不动，装 theos 的 7 分钟不重付）。
+          rm -rf .theos/obj .theos/build 2>/dev/null || true
+          echo "stale intermediates cleaned"
+
       - name: Build dylib only (arm64)
         run: |
           rm -rf packages && mkdir -p packages
