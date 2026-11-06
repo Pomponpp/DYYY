@@ -35,6 +35,7 @@
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "DYYYClassRegistry.h"
+#import "DYYYFloatDiagButton.h"
 
 static CGFloat gStartY = 0.0;
 static CGFloat gStartVal = 0.0;
@@ -3325,6 +3326,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 - (void)makeKeyAndVisible {
     %orig;
+    [DYYYFloatDiagButton attachToWindowIfNeeded:self];
 
     if (!isFloatSpeedButtonEnabled)
         return;
@@ -7371,22 +7373,37 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %end
 
-// #32 取证 B 路：基类出口。详情表可能不自己实现 setFrame:（写入走基类），
-// 那样子类 hook（A 路）永远收不到写入——两路同时打点即可裁决走哪条。
-// 仅当诊断开关开启时打点，且不修改写入值（纯观察，零行为风险）。
+#32 日志裁决（l32）：B 路 110 条、A 路 0 条——41.0 详情表写入全部走
+基类 AWEFeedDataSafeTableView 的 setFrame:，子类出口永远等不到。
+#32 同时实锤点A弹B机制：落点已按 926 同源计算，但建行早于撑高的
+843 旧 cell 残留在表里（y=-249/H=843 与 y=594/H=926 同 offset 共存）。
+
+#33 本 hook 升级为「写入顶回 + 记原高」：基类出口是唯一活的写入通道，
+在此把压缩写入顶回满视口、并记录原高供行高同源规则使用。仅对
+详情表实例生效（AWEFeedTableView 等其他子类不受影响）。
 %hook AWEFeedDataSafeTableView
 
 - (void)setFrame:(CGRect)frame {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYFullscreenDiag") && [NSThread isMainThread]) {
-        if ([NSStringFromClass([self class]) isEqualToString:@"AWEAwemeDetailTableView"]) {
-            NSLog(@"[DYYY][table] setFrame[B] 基类出口(详情表实例) 高=%.1f y=%.1f",
-                  frame.size.height, frame.origin.y);
-        } else {
-            NSLog(@"[DYYY][table] setFrame[B] 基类出口(其他=%@) 高=%.1f",
-                  NSStringFromClass([self class]), frame.size.height);
+    CGRect adjusted = frame;
+    BOOL isDetailTable = [NSStringFromClass([self class]) isEqualToString:@"AWEAwemeDetailTableView"];
+    if (isDetailTable && DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && [NSThread isMainThread]) {
+        UIView *parent = self.superview;
+        CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
+        if (target > 0 && frame.size.height < target - 0.5 && frame.size.height >= target * 0.5) {
+            // 与 prepare 共享同一份原高记录（行高同源规则依赖它）
+            if (!objc_getAssociatedObject(self, @selector(prepareDetailTableNew:))) {
+                objc_setAssociatedObject(self, @selector(prepareDetailTableNew:), @(frame.size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                    NSLog(@"[DYYY][table] setFrame[B] 记原高=%.1f", frame.size.height);
+                }
+            }
+            adjusted.size.height = target;
+            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                NSLog(@"[DYYY][table] setFrame[B] 原高=%.1f → 顶高=%.1f", frame.size.height, target);
+            }
         }
     }
-    %orig(frame);
+    %orig(adjusted);
 }
 
 %end

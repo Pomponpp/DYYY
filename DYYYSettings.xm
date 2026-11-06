@@ -4478,6 +4478,15 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     };
     [diagnosticItems addObject:clearLogItem];
 
+    // 诊断悬浮入口开关（临时调试用，不进备份）
+    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
+                             @"identifier" : @"DYYYDiagEntryEnabled",
+                             @"title" : @"诊断悬浮入口",
+                             @"detail" : @"开启后屏幕显示扳手按钮，随时一键导出诊断包取证",
+                             @"cellType" : @6,
+                             @"imageName" : @"ic_bug_outlined_20"
+                         }]];
+
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;
 
