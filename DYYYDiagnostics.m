@@ -5,6 +5,7 @@
 #import "AwemeHeaders.h"
 #import "DYYYClassRegistry.h"
 #import "DYYYToast.h"
+#import "DYYYUtils.h"
 #import <UIKit/UIKit.h>
 
 static NSString *const kDYYYRuntimeLogSubdir = @"DYYYLogs";
