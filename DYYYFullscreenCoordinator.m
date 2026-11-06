@@ -266,9 +266,9 @@
 }
 + (void)layoutBottomInput:(UIView *)view controller:(UIViewController *)controller {
     if (![NSThread isMainThread]) return;
-    // 输入栏底色统一：全屏开就不分页面（DYKiller 同款语义——视频在
-    // 哪一页铺满，底栏底色就在哪一页让开）。旧实现限定"仅详情页"，
-    // 导致推荐页/喜欢页/收藏页的输入栏深浅不一（用户反馈的真实不一致）。
+    // 输入栏底色统一：全屏开就不分页面（视频在某一页铺满，底栏底色
+    // 就在那一页让开），避免各页面深浅不一致。旧实现限定"仅详情页"，
+    // 导致推荐页/喜欢页/收藏页的输入栏深浅不一。
     [self layoutBottomBar:view controller:controller enabled:DYYYGetBool(@"DYYYEnableFullScreen")];
 }
 + (CGFloat)bottomOccupiedHeightForView:(UIView *)view {

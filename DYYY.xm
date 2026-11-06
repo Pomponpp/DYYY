@@ -7320,7 +7320,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %end
 
 // 重构全屏·招①setFrame 写入拦截：详情表被写回"视口-底栏"的那一刻当场顶回
-// 满视口（DYKiller 核心手法，不留"切一下才恢复"空窗）。
+// 满视口（写入出口拦截，不留"切一下才恢复"空窗）。
 // 生效条件：新版模式 + 全屏开启；legacy 回退档下完全不介入。
 %hook AWEAwemeDetailTableView
 
@@ -7887,7 +7887,7 @@ static NSHashTable *processedParentViews = nil;
 
 %end
 
-// ===== 详情页行高统一（参考 DYKiller DKVideoDetailTable 思路）=====
+// ===== 详情页行高统一（停止对抗式写入）=====
 // 40.9 实测（#14 日志）：详情页 cell 高度在一秒内 843↔926 交替 46 次，
 // 用户感知为"上一页与下一页拔河"。根因：DYYY 行高 hook 返回窗口高(926)
 // 与抖音内部布局（窗口高 - 底栏 83 = 843）每帧互斥写入，Auto Layout 与
@@ -7896,7 +7896,7 @@ static NSHashTable *processedParentViews = nil;
 // 改为停止对抗——行高完全交还抖音原生（843），全屏视觉由
 // DYYYFullscreenCoordinator 的容器撑满补偿（容器在 cell 内铺满窗口，
 // cell 与窗口的 83pt 差由下一页 cell 顶上来遮挡，与原生观感一致）。
-// 这与 DYKiller「HUD 钉位回原高」的哲学一致：不改抖音的布局，只钉自己的视图。
+// 设计原则：不改抖音的布局计算，只管理自己的视图。
 static const CGFloat kDYYYDetailHeightTolerance = 0.5;
 
 // 40.9 拔河根修：原「详情页行高统一」三 hook 已移除——行高交还原生，
