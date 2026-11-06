@@ -291,12 +291,15 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
         [DYYYToast showSuccessToastWithMessage:@"诊断包已生成，请存储到文件"];
     } @catch (NSException *e) {
         NSLog(@"[DYYY][diag] present share exception: %@", e.name);
-        [DYYYToast showToast:[NSString stringWithFormat:@"分享面板异常: %@", e.name]];
+        [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"分享面板异常: %@", e.name]];
     }
 }
 
 + (NSString *)exportedLogPathWithName:(NSString *)name {
-    [DYYYToast showSuccessToastWithMessage:@"诊断包已生成，请存储到文件"];
+    NSString *documents = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *dir = [[documents stringByAppendingPathComponent:@"DYYY"] stringByAppendingPathComponent:@"logs"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    return [dir stringByAppendingPathComponent:name];
 }
 
 + (void)exportRuntimeLogFromViewController:(UIViewController *)presenter {
