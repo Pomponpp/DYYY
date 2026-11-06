@@ -1359,6 +1359,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)updateTableViewLayoutForTargetPageIndex:(NSInteger)index;
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath;
 - (double)fixedCellHeight;
+- (double)cellHeightAtIndex:(long long)index;
+- (void)setupDetailTableView;
+- (double)contentOffsetYForCellAtIndex:(long long)index;
+- (void)adjustTableViewHeightForTargetIndex:(long long)index;
 @end
 // 41.0 视图树实锤：评论列表区不透明底色来源（rgba(0.086,0.086,0.086,1.0)），
 // 盖在原生毛玻璃层之上，是"评论区黑色"的真凶。

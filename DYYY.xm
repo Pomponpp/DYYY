@@ -7265,18 +7265,13 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %hook AWEAwemeDetailTableViewController
 
 - (double)fixedCellHeight {
+    if (!DYYYGetBool(@"DYYYFullNewDetailTable") || !DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        return %orig;
+    }
+    // #31 闭环：先准备表（记原高/撑回满视口），再按同源规则回答。
+    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     double nativeHeight = %orig;
-    if (!DYYYGetBool(@"DYYYFullNewDetailTable")) return nativeHeight;
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
-    // #28 改缓存（长期维护形态）：从表创建第一次查询起就无条件答窗口高。
-    // 抖音把 926 缓存进行高表后，落点(N×926)与建行(926)同源，
-    // 「点A弹A」与「全屏」同时成立，不再需要任何时机博弈。
-    // 旧实现的 occupied/nativeCompressed 条件会让部分查询答 843，
-    // 缓存混值 → 点A弹B / 843 回归二选一。
-    UIWindow *window = self.viewIfLoaded.window;
-    CGFloat windowH = window ? CGRectGetHeight(window.bounds) : 0;
-    if (windowH <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
-    return windowH;
+    return [DYYYFullscreenCoordinator detailRowHeight:[self tableView] nativeHeight:nativeHeight];
 }
 
 - (double)cellHeightAtIndex:(long long)index {
@@ -7284,19 +7279,49 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 - (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (!DYYYGetBool(@"DYYYFullNewDetailTable") || !DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        return %orig;
+    }
+    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     double nativeHeight = %orig;
-    if (!DYYYGetBool(@"DYYYFullNewDetailTable")) return nativeHeight;
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
-    UIWindow *window = table.window;
-    CGFloat windowH = window ? CGRectGetHeight(window.bounds) : 0;
-    if (windowH <= 0 || !isfinite(nativeHeight) || nativeHeight <= 0) return nativeHeight;
-    return windowH;
+    return [DYYYFullscreenCoordinator detailRowHeight:table nativeHeight:nativeHeight];
 }
 
-// #30：全屏收敛为「表视图写入出口」单点接管，控制器侧零时机干预。
-// 落点计算（push 进详情页）与表高写入彻底解耦：
-// 抖音按自己的体系算落点，表每次被写 frame 时出口统一顶到父视图高。
-// 41.0 建行走 table.frame / rowHeight 原生属性，不受控制器方法影响。
+// #31 闭环入口：建行/落点/分页的每个必经入口先准备表，再放行原生。
+// 准备 = 首次记原高、之后把被压回的表撑回满视口；行高回答与它同源。
+- (void)setupDetailTableView {
+    %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+}
+
+- (void)viewWillLayoutSubviews {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+    %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+}
+
+- (double)contentOffsetYForCellAtIndex:(long long)index {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+    return %orig;
+}
+
+- (void)adjustTableViewHeightForTargetIndex:(long long)index {
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+    %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+}
 
 %end
 
@@ -7309,10 +7334,15 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && [NSThread isMainThread]) {
         UIView *parent = self.superview;
         CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-        // 不依赖 window 是否已挂载、不挑写入值：表每次被写 frame，
-        // 出口一律顶到父视图满高。抖音自己算落点用的是写入意图，
-        // 与此出口改写互不干扰。目标值取父视图 bounds，设备自适应。
-        if (target > 0 && fabs(frame.size.height - target) > 0.5) {
+        // 出口与 prepare 共享同一份原高记录：压缩写入顶回满视口前，
+        // 先把原值记为未撑高时的高度，行高同源规则依赖它。
+        if (target > 0 && frame.size.height < target - 0.5 && frame.size.height >= target * 0.5) {
+            if (!objc_getAssociatedObject(self, @selector(prepareDetailTableNew:))) {
+                objc_setAssociatedObject(self, @selector(prepareDetailTableNew:), @(frame.size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                    NSLog(@"[DYYY][table] setFrame 记原高=%.1f", frame.size.height);
+                }
+            }
             adjusted.size.height = target;
             if (DYYYGetBool(@"DYYYFullscreenDiag")) {
                 NSLog(@"[DYYY][table] setFrame 原高=%.1f → 顶高=%.1f（父视图%.1f）",
