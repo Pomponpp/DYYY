@@ -121,6 +121,67 @@
     // 行高与 UITableView 分页视口使用同一尺寸，预加载时也不扣第二次底栏。
     return height > 0 && table.bounds.size.height > 0 ? table.bounds.size.height : height;
 }
+// ===== #31 详情页全屏闭环 =====
+// 建行/落点计算前准备表：第一次记录原高（抖音创建时写的 843），
+// 之后每次准备都把被压回的表撑回满视口。行高查询只在已接管
+// （表已撑高）时把整页行高答成满视口；特殊行透传。
+// 落点(N×行高)与建行同源：点A弹A 与 全屏 同时成立。
+static const CGFloat kDYYYDetailHeightTol = 0.5;
+
++ (void)prepareDetailTableNew:(UIViewController *)controller {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !controller) return;
+    if (![controller respondsToSelector:@selector(tableView)]) return;
+    UITableView *table = [(id)controller tableView];
+    if (!table) return;
+    UIView *root = controller.viewIfLoaded;
+    if (!root) return;
+    // 半屏/异形窗口不接管（键盘态、小窗等）
+    UIWindow *window = table.window ?: root.window;
+    if (window && window.windowLevel != UIWindowLevelNormal) return;
+    if (table.superview && ![table isDescendantOfView:root]) return;
+    if (!CGAffineTransformIsIdentity(table.transform)) return;
+
+    CGFloat target = table.superview ? CGRectGetHeight(table.superview.bounds) : CGRectGetHeight(root.bounds);
+    CGFloat current = CGRectGetHeight(table.frame);
+    if (target <= 0 || !isfinite(target) || current <= 0) return;
+
+    NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
+    if (!original) {
+        if (current < target - kDYYYDetailHeightTol && current >= target * 0.5) {
+            objc_setAssociatedObject(table, @selector(prepareDetailTableNew:), @(current), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                NSLog(@"[DYYY][table] prepare 记录原高=%.1f 目标=%.1f", current, target);
+            }
+        }
+        return; // 首次只记录原高，不撑高（不抢抖音建行意图）
+    }
+    // 已接管：表被写回压缩值时撑回满视口
+    if (current >= target - kDYYYDetailHeightTol || current < target * 0.5) return;
+    CGRect adjusted = table.frame;
+    adjusted.size.height = target;
+    if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+        NSLog(@"[DYYY][table] prepare 撑高 %.1f → %.1f", current, target);
+    }
+    table.frame = adjusted;
+}
+
++ (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !table) return nativeHeight;
+    NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
+    CGFloat target = CGRectGetHeight(table.bounds);
+    if (!original || !isfinite(nativeHeight) || !isfinite(target) || nativeHeight <= 0 || target <= 0) {
+        return nativeHeight;
+    }
+    // 表还没被撑高（未接管）：透传，避免行高与表高矛盾拉锯
+    if (target <= original.doubleValue + kDYYYDetailHeightTol) return nativeHeight;
+    // 只统一整页行高（原整页高或满视口高）；特殊行透传
+    if (fabs(nativeHeight - original.doubleValue) > kDYYYDetailHeightTol &&
+        fabs(nativeHeight - target) > kDYYYDetailHeightTol) {
+        return nativeHeight;
+    }
+    return target;
+}
+
 + (void)reconcileDetailPaging:(UIViewController *)controller {
     // 重构全屏·病灶②退路：beginUpdates/endUpdates 强制重载会打断
     // #20 教训：默认停用 reconcile 与 inset 归零造成他人主页作品页
