@@ -75,7 +75,7 @@
     if (!state.discoveredLists) {
         state.discoveredLists = YES;
         NSMutableArray<UIView *> *pending = [view.subviews mutableCopy];
-        // 41.0 视图树实锤（DYKiller 导出）：评论列表区的不透明底色来自
+        // 41.0 视图树实锤：评论列表区的不透明底色来自
         // AWEBaseListSectionBackgroundView（rgba(0.086,0.086,0.086,1.0)），
         // 旧 BFS 只清 UIScrollView/UILabel，漏掉这个 ListKit 分区背景，
         // 表现为毛玻璃层之上永远盖着一块黑。
