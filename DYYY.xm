@@ -7296,9 +7296,21 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     return windowH;
 }
 
-// #28 后仅剩两处顶高（表创建 + viewDidAppear 兜底）：
-// 行高缓存已从第一次查询就是 926，落点与建行同源，不再需要时机博弈。
+// #29 实锤修正（#28 日志 l28）：41.0 详情页建行走 table.frame /
+// rowHeight 原生属性，fixedCellHeight 等三个查询点不决定建行。
+// 所以「答行高」无用，真正决定全屏的是「顶表 frame」。
+// 落点保护：%orig 之前绝不顶（push 时抖音按自己体系算落点，抢跑=点A弹B）；
+// 全屏：落点算完之后（%orig 之后）顶表，两个目标互不冲突。
 - (void)setupDetailTableView {
+    %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+}
+
+// 分页调整完成后顶表（#26 全屏达成的关键时机，#27/#28 误删导致 843 回归）。
+// 只在 %orig 之后——落点已在 %orig 内算定，此时顶表不影响点A弹A。
+- (void)adjustTableViewHeightForTargetIndex:(long long)index {
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
@@ -7317,12 +7329,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && NSThread.isMainThread && self.window) {
         UIView *parent = self.superview;
         CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-        if (target > 0 && fabs(frame.size.height - target) > 0.5) {
-            CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:self];
-            // 只顶回"视口-底栏"这一种压缩写入，特殊尺寸放行（设备无关）
-            if (occupied > 0 && fabs(frame.size.height - (target - occupied)) <= 1.0) {
-                adjusted.size.height = target;
-            }
+        if (target > 0 && frame.size.height < target - 0.5 && frame.size.height > target * 0.5) {
+            // 凡是"明显小于满视口"的压缩写入都顶回（设备无关，不依赖 occupied）。
+            // 太小的值（半屏以下的小面板/键盘态）放行，避免误伤。
+            adjusted.size.height = target;
         }
     }
     %orig(adjusted);
