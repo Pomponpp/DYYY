@@ -9,7 +9,6 @@ static DYYYFloatDiagButton *_shared = nil;
 + (instancetype)sharedButton {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        // 标准 UIButton 初始化（照 DYYYFloatClearButton 的成熟模式）
         _shared = [[DYYYFloatDiagButton alloc] initWithFrame:CGRectMake(0, 0, 44, 44)];
     });
     return _shared;
@@ -25,7 +24,6 @@ static DYYYFloatDiagButton *_shared = nil;
         self.tintColor = UIColor.whiteColor;
         self.titleLabel.font = [UIFont boldSystemFontOfSize:20];
         [self setTitle:@"🔧" forState:UIControlStateNormal];
-        // 标准 addTarget 点击（UIButton 的正确用法；overrides touchesEnded 不可靠）
         [self addTarget:self action:@selector(dyyy_tapAction) forControlEvents:UIControlEventTouchUpInside];
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dyyy_handlePan:)];
         [self addGestureRecognizer:pan];
@@ -78,7 +76,7 @@ static DYYYFloatDiagButton *_shared = nil;
     }
 }
 
-- (void)dyyy_tapAction {
+- (UIViewController *)dyyy_topPresenter {
     UIViewController *presenter = nil;
     for (UIWindow *w in [UIApplication sharedApplication].windows) {
         if (w.hidden || w.windowLevel != UIWindowLevelNormal) continue;
@@ -87,22 +85,15 @@ static DYYYFloatDiagButton *_shared = nil;
         presenter = root;
         break;
     }
+    return presenter;
+}
+
+- (void)dyyy_tapAction {
+    UIViewController *presenter = [self dyyy_topPresenter];
     if (!presenter) return;
     UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"DYYY 诊断"
                                                                  message:nil
                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    void (^presenterBlock)(void) = ^{
-      UIViewController *p = nil;
-      for (UIWindow *w in [UIApplication sharedApplication].windows) {
-          if (w.hidden || w.windowLevel != UIWindowLevelNormal) continue;
-          UIViewController *root = w.rootViewController;
-          while (root.presentedViewController) root = root.presentedViewController;
-          p = root;
-          break;
-      }
-      return p;
-    };
-    // 上面的 block 语法不能直接 return p —— 改用辅助方法
     [menu addAction:[UIAlertAction actionWithTitle:@"导出诊断包" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
         UIViewController *p = [self dyyy_topPresenter];
         [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p];
@@ -123,18 +114,6 @@ static DYYYFloatDiagButton *_shared = nil;
     menu.popoverPresentationController.sourceView = presenter.view;
     menu.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
     [presenter presentViewController:menu animated:YES completion:nil];
-}
-
-- (UIViewController *)dyyy_topPresenter {
-    UIViewController *presenter = nil;
-    for (UIWindow *w in [UIApplication sharedApplication].windows) {
-        if (w.hidden || w.windowLevel != UIWindowLevelNormal) continue;
-        UIViewController *root = w.rootViewController;
-        while (root.presentedViewController) root = root.presentedViewController;
-        presenter = root;
-        break;
-    }
-    return presenter;
 }
 
 @end
