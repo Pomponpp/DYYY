@@ -7373,14 +7373,14 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %end
 
-#32 日志裁决（l32）：B 路 110 条、A 路 0 条——41.0 详情表写入全部走
-基类 AWEFeedDataSafeTableView 的 setFrame:，子类出口永远等不到。
-#32 同时实锤点A弹B机制：落点已按 926 同源计算，但建行早于撑高的
-843 旧 cell 残留在表里（y=-249/H=843 与 y=594/H=926 同 offset 共存）。
-
-#33 本 hook 升级为「写入顶回 + 记原高」：基类出口是唯一活的写入通道，
-在此把压缩写入顶回满视口、并记录原高供行高同源规则使用。仅对
-详情表实例生效（AWEFeedTableView 等其他子类不受影响）。
+// #32 日志裁决（l32）：B 路 110 条、A 路 0 条——41.0 详情表写入全部走
+// 基类 AWEFeedDataSafeTableView 的 setFrame:，子类出口永远等不到。
+// #32 同时实锤点A弹B机制：落点已按 926 同源计算，但建行早于撑高的
+// 843 旧 cell 残留在表里（y=-249/H=843 与 y=594/H=926 同 offset 共存）。
+//
+// #33 本 hook 升级为「写入顶回 + 记原高」：基类出口是唯一活的写入通道，
+// 在此把压缩写入顶回满视口、并记录原高供行高同源规则使用。仅对
+// 详情表实例生效（AWEFeedTableView 等其他子类不受影响）。
 %hook AWEFeedDataSafeTableView
 
 - (void)setFrame:(CGRect)frame {
