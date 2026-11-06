@@ -41,7 +41,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     static dispatch_queue_t logQueue = nil;
     static dispatch_once_t queueOnceToken;
     dispatch_once(&queueOnceToken, ^{
-      logQueue = dispatch_queue_create("com.dyyy.runtime-log.queue", DISPATCH_QUEUE_SERIAL);
+      logQueue = [self logQueueForExport];
     });
 
     dispatch_async(logQueue, ^{
@@ -151,6 +151,13 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     [DYYYToast showSuccessToastWithMessage:@"运行日志已清空"];
 }
 
++ (dispatch_queue_t)logQueueForExport {
+    static dispatch_queue_t q = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ q = dispatch_queue_create("com.dyyy.runtime-log.export", DISPATCH_QUEUE_SERIAL); });
+    return q;
+}
+
 + (NSString *)exportedLogPathWithName:(NSString *)name {
     NSString *documents = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
     NSString *dir = [[documents stringByAppendingPathComponent:@"DYYY"] stringByAppendingPathComponent:@"logs"];
@@ -224,19 +231,23 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
                   atomically:YES];
     }
 
-    // ④ 截图（Metal 渲染内容可能是黑的，用于看 UI 布局层）
-    UIView *snapshotRoot = presenter.view.window ?: presenter.view;
-    CGSize size = snapshotRoot.bounds.size;
+    // ④ 截图：旧式上下文 + 按 windowLevel 从低到高把所有窗口合成进同一画面，
+    // 才等于用户真正看到的画面（画中画窗口在 windowLevel 2000，只画 key
+    // 窗口会漏层）。afterScreenUpdates:NO 抓当前已合成帧，Metal 视频画面在。
+    CGSize size = UIScreen.mainScreen.bounds.size;
     if (size.width > 0 && size.height > 0) {
-        UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat defaultFormat];
-        fmt.scale = [UIScreen mainScreen].scale;
-        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:size format:fmt];
-        UIImage *shot = [renderer imageWithActions:^(__unused UIGraphicsImageRendererContext *ctx) {
-            BOOL ok = [snapshotRoot drawViewHierarchyInRect:snapshotRoot.bounds afterScreenUpdates:YES];
-            if (!ok) {
-                [snapshotRoot.layer renderInContext:ctx.CGContext];
-            }
-        }];
+        UIGraphicsBeginImageContextWithOptions(size, NO, 0);
+        NSArray<UIWindow *> *wins = [[UIApplication sharedApplication].windows
+            sortedArrayUsingComparator:^NSComparisonResult(UIWindow *a, UIWindow *b) {
+                if (a.windowLevel == b.windowLevel) return NSOrderedSame;
+                return a.windowLevel < b.windowLevel ? NSOrderedAscending : NSOrderedDescending;
+            }];
+        for (UIWindow *w in wins) {
+            BOOL drew = [w drawViewHierarchyInRect:w.bounds afterScreenUpdates:NO];
+            if (!drew) [w.layer renderInContext:UIGraphicsGetCurrentContext()];
+        }
+        UIImage *shot = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
         NSData *png = UIImagePNGRepresentation(shot);
         if (png) {
             [png writeToFile:[bundleDir stringByAppendingPathComponent:@"screenshot.png"] atomically:YES];

@@ -4479,13 +4479,22 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     [diagnosticItems addObject:clearLogItem];
 
     // 诊断悬浮入口开关（临时调试用，不进备份）
-    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
-                             @"identifier" : @"DYYYDiagEntryEnabled",
-                             @"title" : @"诊断悬浮入口",
-                             @"detail" : @"开启后屏幕显示扳手按钮，随时一键导出诊断包取证",
-                             @"cellType" : @6,
-                             @"imageName" : @"ic_bug_outlined_20"
-                         }]];
+    AWESettingItemModel *diagEntryItem = [[%c(AWESettingItemModel) alloc] init];
+    diagEntryItem.identifier = @"DYYYDiagEntryEnabled";
+    diagEntryItem.title = @"诊断悬浮入口";
+    diagEntryItem.detail = @"开启后屏幕显示扳手按钮，随时一键导出诊断包取证";
+    diagEntryItem.type = 1;
+    diagEntryItem.cellType = 6;
+    diagEntryItem.isEnable = YES;
+    diagEntryItem.on = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
+    diagEntryItem.switchChangedBlock = ^{
+      BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
+      [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:@"DYYYDiagEntryEnabled"];
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [DYYYFloatDiagButton refreshPresence];
+      });
+    };
+    [diagnosticItems addObject:diagEntryItem];
 
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;
