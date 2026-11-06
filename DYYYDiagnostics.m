@@ -295,12 +295,6 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     }
 }
 
-+ (NSString *)exportedLogPathWithName:(NSString *)name {
-    NSString *documents = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *dir = [[documents stringByAppendingPathComponent:@"DYYY"] stringByAppendingPathComponent:@"logs"];
-    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-    return [dir stringByAppendingPathComponent:name];
-}
 
 + (void)exportRuntimeLogFromViewController:(UIViewController *)presenter {
     if (!presenter) {
