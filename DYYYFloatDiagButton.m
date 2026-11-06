@@ -105,7 +105,6 @@ static DYYYFloatDiagButton *_shared = nil;
     };
     [menu addAction:[UIAlertAction actionWithTitle:@"导出诊断包" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
         runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p]; });
-        [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p];
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"导出日志" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
         runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics exportRuntimeLogFromViewController:p]; });
