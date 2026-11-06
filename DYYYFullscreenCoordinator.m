@@ -163,6 +163,25 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
         NSLog(@"[DYYY][table] prepare 撑高 %.1f → %.1f", current, target);
     }
     table.frame = adjusted;
+    // 清残留：落点已按满视口同源计算，把建行早于撑高的旧 cell（843 高）
+    // 对齐到满视口，消除同 offset 下 843/926 混住（点A弹B的直接原因）。
+    [self alignExistingCellsIfNeeded:table target:target];
+}
+
++ (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target {
+    if (!table || target <= 0) return;
+    NSArray<UITableViewCell *> *cells = table.visibleCells;
+    for (UITableViewCell *cell in cells) {
+        CGFloat h = CGRectGetHeight(cell.frame);
+        if (h > 0 && fabs(h - target) > 0.5 && h >= target * 0.5) {
+            CGRect f = cell.frame;
+            f.size.height = target;
+            cell.frame = f;
+            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                NSLog(@"[DYYY][table] 对齐残留 cell %.1f → %.1f", h, target);
+            }
+        }
+    }
 }
 
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight {
