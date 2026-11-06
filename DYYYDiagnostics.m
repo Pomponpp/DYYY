@@ -264,14 +264,38 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
         NSLog(@"[DYYY][diag] screenshot exception: %@", e.name);
     }
 
-    // 分享目录（UIActivityViewController 支持目录，落到"文件"App）
+    // #36 防闪退：调用方可能带着已 present 的面板（扳手菜单），先 dismiss
+    // 再延迟 present——"presentation in progress" 异常是 SIGABRT 直接来源
     NSURL *bundleURL = [NSURL fileURLWithPath:bundleDir];
     UIActivityViewController *share = [[UIActivityViewController alloc]
         initWithActivityItems:@[ bundleURL ] applicationActivities:nil];
-    share.popoverPresentationController.sourceView = presenter.view;
-    share.popoverPresentationController.sourceRect =
-        CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
-    [presenter presentViewController:share animated:YES completion:nil];
+    if (presenter.presentedViewController) {
+        [presenter dismissViewControllerAnimated:YES completion:^{
+          [DYYYDiagnostics safePresentBundleShare:bundleURL from:presenter];
+        }];
+    } else {
+        [DYYYDiagnostics safePresentBundleShare:bundleURL from:presenter];
+    }
+}
+
+// 安全弹出诊断包分享面板：调用时保证无进行中的 presentation
++ (void)safePresentBundleShare:(NSURL *)bundleURL from:(UIViewController *)presenter {
+    if (!presenter || !presenter.view.window) return;
+    @try {
+        UIActivityViewController *share = [[UIActivityViewController alloc]
+            initWithActivityItems:@[ bundleURL ] applicationActivities:nil];
+        share.popoverPresentationController.sourceView = presenter.view;
+        share.popoverPresentationController.sourceRect =
+            CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
+        [presenter presentViewController:share animated:YES completion:nil];
+        [DYYYToast showSuccessToastWithMessage:@"诊断包已生成，请存储到文件"];
+    } @catch (NSException *e) {
+        NSLog(@"[DYYY][diag] present share exception: %@", e.name);
+        [DYYYToast showToast:[NSString stringWithFormat:@"分享面板异常: %@", e.name]];
+    }
+}
+
++ (NSString *)exportedLogPathWithName:(NSString *)name {
     [DYYYToast showSuccessToastWithMessage:@"诊断包已生成，请存储到文件"];
 }
 
@@ -329,7 +353,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
                                                                  message:[NSString stringWithFormat:@"已保存到 文件→DYYY/logs/%@\n也可用分享面板直接发送。", exportName]
                                                           preferredStyle:UIAlertControllerStyleAlert];
     [done addAction:[UIAlertAction actionWithTitle:@"打开分享" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-                                                      [presenter presentViewController:share animated:YES completion:nil];
+                                                      [presenter dismissViewControllerAnimated:YES completion:^{ [presenter presentViewController:share animated:YES completion:nil]; }];
                                                   }]];
     [done addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
     [presenter presentViewController:done animated:YES completion:nil];

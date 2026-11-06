@@ -94,21 +94,27 @@ static DYYYFloatDiagButton *_shared = nil;
     UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"DYYY 诊断"
                                                                  message:nil
                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    [menu addAction:[UIAlertAction actionWithTitle:@"导出诊断包" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
+    // #36：菜单在场时 topPresenter 会拿到菜单自身——先 dismiss 再执行
+    void (^runAfterDismiss)(void (^)(UIViewController *)) = ^(void (^work)(UIViewController *p)) {
         UIViewController *p = [self dyyy_topPresenter];
+        if (p.presentedViewController) {
+            [p dismissViewControllerAnimated:YES completion:^{ work(p); }];
+        } else {
+            work(p);
+        }
+    };
+    [menu addAction:[UIAlertAction actionWithTitle:@"导出诊断包" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
+        runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p]; });
         [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p];
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"导出日志" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        UIViewController *p = [self dyyy_topPresenter];
-        [DYYYDiagnostics exportRuntimeLogFromViewController:p];
+        runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics exportRuntimeLogFromViewController:p]; });
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"环境自检" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        UIViewController *p = [self dyyy_topPresenter];
-        [DYYYDiagnostics showAuditReportFromViewController:p];
+        runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics showAuditReportFromViewController:p]; });
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"清空日志" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        UIViewController *p = [self dyyy_topPresenter];
-        [DYYYDiagnostics clearRuntimeLogFromViewController:p];
+        runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics clearRuntimeLogFromViewController:p]; });
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     menu.popoverPresentationController.sourceView = presenter.view;
