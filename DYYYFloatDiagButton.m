@@ -28,6 +28,15 @@ static DYYYFloatDiagButton *_shared = nil;
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
 }
 
++ (void)refreshPresence {
+    // 不依赖 makeKeyAndVisible 时机：开关切换/启动后直接对 keyWindow 挂载或移除。
+    UIWindow *key = nil;
+    for (UIWindow *w in [UIApplication sharedApplication].windows) {
+        if (!w.hidden && w.windowLevel == UIWindowLevelNormal) { key = w; break; }
+    }
+    [self attachToWindowIfNeeded:key];
+}
+
 + (void)attachToWindowIfNeeded:(UIWindow *)window {
     if (!window) return;
     if (![self isDiagEntryEnabled]) { [self removeFromWindowIfPresent]; return; }

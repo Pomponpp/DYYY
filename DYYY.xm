@@ -3326,7 +3326,6 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 - (void)makeKeyAndVisible {
     %orig;
-    [DYYYFloatDiagButton attachToWindowIfNeeded:self];
 
     if (!isFloatSpeedButtonEnabled)
         return;
@@ -7332,12 +7331,13 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 - (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        // 翻页必经入口：落点已在 %orig 内算定，此处只做两件安全事——
+        // 撑回满视口（B路顶回的兜底）+ 对齐存量 843 cell（清混住残留）。
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+        UITableView *t = [(id)self tableView];
+        if (t) [DYYYFullscreenCoordinator alignExistingCellsIfNeeded:t target:CGRectGetHeight(t.superview.bounds)];
     }
 }
 
@@ -7407,6 +7407,20 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 %end
+
+%hook UIWindow
+
+- (void)makeKeyAndVisible {
+    %orig;
+    [DYYYFloatDiagButton attachToWindowIfNeeded:self];
+}
+
+%end
+
+// #34：诊断扳手挂载——独立顶层 hook，不受「禁用设置手势」开关影响。
+// keyWindow 变化即刷新（原挂载埋在 DYYYSettingsGesture group 内，
+// 用户开启禁用设置手势后整个 group 不注册，扳手随之失效）。
+
 
 %hook AWEAwemeHotSpotTableViewController
 - (BOOL)prefersStatusBarHidden {
