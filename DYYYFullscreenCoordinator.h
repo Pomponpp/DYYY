@@ -9,8 +9,6 @@
 + (CGRect)frameForPureModeContainer:(UIViewController *)controller proposed:(CGRect)frame;
 + (CGFloat)bottomInsetForDetail:(CGFloat)inset controller:(UIViewController *)controller;
 + (void)reconcileDetailPaging:(UIViewController *)controller;
-// 重构全屏·招①主路径（实验档）：详情表创建/布局时主动顶到 superview 高。
-+ (void)prepareDetailTableNew:(UIViewController *)controller;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;
 + (BOOL)isImageContentController:(UIViewController *)controller;
