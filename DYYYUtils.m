@@ -3,6 +3,8 @@
 #import <ImageIO/ImageIO.h>
 #import <MobileCoreServices/UTCoreTypes.h>
 #import <UIKit/UIKit.h>
+#import <fcntl.h>
+#import <unistd.h>
 #import <math.h>
 #import <os/lock.h>
 #import <os/log.h>
@@ -2366,34 +2368,28 @@ static void DYYYAppendViewTree(UIView *view, NSMutableString *buffer, NSUInteger
 
     // 后台线程写入，避免阻塞 UI
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        // #45：不用 Foundation writeToFile（内部 fsync/扩展属性路径有 C++
+        // assert，第六份 .ips 实锤 SIGABRT 且 @try 接不住 C++ 异常）。
+        // 改用纯 POSIX write：无异常路径，错误全走返回值。
         @try {
-        // 父目录兜底创建（bundleDir 若未建成功，writeToFile 直接抛异常）
         NSString *parentDir = [targetPath stringByDeletingLastPathComponent];
         if (parentDir.length) [[NSFileManager defaultManager] createDirectoryAtPath:parentDir withIntermediateDirectories:YES attributes:nil error:nil];
-        NSError *writeError = nil;
-        BOOL ok = [buffer writeToFile:targetPath
-                           atomically:YES
-                             encoding:NSUTF8StringEncoding
-                                error:&writeError];
-        if (!ok) {
-            // sandbox 环境下 /var/mobile 可能不可写，fallback 到 Documents
-            NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-            if (documents) {
-                NSString *fallback = [documents stringByAppendingPathComponent:[targetPath lastPathComponent]];
-                NSError *fallbackError = nil;
-                BOOL fallbackOK = [buffer writeToFile:fallback
-                                           atomically:YES
-                                             encoding:NSUTF8StringEncoding
-                                                error:&fallbackError];
-                NSLog(@"[DYYY] dump view tree fallback to %@ ok=%d err=%@", fallback, fallbackOK, fallbackError);
-            } else {
-                NSLog(@"[DYYY] dump view tree failed: %@", writeError);
-            }
-        } else {
-            NSLog(@"[DYYY] dump view tree to %@ size=%lu", targetPath, (unsigned long)buffer.length);
+        const char *cPath = targetPath.fileSystemRepresentation;
+        int fd = open(cPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd < 0) { NSLog(@"[DYYY] dump open fail errno=%d path=%@", errno, targetPath); return; }
+        NSData *data = [buffer dataUsingEncoding:NSUTF8StringEncoding];
+        const void *bytes = data.bytes;
+        NSUInteger remaining = data.length, written = 0;
+        while (remaining > 0) {
+            ssize_t w = write(fd, (const char *)bytes + written, remaining);
+            if (w <= 0) { if (errno == EINTR) continue; NSLog(@"[DYYY] dump write fail errno=%d", errno); close(fd); return; }
+            written += w; remaining -= w;
         }
+        fsync(fd);
+        close(fd);
+        NSLog(@"[DYYY] dump view tree to %@ size=%lu (posix)", targetPath, (unsigned long)data.length);
         } @catch (NSException *e) {
-            NSLog(@"[DYYY] dump view tree write exception: %@", e.name);
+            NSLog(@"[DYYY] dump view tree exception: %@", e.name);
         }
     });
 }
