@@ -6,6 +6,3 @@
 + (void)hide;
 @end
 
-@interface DYYYFloatDiagController : UIViewController
-@property (nonatomic, strong) UIButton *wrenchButton;
-@end
