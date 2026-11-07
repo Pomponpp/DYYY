@@ -2,41 +2,65 @@
 #import "AwemeHeaders.h"
 #import "DYYYToast.h"
 
+@class DYYYFloatDiagController;
+
+@interface DYYYFloatDiagWindow ()
+@end
+
+static DYYYFloatDiagWindow *_diagWindow = nil;
+static DYYYFloatDiagController *_diagController = nil;
+
+// 透传容器视图：只有扳手 frame 内返回 YES，其余穿透
+@interface DYYYFloatDiagPassView : UIView
+@property (nonatomic, weak) UIButton *wrenchButton;
+@end
+
+@implementation DYYYFloatDiagPassView
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    if (!_wrenchButton) return NO;
+    CGPoint p = [self convertPoint:point toView:_wrenchButton];
+    return [_wrenchButton pointInside:p withEvent:event];
+}
+@end
+
+@interface DYYYFloatDiagController : UIViewController
+@property (nonatomic, strong) UIButton *wrenchButton;
+@property (nonatomic, strong) DYYYFloatDiagPassView *passView;
+- (void)tapWrench;
+- (void)panWrench:(UIPanGestureRecognizer *)pan;
+@end
+
 @implementation DYYYFloatDiagWindow
 
 + (instancetype)sharedWindow {
-    static DYYYFloatDiagWindow *win = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         if (@available(iOS 13.0, *)) {
             UIWindowScene *scene = nil;
-            for (UIWindowScene *s in [UIApplication sharedApplication].connectedScenes) {
-                if (s.activationState == UISceneActivationStateForegroundActive) { scene = s; break; }
+            for (UIWindowScene *sc in [UIApplication sharedApplication].connectedScenes) {
+                if (sc.activationState == UISceneActivationStateForegroundActive) { scene = sc; break; }
             }
-            win = scene ? [[DYYYFloatDiagWindow alloc] initWithWindowScene:scene]
-                        : [[DYYYFloatDiagWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            _diagWindow = scene ? [[DYYYFloatDiagWindow alloc] initWithWindowScene:scene]
+                                : [[DYYYFloatDiagWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
         } else {
-            win = [[DYYYFloatDiagWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            _diagWindow = [[DYYYFloatDiagWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
         }
-        win.backgroundColor = UIColor.clearColor;
-        win.opaque = NO;
-        win.windowLevel = UIWindowLevelAlert + 100000.0;
-        win.hidden = YES;
-        DYYYFloatDiagController *vc = [DYYYFloatDiagController new];
-        win.rootViewController = vc;
+        _diagWindow.backgroundColor = UIColor.clearColor;
+        _diagWindow.opaque = NO;
+        _diagWindow.windowLevel = UIWindowLevelAlert + 100000.0;
+        _diagWindow.hidden = YES;
+        _diagController = [DYYYFloatDiagController new];
+        _diagWindow.rootViewController = _diagController;
     });
-    return win;
+    return _diagWindow;
 }
 
 + (void)show {
-    DYYYFloatDiagWindow *win = [self sharedWindow];
-    win.hidden = NO;
-    [win makeKeyAndVisible];
+    [self sharedWindow].hidden = NO;
 }
 
 + (void)hide {
-    DYYYFloatDiagWindow *win = [self sharedWindow];
-    win.hidden = YES;
+    [self sharedWindow].hidden = YES;
 }
 
 @end
@@ -44,10 +68,13 @@
 @implementation DYYYFloatDiagController
 
 - (void)loadView {
-    UIView *v = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    // 穿透容器：触摸只认扳手 frame，其余自动穿透（pointInside=NO → hitTest 跳过）
+    DYYYFloatDiagPassView *v = [[DYYYFloatDiagPassView alloc] initWithFrame:[UIScreen mainScreen].bounds];
     v.backgroundColor = UIColor.clearColor;
     v.opaque = NO;
+    v.userInteractionEnabled = YES;
     self.view = v;
+    _passView = v;
 }
 
 - (void)viewDidLoad {
@@ -67,12 +94,12 @@
     [wrench addGestureRecognizer:pan];
     [self.view addSubview:wrench];
     self.wrenchButton = wrench;
+    self.passView.wrenchButton = wrench;
 }
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    // 默认位置：右下角，避开底部安全区
-    if (self.wrenchButton.center.x == 24 && self.wrenchButton.center.y == 24) {
+    if (CGRectGetMidX(self.wrenchButton.frame) <= 1) {
         UIView *v = self.view;
         self.wrenchButton.center = CGPointMake(v.bounds.size.width - 48, v.bounds.size.height - 140);
     }
@@ -92,35 +119,52 @@
     }
 }
 
+- (UIViewController *)dyyy_topPresenter {
+    UIViewController *presenter = nil;
+    for (UIWindow *w in [UIApplication sharedApplication].windows) {
+        if (w.hidden || w.windowLevel != UIWindowLevelNormal) continue;
+        UIViewController *root = w.rootViewController;
+        while (root.presentedViewController) root = root.presentedViewController;
+        presenter = root;
+        break;
+    }
+    return presenter;
+}
+
 - (void)tapWrench {
     UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"DYYY 诊断"
                                                                  message:nil
                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    void (^run)(void(^)(UIViewController *)) = ^(void(^work)(UIViewController *p)) {
-        work(self);
+    void (^work)(UIViewController *) = ^(UIViewController *p) {
+        [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p];
+    };
+    void (^runAfterDismiss)(void) = ^{
+        UIViewController *p = [self dyyy_topPresenter];
+        if (p.presentedViewController) {
+            [p dismissViewControllerAnimated:YES completion:^{ work(p); }];
+        } else {
+            work(p);
+        }
     };
     [menu addAction:[UIAlertAction actionWithTitle:@"导出诊断包" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        run(^(UIViewController *p) { [DYYYDiagnostics exportDiagnosticsBundleFromViewController:self]; });
+        runAfterDismiss();
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"导出日志" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        run(^(UIViewController *p) { [DYYYDiagnostics exportRuntimeLogFromViewController:self]; });
+        UIViewController *p = [self dyyy_topPresenter];
+        [DYYYDiagnostics exportRuntimeLogFromViewController:p];
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"环境自检" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        run(^(UIViewController *p) { [DYYYDiagnostics showAuditReportFromViewController:self]; });
+        UIViewController *p = [self dyyy_topPresenter];
+        [DYYYDiagnostics showAuditReportFromViewController:p];
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"清空日志" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        run(^(UIViewController *p) { [DYYYDiagnostics clearRuntimeLogFromViewController:self]; });
+        UIViewController *p = [self dyyy_topPresenter];
+        [DYYYDiagnostics clearRuntimeLogFromViewController:p];
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     menu.popoverPresentationController.sourceView = self.wrenchButton;
     menu.popoverPresentationController.sourceRect = self.wrenchButton.bounds;
     [self presentViewController:menu animated:YES completion:nil];
-}
-
-// hitTest 穿透：只有扳手区域响应触摸，其余全部穿透给抖音
-- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    CGPoint p = [self.wrenchButton convertPoint:point fromView:self.view];
-    return [self.wrenchButton pointInside:p withEvent:event];
 }
 
 @end
