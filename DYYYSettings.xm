@@ -1,5 +1,5 @@
 #import "AwemeHeaders.h"
-#import "DYYYFloatDiagButton.h"
+#import "DYYYFloatDiagWindow.h"
 #import "DYYYManager.h"
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <math.h>
@@ -4492,7 +4492,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
       [[NSUserDefaults standardUserDefaults] setBool:@(!enabled) forKey:@"DYYYDiagEntryEnabled"];
       dispatch_async(dispatch_get_main_queue(), ^{
-        [DYYYFloatDiagButton refreshPresence];
+        enabled ? [DYYYFloatDiagWindow show] : [DYYYFloatDiagWindow hide];
       });
     };
     [diagnosticItems addObject:diagEntryItem];

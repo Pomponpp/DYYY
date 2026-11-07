@@ -35,7 +35,7 @@
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "DYYYClassRegistry.h"
-#import "DYYYFloatDiagButton.h"
+#import "DYYYFloatDiagWindow.h"
 
 static CGFloat gStartY = 0.0;
 static CGFloat gStartVal = 0.0;
@@ -7412,7 +7412,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 - (void)makeKeyAndVisible {
     %orig;
-    [DYYYFloatDiagButton attachToWindowIfNeeded:self];
 }
 
 %end
@@ -13124,6 +13123,7 @@ static void findTargetViewInView(UIView *view) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
                      [DYYYClassRegistry runStartupAudit];
+                     if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"]) [DYYYFloatDiagWindow show];
                      // 状态自证日志：导出的日志首段即可确认实验档是否生效，
                      // 避免"拨了开关但代码没干活"与"没拨开关"两种情况混淆。
                      NSLog(@"[DYYY][fullscreen] 启动状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
