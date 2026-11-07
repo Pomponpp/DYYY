@@ -285,34 +285,11 @@ static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
     }
 
 [DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step7 screenshot begin"];
-    // ④ 截图：旧式上下文 + 按 windowLevel 从低到高把所有窗口合成进同一画面，
-    // 才等于用户真正看到的画面（画中画窗口在 windowLevel 2000，只画 key
-    // 窗口会漏层）。afterScreenUpdates:NO 抓当前已合成帧，Metal 视频画面在。
-    @try {
-        CGSize size = UIScreen.mainScreen.bounds.size;
-        if (size.width > 0 && size.height > 0) {
-            UIGraphicsBeginImageContextWithOptions(size, NO, 0);
-            // 只画正常级窗口：键盘/输入辅助/systemGesture 等系统窗口的
-            // drawViewHierarchyInRect 在部分系统版本会崩（闪退根因）
-            NSMutableArray<UIWindow *> *wins = [NSMutableArray array];
-            for (UIWindow *w in [UIApplication sharedApplication].windows) {
-                if (!w.hidden && w.windowLevel == UIWindowLevelNormal) [wins addObject:w];
-            }
-            for (UIWindow *w in wins) {
-                BOOL drew = [w drawViewHierarchyInRect:w.bounds afterScreenUpdates:NO];
-                if (!drew) [w.layer renderInContext:UIGraphicsGetCurrentContext()];
-            }
-            UIImage *shot = UIGraphicsGetImageFromCurrentImageContext();
-            UIGraphicsEndImageContext();
-            NSData *png = UIImagePNGRepresentation(shot);
-            if (png) {
-                [png writeToFile:[bundleDir stringByAppendingPathComponent:@"screenshot.png"] atomically:YES];
-            }
-        }
-    } @catch (NSException *e) {
-        UIGraphicsEndImageContext();
-        NSLog(@"[DYYY][diag] screenshot exception: %@", e.name);
-    }
+    // ④ 截图：#43 实测 renderInContext 遇 Metal layer 在部分状态直接 abort
+    // （C++ 层 assert，@try 接不住）。暂时用占位说明替代，后续用安全截图方案。
+    [[NSString stringWithFormat:@"screenshot skipped: Metal layer abort risk"]
+        writeToFile:[bundleDir stringByAppendingPathComponent:@"screenshot-skip.txt"]
+         atomically:YES encoding:NSUTF8StringEncoding error:nil];
 
     // #36 防闪退：调用方可能带着已 present 的面板（扳手菜单），先 dismiss
     // 再延迟 present——"presentation in progress" 异常是 SIGABRT 直接来源
