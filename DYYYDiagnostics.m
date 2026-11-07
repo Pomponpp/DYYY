@@ -280,21 +280,42 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     }
 }
 
-// 安全弹出诊断包分享面板：调用时保证无进行中的 presentation
+// 安全 present（终极版）：present 前若面板在场先 dismiss，completion 后
+// 延迟重试（dismiss completion 触发时 UIKit 状态可能仍未就绪——
+// 三份 .ips 都是这一类时序异常）。
++ (void)safePresentViewController:(UIViewController *)vc from:(UIViewController *)presenter retries:(NSInteger)retries {
+    if (!presenter || !presenter.view.window) return;
+    if (presenter.presentedViewController) {
+        [presenter dismissViewControllerAnimated:YES completion:^{
+          dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                         dispatch_get_main_queue(), ^{
+            [DYYYDiagnostics safePresentViewController:vc from:presenter retries:retries];
+          });
+        }];
+        return;
+    }
+    @try {
+        [presenter presentViewController:vc animated:YES completion:nil];
+    } @catch (NSException *e) {
+        NSLog(@"[DYYY][diag] present exception: %@", e.name);
+        if (retries > 0) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+              [DYYYDiagnostics safePresentViewController:vc from:presenter retries:retries - 1];
+            });
+        }
+    }
+}
+
 + (void)safePresentBundleShare:(NSURL *)bundleURL from:(UIViewController *)presenter {
     if (!presenter || !presenter.view.window) return;
-    @try {
-        UIActivityViewController *share = [[UIActivityViewController alloc]
-            initWithActivityItems:@[ bundleURL ] applicationActivities:nil];
-        share.popoverPresentationController.sourceView = presenter.view;
-        share.popoverPresentationController.sourceRect =
-            CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
-        [presenter presentViewController:share animated:YES completion:nil];
-        [DYYYToast showSuccessToastWithMessage:@"诊断包已生成，请存储到文件"];
-    } @catch (NSException *e) {
-        NSLog(@"[DYYY][diag] present share exception: %@", e.name);
-        [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"分享面板异常: %@", e.name]];
-    }
+    UIActivityViewController *share = [[UIActivityViewController alloc]
+        initWithActivityItems:@[ bundleURL ] applicationActivities:nil];
+    share.popoverPresentationController.sourceView = presenter.view;
+    share.popoverPresentationController.sourceRect =
+        CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
+    [DYYYToast showSuccessToastWithMessage:@"诊断包已生成，请存储到文件"];
+    [DYYYDiagnostics safePresentViewController:share from:presenter retries:2];
 }
 
 
@@ -352,7 +373,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
                                                                  message:[NSString stringWithFormat:@"已保存到 文件→DYYY/logs/%@\n也可用分享面板直接发送。", exportName]
                                                           preferredStyle:UIAlertControllerStyleAlert];
     [done addAction:[UIAlertAction actionWithTitle:@"打开分享" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-                                                      [presenter dismissViewControllerAnimated:YES completion:^{ [presenter presentViewController:share animated:YES completion:nil]; }];
+                                                      [DYYYDiagnostics safePresentViewController:share from:presenter retries:2];
                                                   }]];
     [done addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
     [presenter presentViewController:done animated:YES completion:nil];
