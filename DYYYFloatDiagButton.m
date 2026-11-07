@@ -104,7 +104,13 @@ static DYYYFloatDiagButton *_shared = nil;
         }
     };
     [menu addAction:[UIAlertAction actionWithTitle:@"导出诊断包" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p]; });
+        runAfterDismiss(^(UIViewController *p) {
+          // 方案2：菜单转场结束后再跑导出（对齐媒体导出的成熟时机模式）
+          dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                         dispatch_get_main_queue(), ^{
+            [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p];
+          });
+        });
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"导出日志" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
         runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics exportRuntimeLogFromViewController:p]; });
