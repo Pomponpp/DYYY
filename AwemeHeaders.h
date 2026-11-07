@@ -52,6 +52,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 + (void)appendRuntimeLogLine:(NSString *)line;
 // 清理超过保留期（3 天）的日志与过期导出副本。
 + (void)cleanupStaleLogs;
++ (void)cleanupStaleLogsOnQueue;
 // 手动清空运行日志、轮转备份与导出副本。
 + (void)clearRuntimeLogFromViewController:(UIViewController *)presenter;
 // 把运行日志拷贝到 Documents/DYYY/logs 并弹出分享面板（可"存储到文件"）。
