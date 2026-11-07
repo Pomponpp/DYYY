@@ -19,10 +19,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
 // 未捕获 NSException 兜底：写入日志再交还系统（闪退后日志里有现场）
 static void DYYYUncaughtExceptionHandler(NSException *exception) {
     @try {
-        NSString *line = [NSString stringWithFormat:@"[DYYY][CRASH] 未捕获异常: %@
-%@",
-                          exception.name, exception.reason ?: @"(无 reason)"];
-        [DYYYDiagnostics appendRuntimeLogLine:line];
+        NSString *line = [NSString stringWithFormat:@"[DYYY][CRASH] 未捕获异常: %@ | %@", exception.name, exception.reason ?: @"(无 reason)"];
         NSArray *symbols = exception.callStackSymbols;
         for (NSString *s in symbols) [DYYYDiagnostics appendRuntimeLogLine:[@"   " stringByAppendingString:s]];
     } @catch (__unused NSException *e) {
