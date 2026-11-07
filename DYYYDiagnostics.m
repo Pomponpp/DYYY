@@ -16,6 +16,31 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
 
 @implementation DYYYDiagnostics
 
+// 未捕获 NSException 兜底：写入日志再交还系统（闪退后日志里有现场）
+static void DYYYUncaughtExceptionHandler(NSException *exception) {
+    @try {
+        NSString *line = [NSString stringWithFormat:@"[DYYY][CRASH] 未捕获异常: %@
+%@",
+                          exception.name, exception.reason ?: @"(无 reason)"];
+        [DYYYDiagnostics appendRuntimeLogLine:line];
+        NSArray *symbols = exception.callStackSymbols;
+        for (NSString *s in symbols) [DYYYDiagnostics appendRuntimeLogLine:[@"   " stringByAppendingString:s]];
+    } @catch (__unused NSException *e) {
+    }
+    // 交还系统默认 handler，保持崩溃上报行为
+    if (gDYYYPreviousHandler) gDYYYPreviousHandler(exception);
+}
+
+static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
+
++ (void)installUncaughtExceptionHandler {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      gDYYYPreviousHandler = NSGetUncaughtExceptionHandler();
+      NSSetUncaughtExceptionHandler(DYYYUncaughtExceptionHandler);
+    });
+}
+
 + (NSString *)runtimeLogDirectory {
     static NSString *dir = nil;
     static dispatch_once_t onceToken;
@@ -207,11 +232,13 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     NSDateFormatter *nameFormatter = [[NSDateFormatter alloc] init];
     nameFormatter.dateFormat = @"yyyyMMdd-HHmmss";
     NSString *stamp = [nameFormatter stringFromDate:[NSDate date]];
+[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step3 bundleDir built"];
     NSString *bundleDir = [[self exportedLogPathWithName:@""] stringByAppendingString:
         [NSString stringWithFormat:@"DYYY-diag-%@", stamp]];
     [[NSFileManager defaultManager] createDirectoryAtPath:bundleDir
                               withIntermediateDirectories:YES attributes:nil error:nil];
 
+[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step4 log copy begin"];
     // ① runtime.log
     NSString *logSrc = [self runtimeLogPath];
     if (![[NSFileManager defaultManager] fileExistsAtPath:logSrc]) {
@@ -222,6 +249,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
                                            toPath:[bundleDir stringByAppendingPathComponent:@"runtime.log"]
                                             error:nil];
 
+[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step5 view-tree begin"];
     // ② 视图树快照（UIView 属性必须主线程读；非主线程调用时跳过并留痕，
     //    绝不 dispatch_sync(main)——同步到主线程会与日志队列交叉死锁）
     NSString *treePath = [bundleDir stringByAppendingPathComponent:@"view-tree.txt"];
@@ -238,6 +266,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
             writeToFile:treePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
     }
 
+[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step6 state.json begin"];
     // ③ 环境与开关状态
     NSMutableDictionary *state = [NSMutableDictionary dictionary];
     state[@"timestamp"] = [NSDate date];
@@ -258,6 +287,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
                   atomically:YES];
     }
 
+[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step7 screenshot begin"];
     // ④ 截图：旧式上下文 + 按 windowLevel 从低到高把所有窗口合成进同一画面，
     // 才等于用户真正看到的画面（画中画窗口在 windowLevel 2000，只画 key
     // 窗口会漏层）。afterScreenUpdates:NO 抓当前已合成帧，Metal 视频画面在。
@@ -296,7 +326,8 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     // （对齐媒体导出的成熟时机模式——静态时刻 present，零转场冲突）
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-      [DYYYDiagnostics safePresentBundleShare:bundleURL from:presenter];
+  [DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step8 present share"];
+    [DYYYDiagnostics safePresentBundleShare:bundleURL from:presenter];
     });
 }
 

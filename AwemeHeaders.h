@@ -51,6 +51,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 // 追加一行运行日志（内部串行队列 + 轮转）。
 + (void)appendRuntimeLogLine:(NSString *)line;
 // 清理超过保留期（3 天）的日志与过期导出副本。
++ (void)installUncaughtExceptionHandler;
 + (void)cleanupStaleLogs;
 + (void)cleanupStaleLogsOnQueue;
 // 手动清空运行日志、轮转备份与导出副本。
