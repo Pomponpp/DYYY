@@ -65,9 +65,9 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
           @try {
               [fileHandle seekToEndOfFile];
               [fileHandle writeData:lineData];
+              [fileHandle closeFile];
           } @catch (NSException *exception) {
           }
-          [fileHandle closeFile];
       }
     });
 }
