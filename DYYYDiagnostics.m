@@ -53,7 +53,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
 
           NSString *logPath = [self runtimeLogPath];
           NSFileManager *fileManager = [NSFileManager defaultManager];
-          [self rotateRuntimeLogIfNeeded];
+          [self rotateRuntimeLogIfNeededOnQueue];
           if (![fileManager fileExistsAtPath:logPath]) {
               [fileManager createFileAtPath:logPath contents:nil attributes:nil];
           }
@@ -72,7 +72,17 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     });
 }
 
+// #40：轮转必须在日志串行队列内执行（与 append/closeFile 串行化），
+// 主线程直接 move 文件会与队列线程的 handle 操作竞态 → closeFile 崩溃。
 + (void)rotateRuntimeLogIfNeeded {
+    if ([NSThread isMainThread]) {
+        dispatch_async([self logQueueForExport], ^{ [self rotateRuntimeLogIfNeededOnQueue]; });
+        return;
+    }
+    [self rotateRuntimeLogIfNeededOnQueue];
+}
+
++ (void)rotateRuntimeLogIfNeededOnQueue {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSDictionary *attrs = [fileManager attributesOfItemAtPath:[self runtimeLogPath] error:nil];
     unsigned long long size = [attrs fileSize];
@@ -172,7 +182,8 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
         return;
     }
     [self cleanupStaleLogs];
-    [self rotateRuntimeLogIfNeeded];
+    // 先等日志队列排空（防半行），再在队列内轮转
+    dispatch_sync([self logQueueForExport], ^{ [self rotateRuntimeLogIfNeededOnQueue]; });
 
     // 状态指纹（与单导日志一致，诊断包自带可对性）
     [self appendRuntimeLogLine:@"—— 导出时刻开关状态 ——"];
@@ -326,7 +337,7 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
 
     // 导出前先清理过期日志（3 天前的运行日志与导出副本）
     [self cleanupStaleLogs];
-    [self rotateRuntimeLogIfNeeded];
+    dispatch_sync([self logQueueForExport], ^{ [self rotateRuntimeLogIfNeededOnQueue]; });
 
     // 版本指纹：导出时刻强制写入当前开关状态到运行日志头部。
     // 不再依赖启动时机（清空/轮转都可能把启动行冲掉），导出的日志
