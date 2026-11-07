@@ -204,6 +204,8 @@ static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 
     // ② 视图树快照（UIView 属性必须主线程读；非主线程调用时跳过并留痕，
     //    绝不 dispatch_sync(main)——同步到主线程会与日志队列交叉死锁）
     NSString *treePath = [bundleDir stringByAppendingPathComponent:@"view-tree.txt"];
+    // 防御：父目录再次确保存在 + 路径合法性（writeToFile 在后台队列抛异常
+    // 无法被调用方 @try 捕获，必须在源头保证路径可用）
     if ([NSThread isMainThread]) {
         @try {
             [DYYYUtils dumpAllWindowsViewTreeToFile:treePath];
