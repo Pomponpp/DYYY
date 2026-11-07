@@ -2366,6 +2366,10 @@ static void DYYYAppendViewTree(UIView *view, NSMutableString *buffer, NSUInteger
 
     // 后台线程写入，避免阻塞 UI
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        @try {
+        // 父目录兜底创建（bundleDir 若未建成功，writeToFile 直接抛异常）
+        NSString *parentDir = [targetPath stringByDeletingLastPathComponent];
+        if (parentDir.length) [[NSFileManager defaultManager] createDirectoryAtPath:parentDir withIntermediateDirectories:YES attributes:nil error:nil];
         NSError *writeError = nil;
         BOOL ok = [buffer writeToFile:targetPath
                            atomically:YES
@@ -2387,6 +2391,9 @@ static void DYYYAppendViewTree(UIView *view, NSMutableString *buffer, NSUInteger
             }
         } else {
             NSLog(@"[DYYY] dump view tree to %@ size=%lu", targetPath, (unsigned long)buffer.length);
+        }
+        } @catch (NSException *e) {
+            NSLog(@"[DYYY] dump view tree write exception: %@", e.name);
         }
     });
 }
