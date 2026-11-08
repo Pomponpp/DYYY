@@ -248,8 +248,14 @@ static void DYYYEngineRestore(void) {
 
 #pragma mark - 安装（方法存在性自检，改版断线自报告）
 
-%ctor {
-    gDYYYStretchedTables = [NSHashTable weakObjectsHashTable];
+// 关键：#61 曾把 NSClassFromString + %init 直接放在 %ctor 里，在 dyld 的
+// load_images 阶段触发 AwemeCore 的 +load 初始化，双方争同一把 dispatch_once
+// 锁 → 主线程卡死 → watchdog SIGKILL（抖音打不开）。
+// 现在：%ctor 只做无副作用的常量初始化，真正的安装延到首个主队列周期。
+static void DYYYEngineInstallIfNeeded(void) {
+    static BOOL done = NO;
+    if (done) return;
+    done = YES;
 
     Class detail = NSClassFromString(@"AWEAwemeDetailTableViewController");
     SEL required[] = {
@@ -271,14 +277,23 @@ static void DYYYEngineRestore(void) {
     } else {
         NSLog(@"[DYYY][engine] 全屏引擎入口缺失，未安装：%@", [missing componentsJoinedByString:@", "]);
     }
+}
 
-    // 全屏开关关闭时立刻还原（自监听配置变化，不依赖设置页回调）。
+%ctor {
+    // dyld 阶段只初始化容器与监听，不碰任何抖音类。
+    gDYYYStretchedTables = [NSHashTable weakObjectsHashTable];
+
     [NSNotificationCenter.defaultCenter addObserverForName:NSUserDefaultsDidChangeNotification
                                                     object:nil
                                                      queue:[NSOperationQueue mainQueue]
                                                 usingBlock:^(__unused NSNotification *note) {
         DYYYFullscreenEngineOnToggle();
     }];
+
+    // 主队列空闲后安装（此时 dyld 已完成全部 +load）。
+    dispatch_async(dispatch_get_main_queue(), ^{
+        DYYYEngineInstallIfNeeded();
+    });
 }
 
 // 设置页开关关闭时调用：立刻还原所有撑高过的表。
