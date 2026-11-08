@@ -9,55 +9,43 @@ static DYYYFloatDiagButton *_shared = nil;
 + (instancetype)sharedButton {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        _shared = [[DYYYFloatDiagButton alloc] initWithFrame:CGRectMake(0, 0, 44, 44)];
+        _shared = [super buttonWithType:UIButtonTypeSystem];
+        _shared.backgroundColor = [UIColor colorWithWhite:0.15 alpha:0.85];
+        _shared.layer.cornerRadius = 22;
+        _shared.layer.borderWidth = 1;
+        _shared.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.25].CGColor;
+        _shared.tintColor = UIColor.whiteColor;
+        _shared.titleLabel.font = [UIFont boldSystemFontOfSize:20];
+        [_shared setTitle:@"🔧" forState:UIControlStateNormal];
+        _shared.frame = CGRectMake(0, 0, 44, 44);
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:_shared action:@selector(dyyy_handlePan:)];
+        [_shared addGestureRecognizer:pan];
     });
     return _shared;
-}
-
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (self) {
-        self.backgroundColor = [UIColor colorWithWhite:0.15 alpha:0.85];
-        self.layer.cornerRadius = 22;
-        self.layer.borderWidth = 1;
-        self.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.25].CGColor;
-        self.tintColor = UIColor.whiteColor;
-        self.titleLabel.font = [UIFont boldSystemFontOfSize:20];
-        [self setTitle:@"🔧" forState:UIControlStateNormal];
-        [self addTarget:self action:@selector(dyyy_tapAction) forControlEvents:UIControlEventTouchUpInside];
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dyyy_handlePan:)];
-        [self addGestureRecognizer:pan];
-    }
-    return self;
 }
 
 + (BOOL)isDiagEntryEnabled {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
 }
 
-+ (void)refreshPresence {
-    UIWindow *key = nil;
-    for (UIWindow *w in [UIApplication sharedApplication].windows) {
-        if (!w.hidden && w.windowLevel == UIWindowLevelNormal) { key = w; break; }
-    }
-    [self attachToWindowIfNeeded:key];
-}
-
 + (void)attachToWindowIfNeeded:(UIWindow *)window {
     if (!window) return;
-    DYYYFloatDiagButton *btn = [self sharedButton];
-    if (![self isDiagEntryEnabled]) { [btn removeFromSuperview]; return; }
-    if (btn.superview == window) return;
-    [btn removeFromSuperview];
-    CGFloat x = window.bounds.size.width - 60;
-    CGFloat y = window.bounds.size.height - 140;
-    btn.frame = CGRectMake(x, y, 44, 44);
-    [window addSubview:btn];
+    if (![self isDiagEntryEnabled]) { [self removeFromWindowIfPresent]; return; }
+    if (_shared.superview == window) return;
+    [_shared removeFromSuperview];
+    // 初始位置：右下角，避开底部安全区
+    UIWindow *w = window;
+    CGFloat x = w.bounds.size.width - 60;
+    CGFloat y = w.bounds.size.height - 140;
+    _shared.frame = CGRectMake(x, y, 44, 44);
+    [w addSubview:_shared];
 }
 
 + (void)removeFromWindowIfPresent {
     [_shared removeFromSuperview];
 }
+
+- (instancetype)initWithCoder:(NSCoder *)coder { self = [super initWithCoder:coder]; return self; }
 
 - (void)dyyy_handlePan:(UIPanGestureRecognizer *)pan {
     CGPoint t = [pan translationInView:self.superview];
@@ -65,6 +53,7 @@ static DYYYFloatDiagButton *_shared = nil;
         CGRect f = self.frame;
         f.origin.x += t.x;
         f.origin.y += t.y;
+        // 吸边约束在窗口范围内
         if (self.superview) {
             CGFloat maxX = self.superview.bounds.size.width - f.size.width;
             CGFloat maxY = self.superview.bounds.size.height - f.size.height;
@@ -73,58 +62,18 @@ static DYYYFloatDiagButton *_shared = nil;
         }
         self.frame = f;
         [pan setTranslation:CGPointZero inView:self.superview];
+    } else if (pan.state == UIGestureRecognizerStateEnded) {
+        // 松手不弹菜单（拖动结束误触保护）
     }
 }
 
-- (UIViewController *)dyyy_topPresenter {
-    UIViewController *presenter = nil;
-    for (UIWindow *w in [UIApplication sharedApplication].windows) {
-        if (w.hidden || w.windowLevel != UIWindowLevelNormal) continue;
-        UIViewController *root = w.rootViewController;
-        while (root.presentedViewController) root = root.presentedViewController;
-        presenter = root;
-        break;
-    }
-    return presenter;
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesEnded:touches withEvent:event];
+    UITouch *touch = [touches anyObject];
+    CGPoint loc = [touch locationInView:self];
+    if (![self pointInside:loc withEvent:event]) return;
+    if (fabs(loc.x - self.bounds.size.width/2) > 18 || fabs(loc.y - self.bounds.size.height/2) > 18) return;
+    // 点扳手直接导出诊断包（纯写文件 + Toast，不弹任何菜单/分享面板）
+    [DYYYDiagnostics exportDiagnosticsBundleFromViewController:nil];
 }
-
-- (void)dyyy_tapAction {
-    UIViewController *presenter = [self dyyy_topPresenter];
-    if (!presenter) return;
-    UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"DYYY 诊断"
-                                                                 message:nil
-                                                          preferredStyle:UIAlertControllerStyleActionSheet];
-    // #36：菜单在场时 topPresenter 会拿到菜单自身——先 dismiss 再执行
-    void (^runAfterDismiss)(void (^)(UIViewController *)) = ^(void (^work)(UIViewController *p)) {
-        UIViewController *p = [self dyyy_topPresenter];
-        if (p.presentedViewController) {
-            [p dismissViewControllerAnimated:YES completion:^{ work(p); }];
-        } else {
-            work(p);
-        }
-    };
-    [menu addAction:[UIAlertAction actionWithTitle:@"导出诊断包" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        runAfterDismiss(^(UIViewController *p) {
-          // 方案2：菜单转场结束后再跑导出（对齐媒体导出的成熟时机模式）
-          dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                         dispatch_get_main_queue(), ^{
-            [DYYYDiagnostics exportDiagnosticsBundleFromViewController:p];
-          });
-        });
-    }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"导出日志" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics exportRuntimeLogFromViewController:p]; });
-    }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"环境自检" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics showAuditReportFromViewController:p]; });
-    }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"清空日志" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-        runAfterDismiss(^(UIViewController *p) { [DYYYDiagnostics clearRuntimeLogFromViewController:p]; });
-    }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    menu.popoverPresentationController.sourceView = presenter.view;
-    menu.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
-    [presenter presentViewController:menu animated:YES completion:nil];
-}
-
 @end

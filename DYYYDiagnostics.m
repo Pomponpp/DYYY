@@ -1,7 +1,7 @@
 // DYYYDiagnostics — 运行日志导出 + 可读自检报告面板（类声明见 AwemeHeaders.h）
 // 日志文件位于 NSTemporaryDirectory()/DYYYLogs/runtime.log（系统会清理临时目录），
-// 因此导出时拷贝到 Documents/DYYY/logs 持久保存，再经 UIActivityViewController
-// 用"存储到文件"落到"文件"App，或 AirDrop/复制到其他设备。
+// 因此导出时拷贝到 Documents/DYYY/logs 持久保存（文件 App 可直接取）。
+// 诊断导出为纯写文件 + Toast，不弹任何分享/告警面板。
 #import "AwemeHeaders.h"
 #import "DYYYClassRegistry.h"
 #import "DYYYToast.h"
@@ -15,6 +15,7 @@ static const NSUInteger kDYYYRuntimeLogMaxBackups = 1;
 static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 3 天
 
 static BOOL gDYYYExportBusy = NO;
+static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
 
 @implementation DYYYDiagnostics
 
@@ -29,8 +30,6 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
     // 交还系统默认 handler，保持崩溃上报行为
     if (gDYYYPreviousHandler) gDYYYPreviousHandler(exception);
 }
-
-static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
 
 + (void)installUncaughtExceptionHandler {
     static dispatch_once_t onceToken;
@@ -211,17 +210,12 @@ static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
 // 一键诊断包：日志 + 视图树 + 环境/开关状态 + 截图，四样时间戳天然对齐。
 // 导出为单个目录（Documents/DYYY/logs/DYYY-diag-时间戳/）后弹分享。
 + (void)exportDiagnosticsBundleFromViewController:(UIViewController *)presenter {
-    if (!presenter) {
-        return;
-    }
+    // 纯写文件 + Toast：零 present / 零 UIActivityViewController / 零 UIAlertController。
+    // 所有历史 .ips 的崩点（present 冲突、Metal abort、Foundation C++ 写入）
+    // 在这条路径上物理不存在。产物固定落在 文件App→DYYY/logs/DYYY-diag-时间戳/。
     if (gDYYYExportBusy) { [DYYYToast showSuccessToastWithMessage:@"正在导出，请稍候"]; return; }
     gDYYYExportBusy = YES;
-    dispatch_sync([self logQueueForExport], ^{
-      [self cleanupStaleLogsOnQueue];
-      [self rotateRuntimeLogIfNeededOnQueue];
-    });
 
-    // 状态指纹（与单导日志一致，诊断包自带可对性）
     [self appendRuntimeLogLine:@"—— 导出时刻开关状态 ——"];
     [self appendRuntimeLogLine:[NSString stringWithFormat:
         @"[DYYY][fullscreen] 导出状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
@@ -230,206 +224,68 @@ static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
         DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
         DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0]];
 
-    NSDateFormatter *nameFormatter = [[NSDateFormatter alloc] init];
-    nameFormatter.dateFormat = @"yyyyMMdd-HHmmss";
-    NSString *stamp = [nameFormatter stringFromDate:[NSDate date]];
-[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step3 bundleDir built"];
-    NSString *bundleDir = [[self exportedLogPathWithName:@""] stringByAppendingString:
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    fmt.dateFormat = @"yyyyMMdd-HHmmss";
+    NSString *stamp = [fmt stringFromDate:[NSDate date]];
+    NSString *dir = [[self exportedLogPathWithName:@""] stringByAppendingString:
         [NSString stringWithFormat:@"DYYY-diag-%@", stamp]];
-    [[NSFileManager defaultManager] createDirectoryAtPath:bundleDir
-                              withIntermediateDirectories:YES attributes:nil error:nil];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
 
-[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step4 log copy begin"];
-    // ① runtime.log
+    // ① 运行日志（拷贝，源文件由串行队列维护）
     NSString *logSrc = [self runtimeLogPath];
-    if (![[NSFileManager defaultManager] fileExistsAtPath:logSrc]) {
-        [[NSString stringWithFormat:@"DYYY 诊断包 %@\n（运行日志为空）\n", [NSDate date]]
-            writeToFile:logSrc atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    if ([fm fileExistsAtPath:logSrc]) {
+        [fm copyItemAtPath:logSrc toPath:[dir stringByAppendingPathComponent:@"runtime.log"] error:nil];
     }
-    [[NSFileManager defaultManager] copyItemAtPath:logSrc
-                                           toPath:[bundleDir stringByAppendingPathComponent:@"runtime.log"]
-                                            error:nil];
 
-[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step5 view-tree begin"];
-    // ② 视图树快照（UIView 属性必须主线程读；非主线程调用时跳过并留痕，
-    //    绝不 dispatch_sync(main)——同步到主线程会与日志队列交叉死锁）
-    NSString *treePath = [bundleDir stringByAppendingPathComponent:@"view-tree.txt"];
-    // 防御：父目录再次确保存在 + 路径合法性（writeToFile 在后台队列抛异常
-    // 无法被调用方 @try 捕获，必须在源头保证路径可用）
+    // ② 视图树（DYYYUtils 内部已用 POSIX 写入，避开 Foundation C++ 异常）
     if ([NSThread isMainThread]) {
-        @try {
-            [DYYYUtils dumpAllWindowsViewTreeToFile:treePath];
-        } @catch (NSException *e) {
-            NSLog(@"[DYYY][diag] view-tree exception: %@", e.name);
-        }
-    } else {
-        [[NSString stringWithFormat:@"view-tree skipped: not main thread"]
-            writeToFile:treePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        @try { [DYYYUtils dumpAllWindowsViewTreeToFile:[dir stringByAppendingPathComponent:@"view-tree.txt"]]; }
+        @catch (NSException *e) { NSLog(@"[DYYY][diag] view-tree exception: %@", e.name); }
     }
 
-[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step6 state.json begin"];
-    // ③ 环境与开关状态
-    NSMutableDictionary *state = [NSMutableDictionary dictionary];
-    state[@"timestamp"] = [NSDate date];
-    state[@"deviceModel"] = [UIDevice currentDevice].model;
-    state[@"systemVersion"] = [UIDevice currentDevice].systemVersion;
-    state[@"appVersion"] = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    state[@"screenBounds"] = NSStringFromCGRect([UIScreen mainScreen].bounds);
-    state[@"screenScale"] = @([UIScreen mainScreen].scale);
-    state[@"fullScreen"] = @(DYYYGetBool(@"DYYYEnableFullScreen"));
-    state[@"fullNewDetailTable"] = @(DYYYGetBool(@"DYYYFullNewDetailTable"));
-    state[@"commentAvoidVideo"] = @(DYYYGetBool(@"DYYYCommentAvoidVideo"));
-    state[@"commentBlur"] = @(DYYYGetBool(@"DYYYEnableCommentBlur"));
-    state[@"fullscreenDiag"] = @(DYYYGetBool(@"DYYYFullscreenDiag"));
-    state[@"hideStatusbar"] = @(DYYYGetBool(@"DYYYHideStatusbar"));
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:state options:NSJSONWritingPrettyPrinted error:nil];
-    if (jsonData) {
-        [jsonData writeToFile:[bundleDir stringByAppendingPathComponent:@"state.json"]
-                  atomically:YES];
-    }
+    // ③ 环境状态
+    NSMutableDictionary *st = [NSMutableDictionary dictionary];
+    st[@"timestamp"] = [NSDate date];
+    st[@"deviceModel"] = [UIDevice currentDevice].model;
+    st[@"systemVersion"] = [UIDevice currentDevice].systemVersion;
+    st[@"appVersion"] = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    st[@"screenBounds"] = NSStringFromCGRect([UIScreen mainScreen].bounds);
+    st[@"fullScreen"] = @(DYYYGetBool(@"DYYYEnableFullScreen"));
+    st[@"fullNewDetailTable"] = @(DYYYGetBool(@"DYYYFullNewDetailTable"));
+    st[@"commentBlur"] = @(DYYYGetBool(@"DYYYEnableCommentBlur"));
+    NSData *jd = [NSJSONSerialization dataWithJSONObject:st options:NSJSONWritingPrettyPrinted error:nil];
+    if (jd) [jd writeToFile:[dir stringByAppendingPathComponent:@"state.json"] atomically:YES];
 
-[DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step7 screenshot begin"];
-    // ④ 截图：#43 实测 renderInContext 遇 Metal layer 在部分状态直接 abort
-    // （C++ 层 assert，@try 接不住）。暂时用占位说明替代，后续用安全截图方案。
-    [[NSString stringWithFormat:@"screenshot skipped: Metal layer abort risk"]
-        writeToFile:[bundleDir stringByAppendingPathComponent:@"screenshot-skip.txt"]
+    // ④ 截图禁用说明（Metal 层会 C++ abort，@try 接不住）
+    [[NSString stringWithFormat:@"screenshot disabled: Metal layer abort risk"]
+        writeToFile:[dir stringByAppendingPathComponent:@"screenshot-skip.txt"]
          atomically:YES encoding:NSUTF8StringEncoding error:nil];
 
-    // #36 防闪退：调用方可能带着已 present 的面板（扳手菜单），先 dismiss
-    // 再延迟 present——"presentation in progress" 异常是 SIGABRT 直接来源
-    NSURL *bundleURL = [NSURL fileURLWithPath:bundleDir];
-    UIActivityViewController *share = [[UIActivityViewController alloc]
-        initWithActivityItems:@[ bundleURL ] applicationActivities:nil];
-    // 方案2：打包已完成（异步节点），延迟 0.4s 确保转场彻底结束再 present
-    // （对齐媒体导出的成熟时机模式——静态时刻 present，零转场冲突）
-    // presenter 恒为自己窗口的 rootVC，无转场冲突，直接 present
-    [DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step8 present share"];
-    [DYYYDiagnostics safePresentBundleShare:bundleURL from:presenter];
-}
-
-// 安全 present（终极版）：present 前若面板在场先 dismiss，completion 后
-// 延迟重试（dismiss completion 触发时 UIKit 状态可能仍未就绪——
-// 三份 .ips 都是这一类时序异常）。
-+ (void)safePresentViewController:(UIViewController *)vc from:(UIViewController *)presenter retries:(NSInteger)retries {
-    if (!presenter || !presenter.view.window) return;
-    if (presenter.presentedViewController) {
-        [presenter dismissViewControllerAnimated:YES completion:^{
-          dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
-                         dispatch_get_main_queue(), ^{
-            [DYYYDiagnostics safePresentViewController:vc from:presenter retries:retries];
-          });
-        }];
-        return;
-    }
-    @try {
-        [presenter presentViewController:vc animated:YES completion:nil];
-    } @catch (NSException *e) {
-        NSLog(@"[DYYY][diag] present exception: %@", e.name);
-        if (retries > 0) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-              [DYYYDiagnostics safePresentViewController:vc from:presenter retries:retries - 1];
-            });
-        }
-    }
-}
-
-+ (void)safePresentBundleShare:(NSURL *)bundleURL from:(UIViewController *)presenter {
     gDYYYExportBusy = NO;
-    if (!presenter || !presenter.view.window) return;
-    UIActivityViewController *share = [[UIActivityViewController alloc]
-        initWithActivityItems:@[ bundleURL ] applicationActivities:nil];
-    share.popoverPresentationController.sourceView = presenter.view;
-    share.popoverPresentationController.sourceRect =
-        CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
-    [DYYYToast showSuccessToastWithMessage:@"诊断包已生成，请存储到文件"];
-    [DYYYDiagnostics safePresentViewController:share from:presenter retries:2];
+    [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"诊断包已保存\n文件App → DYYY/logs/\n%@", [dir lastPathComponent]]];
+    NSLog(@"[DYYY][diag] bundle written to %@ (no UI present)", dir);
 }
-
 
 + (void)exportRuntimeLogFromViewController:(UIViewController *)presenter {
-    if (!presenter) {
-        return;
-    }
-
-    // 导出前先清理过期日志（3 天前的运行日志与导出副本）
-    dispatch_sync([self logQueueForExport], ^{
-      [self cleanupStaleLogsOnQueue];
-      [self rotateRuntimeLogIfNeededOnQueue];
-    });
-
-    // 版本指纹：导出时刻强制写入当前开关状态到运行日志头部。
-    // 不再依赖启动时机（清空/轮转都可能把启动行冲掉），导出的日志
-    // 永远自带状态可对——治"测了不知道测没测到"。
+    // 纯写文件 + Toast，零弹窗
     [self appendRuntimeLogLine:@"—— 导出时刻开关状态 ——"];
-    [self appendRuntimeLogLine:[NSString stringWithFormat:
-        @"[DYYY][fullscreen] 导出状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
-        DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
-        DYYYGetBool(@"DYYYFullNewDetailTable") ? 1 : 0,
-        DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
-        DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0]];
-
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    NSString *sourcePath = [self runtimeLogPath];
-    NSDateFormatter *nameFormatter = [[NSDateFormatter alloc] init];
-    nameFormatter.dateFormat = @"yyyyMMdd-HHmmss";
-    NSString *exportName = [NSString stringWithFormat:@"DYYY-log-%@.txt", [nameFormatter stringFromDate:[NSDate date]]];
-    NSString *exportPath = [self exportedLogPathWithName:exportName];
-
-    if (![fileManager fileExistsAtPath:sourcePath]) {
-        // 还没产生日志：先写一条占位，保证导出面板有内容。
-        NSString *placeholder = [NSString stringWithFormat:@"DYYY 日志导出 %@\n（当前运行日志为空）\n\n", [NSDate date]];
-        [placeholder writeToFile:sourcePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    }
-
-    [fileManager removeItemAtPath:exportPath error:nil];
-    NSError *copyError = nil;
-    if (![fileManager copyItemAtPath:sourcePath toPath:exportPath error:&copyError]) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"导出失败"
-                                                                       message:copyError.localizedDescription ?: @"未知错误"
-                                                                preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
-        [presenter presentViewController:alert animated:YES completion:nil];
-        return;
-    }
-
-    NSURL *exportURL = [NSURL fileURLWithPath:exportPath];
-    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[ exportURL ]
-                                                                         applicationActivities:nil];
-    share.popoverPresentationController.sourceView = presenter.view;
-    share.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(presenter.view.bounds), CGRectGetMidY(presenter.view.bounds), 1, 1);
-
-    UIAlertController *done = [UIAlertController alertControllerWithTitle:@"日志已导出"
-                                                                 message:[NSString stringWithFormat:@"已保存到 文件→DYYY/logs/%@\n也可用分享面板直接发送。", exportName]
-                                                          preferredStyle:UIAlertControllerStyleAlert];
-    [done addAction:[UIAlertAction actionWithTitle:@"打开分享" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-                                                      [DYYYDiagnostics safePresentViewController:share from:presenter retries:2];
-                                                  }]];
-    [done addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
-    [presenter presentViewController:done animated:YES completion:nil];
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    fmt.dateFormat = @"yyyyMMdd-HHmmss";
+    NSString *name = [NSString stringWithFormat:@"DYYY-log-%@.txt", [fmt stringFromDate:[NSDate date]]];
+    NSString *dst = [self exportedLogPathWithName:name];
+    NSString *src = [self runtimeLogPath];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if ([fm fileExistsAtPath:src]) [fm copyItemAtPath:src toPath:dst error:nil];
+    [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"日志已保存\n文件App → DYYY/logs/%@", name]];
 }
 
 + (void)showAuditReportFromViewController:(UIViewController *)presenter {
-    if (!presenter) {
-        return;
-    }
-
-    NSString *report = [DYYYClassRegistry auditReportText];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"DYYY 自检报告"
-                                                                   message:report
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"复制报告"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(__unused UIAlertAction *action) {
-                                              [UIPasteboard generalPasteboard].string = report;
-                                          }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"导出运行日志"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(__unused UIAlertAction *action) {
-                                              [self exportRuntimeLogFromViewController:presenter];
-                                          }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
-    [presenter presentViewController:alert animated:YES completion:nil];
+    // 写报告文件 + Toast，零弹窗
+    NSString *report = [DYYYClassRegistry auditReportText] ?: @"(无)";
+    [report writeToFile:[self exportedLogPathWithName:@"DYYY-audit.txt"]
+            atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    [DYYYToast showSuccessToastWithMessage:@"自检报告已保存\n文件App → DYYY/logs/DYYY-audit.txt"];
 }
 
 @end

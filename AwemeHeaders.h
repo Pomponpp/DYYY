@@ -56,11 +56,11 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 + (void)cleanupStaleLogsOnQueue;
 // 手动清空运行日志、轮转备份与导出副本。
 + (void)clearRuntimeLogFromViewController:(UIViewController *)presenter;
-// 把运行日志拷贝到 Documents/DYYY/logs 并弹出分享面板（可"存储到文件"）。
+// 把运行日志拷贝到 Documents/DYYY/logs（文件 App 可直接取）。
 + (void)exportRuntimeLogFromViewController:(UIViewController *)presenter;
-// 一键诊断包：runtime.log + 视图树快照 + 设备/开关状态 + 截图，打包后弹分享面板。
+// 一键诊断包：纯写文件 + Toast，不弹任何面板。
 + (void)exportDiagnosticsBundleFromViewController:(UIViewController *)presenter;
-// 弹出可读自检报告面板（中文，逐条列出关键类状态与对应功能），附"复制报告"。
+// 自检报告写文件 + Toast，不弹面板。
 + (void)showAuditReportFromViewController:(UIViewController *)presenter;
 @end
 @class _TtC33AWECommentPanelContainerSwiftImpl31CommentViewControllerStateModel;
