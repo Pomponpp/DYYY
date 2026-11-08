@@ -326,6 +326,12 @@ static void DKEnsureDebugWindow(void) {
     DKStartExport(context, DKDebugExportModePage);
 }
 
+// 面板（菜单/进度/分享）在场时窗口恢复全量命中——否则"关闭"的触摸被穿透。
+// （音频专项删除时误切掉了原实现，按原版补回。）
+- (BOOL)capturesOverlayTouches {
+    return self.presentedViewController != nil;
+}
+
 @end
 
 #pragma mark - 对外入口
