@@ -4493,7 +4493,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       if (!strongItem || !strongItem.isEnable) return;
       BOOL newValue = !strongItem.isSwitchOn;      // 标准翻转：基于当前 UI 值
       strongItem.isSwitchOn = newValue;
-      [[DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier] ];
+      [DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier];
       DYYYDiagRefresh();                            // 用写入后的新值刷新浮层
     };
     [diagnosticItems addObject:diagEntryItem];
