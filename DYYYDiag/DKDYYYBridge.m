@@ -3,6 +3,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import "AwemeHeaders.h"
+#import "Debug/DKDebugInspector.h"
 
 @implementation DKDYYYBridge : NSObject
 
