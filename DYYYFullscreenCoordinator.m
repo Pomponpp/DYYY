@@ -5,6 +5,47 @@
 #import "AwemeHeaders.h"
 #import <objc/runtime.h>
 
+// ===== 分页状态隔离（实验 DYYYPageIsolation）=====
+// 每个详情页（VC+页索引）一份状态包：原高/撑高目标/接管标记。
+// 切页互不读写——修「A 页撑高状态污染 B 页 cell」的串门问题。
+@interface DYYYPageState : NSObject
+@property (nonatomic, assign) CGFloat originalHeight;
+@property (nonatomic, assign) CGFloat targetHeight;
+@property (nonatomic, assign) BOOL stretched;
+@end
+@implementation DYYYPageState
+@end
+
+static NSMutableDictionary<NSString *, DYYYPageState *> *DYYYPageStates(void) {
+    static NSMutableDictionary *states;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ states = [NSMutableDictionary dictionary]; });
+    return states;
+}
+
+static NSString *DYYYPageKey(UIViewController *controller, UITableView *table) {
+    long pageIndex = -1;
+    if ([controller respondsToSelector:@selector(currentVisibleCellIndex)]) {
+        pageIndex = (long)[(id)controller currentVisibleCellIndex];
+    }
+    return [NSString stringWithFormat:@"%p#%ld", controller, (long)pageIndex];
+}
+
+static DYYYPageState *DYYYPageStateFor(UIViewController *controller, UITableView *table) {
+    NSString *key = DYYYPageKey(controller, table);
+    DYYYPageState *st = DYYYPageStates()[key];
+    if (!st) {
+        st = [DYYYPageState new];
+        st.originalHeight = -1;
+        DYYYPageStates()[key] = st;
+    }
+    return st;
+}
+
+static void DYYYPageStatesPrune(void) {
+    if (DYYYPageStates().count > 32) [DYYYPageStates() removeAllObjects];
+}
+
 @interface DYYYFullscreenPlayerState : NSObject
 @property(nonatomic, weak) UIViewController *owner;
 @property(nonatomic, assign) CGSize layoutWindowSize;
@@ -128,46 +169,7 @@
 // 落点(N×行高)与建行同源：点A弹A 与 全屏 同时成立。
 static const CGFloat kDYYYDetailHeightTol = 0.5;
 
-// ===== 分页状态隔离（实验 DYYYPageIsolation）=====
-// 每个详情页（VC+页索引）一份状态包：原高/撑高目标/接管标记。
-// 切页互不读写——修「A 页撑高状态污染 B 页 cell」的串门问题。
-@interface DYYYPageState : NSObject
-@property (nonatomic, assign) CGFloat originalHeight;
-@property (nonatomic, assign) CGFloat targetHeight;
-@property (nonatomic, assign) BOOL stretched;
-@end
-@implementation DYYYPageState
-@end
 
-static NSMutableDictionary<NSString *, DYYYPageState *> *DYYYPageStates(void) {
-    static NSMutableDictionary *states;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ states = [NSMutableDictionary dictionary]; });
-    return states;
-}
-
-static NSString *DYYYPageKey(UIViewController *controller, UITableView *table) {
-    long pageIndex = -1;
-    if ([controller respondsToSelector:@selector(currentVisibleCellIndex)]) {
-        pageIndex = (long)[(id)controller currentVisibleCellIndex];
-    }
-    return [NSString stringWithFormat:@"%p#%ld", controller, (long)pageIndex];
-}
-
-static DYYYPageState *DYYYPageStateFor(UIViewController *controller, UITableView *table) {
-    NSString *key = DYYYPageKey(controller, table);
-    DYYYPageState *st = DYYYPageStates()[key];
-    if (!st) {
-        st = [DYYYPageState new];
-        st.originalHeight = -1;
-        DYYYPageStates()[key] = st;
-    }
-    return st;
-}
-
-static void DYYYPageStatesPrune(void) {
-    if (DYYYPageStates().count > 32) [DYYYPageStates() removeAllObjects];
-}
 
 // ===== 分页状态隔离占位（将在下方方法改写中使用）=====
 
