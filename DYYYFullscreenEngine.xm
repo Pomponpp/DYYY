@@ -273,10 +273,10 @@ static void DYYYEngineRestore(void) {
     }
 
     // 全屏开关关闭时立刻还原（自监听配置变化，不依赖设置页回调）。
-    [[NSUserDefaults standardUserDefaults] addObserverForName:NSUserDefaultsDidChangeNotification
-                                                       object:nil
-                                                        queue:[NSOperationQueue mainQueue]
-                                                   usingBlock:^(__unused NSNotification *note) {
+    [NSNotificationCenter.defaultCenter addObserverForName:NSUserDefaultsDidChangeNotification
+                                                    object:nil
+                                                     queue:[NSOperationQueue mainQueue]
+                                                usingBlock:^(__unused NSNotification *note) {
         DYYYFullscreenEngineOnToggle();
     }];
 }
