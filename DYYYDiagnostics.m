@@ -14,6 +14,8 @@ static const unsigned long long kDYYYRuntimeLogMaxBytes = 2 * 1024 * 1024; // 2M
 static const NSUInteger kDYYYRuntimeLogMaxBackups = 1;
 static const NSTimeInterval kDYYYRuntimeLogMaxAge = 3 * 24 * 60 * 60; // 保留 3 天
 
+static BOOL gDYYYExportBusy = NO;
+
 @implementation DYYYDiagnostics
 
 // 未捕获 NSException 兜底：写入日志再交还系统（闪退后日志里有现场）
@@ -212,6 +214,8 @@ static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
     if (!presenter) {
         return;
     }
+    if (gDYYYExportBusy) { [DYYYToast showSuccessToastWithMessage:@"正在导出，请稍候"]; return; }
+    gDYYYExportBusy = YES;
     dispatch_sync([self logQueueForExport], ^{
       [self cleanupStaleLogsOnQueue];
       [self rotateRuntimeLogIfNeededOnQueue];
@@ -298,11 +302,9 @@ static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
         initWithActivityItems:@[ bundleURL ] applicationActivities:nil];
     // 方案2：打包已完成（异步节点），延迟 0.4s 确保转场彻底结束再 present
     // （对齐媒体导出的成熟时机模式——静态时刻 present，零转场冲突）
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-  [DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step8 present share"];
+    // presenter 恒为自己窗口的 rootVC，无转场冲突，直接 present
+    [DYYYDiagnostics appendRuntimeLogLine:@"[DYYY][diag] step8 present share"];
     [DYYYDiagnostics safePresentBundleShare:bundleURL from:presenter];
-    });
 }
 
 // 安全 present（终极版）：present 前若面板在场先 dismiss，completion 后
@@ -333,6 +335,7 @@ static NSUncaughtExceptionHandler *gDYYYPreviousHandler = nil;
 }
 
 + (void)safePresentBundleShare:(NSURL *)bundleURL from:(UIViewController *)presenter {
+    gDYYYExportBusy = NO;
     if (!presenter || !presenter.view.window) return;
     UIActivityViewController *share = [[UIActivityViewController alloc]
         initWithActivityItems:@[ bundleURL ] applicationActivities:nil];

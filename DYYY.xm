@@ -7408,14 +7408,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %end
 
-%hook UIWindow
-
-- (void)makeKeyAndVisible {
-    %orig;
-}
-
-%end
-
 // #34：诊断扳手挂载——独立顶层 hook，不受「禁用设置手势」开关影响。
 // keyWindow 变化即刷新（原挂载埋在 DYYYSettingsGesture group 内，
 // 用户开启禁用设置手势后整个 group 不注册，扳手随之失效）。
@@ -13116,6 +13108,9 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %ctor {
+    // 诊断浮层：启动早期一次性安装（hidden 待命），不抢焦点、不参与转场
+    [DYYYFloatDiagWindow install];
+    [DYYYFloatDiagWindow setEnabled:[[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"]];
     [DYYYDiagnostics installUncaughtExceptionHandler];
     // 40.9 优化：启动自检关键 hook 类存在性，改版失效时日志直接给出缺失类清单。
     // 注意：%ctor 执行时抖音自己的 ObjC 类可能尚未全部注册（dyld 尚未完成其初始化），
@@ -13123,7 +13118,6 @@ static void findTargetViewInView(UIView *view) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
                      [DYYYClassRegistry runStartupAudit];
-                     if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"]) [DYYYFloatDiagWindow show];
                      // 状态自证日志：导出的日志首段即可确认实验档是否生效，
                      // 避免"拨了开关但代码没干活"与"没拨开关"两种情况混淆。
                      NSLog(@"[DYYY][fullscreen] 启动状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",

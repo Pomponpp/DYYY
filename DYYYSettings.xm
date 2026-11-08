@@ -4488,12 +4488,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     diagEntryItem.cellType = 6;
     diagEntryItem.isEnable = YES;
     diagEntryItem.isSwitchOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
+    __block AWESettingItemModel *weakItem = diagEntryItem;
     diagEntryItem.switchChangedBlock = ^{
-      BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
-      [[NSUserDefaults standardUserDefaults] setBool:@(!enabled) forKey:@"DYYYDiagEntryEnabled"];
-      dispatch_async(dispatch_get_main_queue(), ^{
-        enabled ? [DYYYFloatDiagWindow show] : [DYYYFloatDiagWindow hide];
-      });
+      __strong AWESettingItemModel *item = weakItem;
+      if (!item) return;
+      BOOL newValue = !item.isSwitchOn;
+      item.isSwitchOn = newValue;
+      [[NSUserDefaults standardUserDefaults] setBool:newValue forKey:@"DYYYDiagEntryEnabled"];
+      [DYYYFloatDiagWindow setEnabled:newValue];   // 用写入后的新值
     };
     [diagnosticItems addObject:diagEntryItem];
 
