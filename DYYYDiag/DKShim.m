@@ -7,7 +7,6 @@
 #import "Shared/DKUtils.h"
 #import "AwemeHeaders.h"
 
-#define DK_VERSION @"2.2-9"
 
 #pragma mark - 音频专项（已移除，空实现）
 

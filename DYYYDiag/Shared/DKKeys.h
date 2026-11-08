@@ -6,6 +6,10 @@
 
 #ifndef DKKeys_h
 #define DKKeys_h
+#ifndef DK_VERSION
+#define DK_VERSION @"2.2-9"
+#endif
+#define DKKeys_h
 
 #import <Foundation/Foundation.h>
 
