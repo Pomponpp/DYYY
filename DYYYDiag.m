@@ -252,6 +252,8 @@ static void DYYYDiagStartExport(void) {
 @property (nonatomic, assign) BOOL didPlace;
 @end
 
+static void DYYYDiagEnsureWindow(void);
+
 @implementation DYYYDiagController
 
 - (void)loadView {
