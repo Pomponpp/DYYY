@@ -319,6 +319,11 @@ static void DYYYDiagStartExport(void) {
     [self presentViewController:menu animated:YES completion:nil];
 }
 
++ (UIViewController *)diagPresenter {
+    [DYYYDiagEnsureWindow];
+    gWindow.hidden = NO;
+    return gController;
+}
 @end
 
 #pragma mark - 安装 / 刷新（启动早期装好，hidden 待命，只翻 hidden）
@@ -341,12 +346,6 @@ static void DYYYDiagEnsureWindow(void) {
     gWindow.windowLevel = UIWindowLevelAlert + 100000.0;
     gWindow.rootViewController = gController;
     gWindow.hidden = YES;
-}
-
-+ (UIViewController *)diagPresenter {
-    [DYYYDiagEnsureWindow];
-    gWindow.hidden = NO;
-    return gController;   // presenter 恒为自己窗口 rootVC，与浮窗同一条安全路径
 }
 
 void DYYYDiagRefresh(void) {
