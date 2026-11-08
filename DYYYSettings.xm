@@ -1,5 +1,6 @@
 #import "AwemeHeaders.h"
 #import "DYYYDiag/DKDYYYBridge.h"
+#import "DYYYDiag/Debug/DKDebugInspector.h"
 #import "DYYYManager.h"
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <math.h>
