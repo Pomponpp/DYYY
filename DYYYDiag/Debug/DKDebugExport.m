@@ -149,7 +149,7 @@ static NSString *DKModeName(DKDebugExportMode mode) {
 
 static NSString *DKReadme(DKDebugExportContext *context, DKDebugExportMode mode) {
     NSMutableString *text = [NSMutableString string];
-    [text appendString:@"DYKiller Debug Export\n"];
+    [text appendString:@"DYYY Debug Export\n"];
     [text appendFormat:@"Generated: %@\n", context.metadata[@"generatedAt"] ?: @""];
     [text appendFormat:@"DYYY: %@\n", DK_VERSION];
     [text appendFormat:@"Bundle: %@\n", context.metadata[@"bundleIdentifier"] ?: @""];
@@ -258,7 +258,7 @@ DKDebugExportResult *DKDebugCreateExport(DKDebugExportContext *context,
 
     NSString *state = mode == DKDebugExportModeAudio ? (context.audioCapture.declaredState ?: @"unknown") : @"";
     NSString *suffix = state.length ? [NSString stringWithFormat:@"-%@", DKSafeFileName(state)] : @"";
-    NSString *rootName = [NSString stringWithFormat:@"DYKiller-Debug-%@%@-%@-%lld",
+    NSString *rootName = [NSString stringWithFormat:@"DYDebug-%@%@-%@-%lld",
                           DKModeName(mode), suffix, NSBundle.mainBundle.bundleIdentifier ?: @"Aweme",
                           (long long)NSDate.date.timeIntervalSince1970];
     NSString *temporary = NSTemporaryDirectory();

@@ -299,13 +299,28 @@ static void DKEnsureDebugWindow(void) {
 - (void)showDebugMenu {
     if (!DKPrefBool(DKKeyDebugInspectorEnabled)) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"DYKiller Debug"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"DYYY 诊断"
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleActionSheet];
-    [alert addAction:[UIAlertAction actionWithTitle:@"导出本页 zip"
+    [alert addAction:[UIAlertAction actionWithTitle:@"导出诊断包 (zip)"
                                               style:UIAlertActionStyleDefault
                                             handler:^(__unused UIAlertAction *action) {
         [self exportWholePage];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"导出运行日志"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(__unused UIAlertAction *action) {
+        [DKDYYYBridge exportRuntimeLogFromOverlay:self];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"环境自检"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(__unused UIAlertAction *action) {
+        [DKDYYYBridge showAuditReportFromOverlay:self];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"清空日志"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(__unused UIAlertAction *action) {
+        [DKDYYYBridge clearRuntimeLogFromOverlay:self];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
     if (alert.popoverPresentationController) {
