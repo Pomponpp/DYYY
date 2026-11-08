@@ -41,17 +41,6 @@ NSString *DKTabBarProbeReport(void) { return @""; }
 
 #pragma mark - 开关读取（映射到 DYYY 配置）
 
-BOOL DKPrefBool(NSString *key) {
-    if ([key isEqualToString:@"DYKillerDebugInspectorEnabled"]) {
-        return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
-    }
-    return [[NSUserDefaults standardUserDefaults] boolForKey:key];
-}
-
-NSInteger DKPrefInteger(NSString *key) {
-    return (NSInteger)[[NSUserDefaults standardUserDefaults] integerForKey:key];
-}
-
 #pragma mark - DKUtils 依赖（玻璃/显示模式等，诊断链路不实际使用，空实现）
 
 BOOL DKGlassOSAvailable(void) { return NO; }
