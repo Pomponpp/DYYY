@@ -4438,6 +4438,25 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     };
     [diagnosticItems addObject:diagEntryItem];
 
+    // 分页状态隔离（实验）：修跨页状态串门（点A弹B/错位）
+    AWESettingItemModel *pageIsoItem = [[%c(AWESettingItemModel) alloc] init];
+    pageIsoItem.identifier = @"DYYYPageIsolation";
+    pageIsoItem.title = @"分页状态隔离 (实验)";
+    pageIsoItem.detail = @"详情页每页独立保存状态，修点A弹B与跨页错位；异常时关闭即回退";
+    pageIsoItem.type = 1;
+    pageIsoItem.cellType = 6;
+    pageIsoItem.isEnable = YES;
+    pageIsoItem.isSwitchOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYPageIsolation"];
+    __block AWESettingItemModel *weakPageIso = pageIsoItem;
+    pageIsoItem.switchChangedBlock = ^{
+      __strong AWESettingItemModel *strongItem = weakPageIso;
+      if (!strongItem || !strongItem.isEnable) return;
+      BOOL newValue = !strongItem.isSwitchOn;
+      strongItem.isSwitchOn = newValue;
+      [[DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier]];
+    };
+    [diagnosticItems addObject:pageIsoItem];
+
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;
 

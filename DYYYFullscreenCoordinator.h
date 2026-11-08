@@ -14,6 +14,7 @@
 + (void)prepareDetailTableNew:(UIViewController *)controller;
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight;
 + (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
++ (UIViewController *)controllerForTable:(UITableView *)table;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;
 + (BOOL)isImageContentController:(UIViewController *)controller;

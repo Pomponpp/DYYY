@@ -128,6 +128,49 @@
 // 落点(N×行高)与建行同源：点A弹A 与 全屏 同时成立。
 static const CGFloat kDYYYDetailHeightTol = 0.5;
 
+// ===== 分页状态隔离（实验 DYYYPageIsolation）=====
+// 每个详情页（VC+页索引）一份状态包：原高/撑高目标/接管标记。
+// 切页互不读写——修「A 页撑高状态污染 B 页 cell」的串门问题。
+@interface DYYYPageState : NSObject
+@property (nonatomic, assign) CGFloat originalHeight;
+@property (nonatomic, assign) CGFloat targetHeight;
+@property (nonatomic, assign) BOOL stretched;
+@end
+@implementation DYYYPageState
+@end
+
+static NSMutableDictionary<NSString *, DYYYPageState *> *DYYYPageStates(void) {
+    static NSMutableDictionary *states;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ states = [NSMutableDictionary dictionary]; });
+    return states;
+}
+
+static NSString *DYYYPageKey(UIViewController *controller, UITableView *table) {
+    long pageIndex = -1;
+    if ([controller respondsToSelector:@selector(currentVisibleCellIndex)]) {
+        pageIndex = (long)[(id)controller currentVisibleCellIndex];
+    }
+    return [NSString stringWithFormat:@"%p#%ld", controller, (long)pageIndex];
+}
+
+static DYYYPageState *DYYYPageStateFor(UIViewController *controller, UITableView *table) {
+    NSString *key = DYYYPageKey(controller, table);
+    DYYYPageState *st = DYYYPageStates()[key];
+    if (!st) {
+        st = [DYYYPageState new];
+        st.originalHeight = -1;
+        DYYYPageStates()[key] = st;
+    }
+    return st;
+}
+
+static void DYYYPageStatesPrune(void) {
+    if (DYYYPageStates().count > 32) [DYYYPageStates() removeAllObjects];
+}
+
+// ===== 分页状态隔离占位（将在下方方法改写中使用）=====
+
 + (void)prepareDetailTableNew:(UIViewController *)controller {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !controller) return;
     if (![controller respondsToSelector:@selector(tableView)]) return;
@@ -135,7 +178,6 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     if (!table) return;
     UIView *root = controller.viewIfLoaded;
     if (!root) return;
-    // 半屏/异形窗口不接管（键盘态、小窗等）
     UIWindow *window = table.window ?: root.window;
     if (window && window.windowLevel != UIWindowLevelNormal) return;
     if (table.superview && ![table isDescendantOfView:root]) return;
@@ -145,6 +187,33 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     CGFloat current = CGRectGetHeight(table.frame);
     if (target <= 0 || !isfinite(target) || current <= 0) return;
 
+    // ===== 实验档：分页状态隔离 =====
+    if (DYYYGetBool(@"DYYYPageIsolation")) {
+        DYYYPageState *st = DYYYPageStateFor(controller, table);
+        DYYYPageStatesPrune();
+        if (!st.stretched) {
+            if (current < target - kDYYYDetailHeightTol && current >= target * 0.5) {
+                st.originalHeight = current;
+                st.targetHeight = target;
+                st.stretched = YES;
+                if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                    NSLog(@"[DYYY][page] 页包 记录原高=%.1f 目标=%.1f", current, target);
+                }
+            }
+            return;
+        }
+        if (current >= target - kDYYYDetailHeightTol || current < target * 0.5) return;
+        CGRect adjusted = table.frame;
+        adjusted.size.height = target;
+        if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+            NSLog(@"[DYYY][page] 页包 撑高 %.1f → %.1f", current, target);
+        }
+        table.frame = adjusted;
+        [self alignExistingCellsIfNeeded:table target:target];
+        return;
+    }
+
+    // ===== 原路径 =====
     NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
     if (!original) {
         if (current < target - kDYYYDetailHeightTol && current >= target * 0.5) {
@@ -153,9 +222,8 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
                 NSLog(@"[DYYY][table] prepare 记录原高=%.1f 目标=%.1f", current, target);
             }
         }
-        return; // 首次只记录原高，不撑高（不抢抖音建行意图）
+        return;
     }
-    // 已接管：表被写回压缩值时撑回满视口
     if (current >= target - kDYYYDetailHeightTol || current < target * 0.5) return;
     CGRect adjusted = table.frame;
     adjusted.size.height = target;
@@ -163,11 +231,8 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
         NSLog(@"[DYYY][table] prepare 撑高 %.1f → %.1f", current, target);
     }
     table.frame = adjusted;
-    // 清残留：落点已按满视口同源计算，把建行早于撑高的旧 cell（843 高）
-    // 对齐到满视口，消除同 offset 下 843/926 混住（点A弹B的直接原因）。
     [self alignExistingCellsIfNeeded:table target:target];
 }
-
 + (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target {
     if (!table || target <= 0) return;
     NSArray<UITableViewCell *> *cells = table.visibleCells;
@@ -186,19 +251,43 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
 
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !table) return nativeHeight;
+
+    // ===== 实验档：按页包回答 =====
+    if (DYYYGetBool(@"DYYYPageIsolation")) {
+        UIViewController *vc = [self controllerForTable:table];
+        if (!vc) return nativeHeight;
+        DYYYPageState *st = DYYYPageStateFor(vc, table);
+        CGFloat target = CGRectGetHeight(table.bounds);
+        if (!isfinite(nativeHeight) || !isfinite(target) || nativeHeight <= 0 || target <= 0) return nativeHeight;
+        if (!st.stretched || target <= st.originalHeight + kDYYYDetailHeightTol) return nativeHeight;
+        if (fabs(nativeHeight - st.originalHeight) > kDYYYDetailHeightTol &&
+            fabs(nativeHeight - target) > kDYYYDetailHeightTol) {
+            return nativeHeight;
+        }
+        return target;
+    }
+
+    // ===== 原路径 =====
     NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
     CGFloat target = CGRectGetHeight(table.bounds);
     if (!original || !isfinite(nativeHeight) || !isfinite(target) || nativeHeight <= 0 || target <= 0) {
         return nativeHeight;
     }
-    // 表还没被撑高（未接管）：透传，避免行高与表高矛盾拉锯
     if (target <= original.doubleValue + kDYYYDetailHeightTol) return nativeHeight;
-    // 只统一整页行高（原整页高或满视口高）；特殊行透传
     if (fabs(nativeHeight - original.doubleValue) > kDYYYDetailHeightTol &&
         fabs(nativeHeight - target) > kDYYYDetailHeightTol) {
         return nativeHeight;
     }
     return target;
+}
+
+// 由 table 反查详情页 VC（沿响应链）
++ (UIViewController *)controllerForTable:(UITableView *)table {
+    UIResponder *r = table;
+    for (int i = 0; r && i < 40; i++, r = r.nextResponder) {
+        if ([r isKindOfClass:[UIViewController class]]) return (UIViewController *)r;
+    }
+    return nil;
 }
 
 + (void)reconcileDetailPaging:(UIViewController *)controller {
