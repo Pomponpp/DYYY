@@ -25,15 +25,21 @@
 
 + (UIViewController *)diagPresenter {
     DKDebugInspectorInstall();
-    // RefreshOverlay 会按开关显示窗口；导出时确保可见
     DKDebugInspectorRefreshOverlay();
-    // 拿浮窗 rootVC：通过遍历 windows 找 DYYYDiag 前缀窗口
-    for (UIWindow *w in [UIApplication sharedApplication].windows) {
-        if ([NSStringFromClass(w.class) hasPrefix:@"DKDebug"] && w.rootViewController) {
-            return w.rootViewController;
+    // 等浮层窗口真正就绪（下一帧）再取，避免 present 到未挂窗口的 VC
+    __block UIViewController *found = nil;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        for (UIWindow *w in [UIApplication sharedApplication].windows) {
+            if ([NSStringFromClass(w.class) hasPrefix:@"DKDebug"] && w.rootViewController && !w.hidden) {
+                found = w.rootViewController;
+            }
         }
+    });
+    if (!found) {
+        // 浮层未就绪：退回设置页自己（调用方传 nil 时由 Diagnostics 自处理）
+        found = nil;
     }
-    return nil;
+    return found;
 }
 
 @end
