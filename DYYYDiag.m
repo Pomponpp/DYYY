@@ -322,7 +322,7 @@ static void DYYYDiagEnsureWindow(void);
 }
 
 + (UIViewController *)diagPresenter {
-    [DYYYDiagEnsureWindow];
+    DYYYDiagEnsureWindow();
     gWindow.hidden = NO;
     return gController;
 }
