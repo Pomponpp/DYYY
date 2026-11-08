@@ -7,6 +7,16 @@
 @property (nonatomic, strong) UIButton *wrenchButton;
 @end
 
+// .xm 按 ObjC++ 编译，C 函数声明必须带 extern "C" 才能与 .m 的 C 链接对上
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void DYYYDiagInstall(void);
 void DYYYDiagRefresh(void);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
