@@ -1,5 +1,5 @@
 #import "AwemeHeaders.h"
-#import "DYYYFloatDiagButton.h"
+#import "DYYYDiag.h"
 #import "DYYYManager.h"
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <math.h>
@@ -4408,7 +4408,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     auditReportItem.isEnable = YES;
     auditReportItem.cellTappedBlock = ^{
       // 诊断类只依赖 UIKit，这里直接找顶层控制器弹出。
-      [DYYYDiagnostics showAuditReportFromViewController:nil];
+      DYYYDiagRefresh();
     };
     [diagnosticItems addObject:auditReportItem];
 
@@ -4422,7 +4422,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     exportLogItem.colorStyle = 0;
     exportLogItem.isEnable = YES;
     exportLogItem.cellTappedBlock = ^{
-      [DYYYDiagnostics exportRuntimeLogFromViewController:nil];
+      DYYYDiagRefresh();
     };
     [diagnosticItems addObject:exportLogItem];
 
@@ -4437,7 +4437,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     diagBundleItem.colorStyle = 0;
     diagBundleItem.isEnable = YES;
     diagBundleItem.cellTappedBlock = ^{
-      [DYYYDiagnostics exportDiagnosticsBundleFromViewController:nil];
+      DYYYDiagRefresh();
     };
     [diagnosticItems addObject:diagBundleItem];
 
@@ -4467,7 +4467,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     clearLogItem.colorStyle = 0;
     clearLogItem.isEnable = YES;
     clearLogItem.cellTappedBlock = ^{
-      [DYYYDiagnostics clearRuntimeLogFromViewController:nil];
+      DYYYDiagRefresh();
     };
     [diagnosticItems addObject:clearLogItem];
 
