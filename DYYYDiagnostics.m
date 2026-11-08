@@ -200,6 +200,15 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
     return q;
 }
 
+// 纯 C 落盘（Foundation writeToFile 在 fsync/扩展属性路径会抛 C++ 异常，@try 接不住）
++ (BOOL)safeWriteData:(NSData *)data toPath:(NSString *)path {
+    return [[NSFileManager defaultManager] createFileAtPath:path contents:data attributes:nil];
+}
+
++ (BOOL)safeWriteString:(NSString *)str toPath:(NSString *)path {
+    return [self safeWriteData:[str dataUsingEncoding:NSUTF8StringEncoding] toPath:path];
+}
+
 + (NSString *)exportedLogPathWithName:(NSString *)name {
     NSString *documents = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
     NSString *dir = [[documents stringByAppendingPathComponent:@"DYYY"] stringByAppendingPathComponent:@"logs"];
@@ -255,12 +264,10 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
     st[@"fullNewDetailTable"] = @(DYYYGetBool(@"DYYYFullNewDetailTable"));
     st[@"commentBlur"] = @(DYYYGetBool(@"DYYYEnableCommentBlur"));
     NSData *jd = [NSJSONSerialization dataWithJSONObject:st options:NSJSONWritingPrettyPrinted error:nil];
-    if (jd) [jd writeToFile:[dir stringByAppendingPathComponent:@"state.json"] atomically:YES];
+    if (jd) [self safeWriteData:jd toPath:[dir stringByAppendingPathComponent:@"state.json"]];
 
     // ④ 截图禁用说明（Metal 层会 C++ abort，@try 接不住）
-    [[NSString stringWithFormat:@"screenshot disabled: Metal layer abort risk"]
-        writeToFile:[dir stringByAppendingPathComponent:@"screenshot-skip.txt"]
-         atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    [self safeWriteString:@"screenshot disabled: Metal layer abort risk" toPath:[dir stringByAppendingPathComponent:@"screenshot-skip.txt"]];
 
     gDYYYExportBusy = NO;
     NSURL *zipless = [NSURL fileURLWithPath:dir];
@@ -304,8 +311,7 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
 + (void)showAuditReportFromViewController:(UIViewController *)presenter {
     // 写报告文件 + Toast，零弹窗
     NSString *report = [DYYYClassRegistry auditReportText] ?: @"(无)";
-    [report writeToFile:[self exportedLogPathWithName:@"DYYY-audit.txt"]
-            atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    [self safeWriteString:report toPath:[self exportedLogPathWithName:@"DYYY-audit.txt"]];
     [DYYYToast showSuccessToastWithMessage:@"自检报告已保存\n文件App → DYYY/logs/DYYY-audit.txt"];
 }
 
