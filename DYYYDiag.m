@@ -187,31 +187,28 @@ static void DYYYDiagShare(NSURL *zipURL) {
     [gController presentViewController:act animated:YES completion:nil];
 }
 
-static void DYYYDiagRunExport(UIAlertController *progress) {
-    DYYYDiagSnapshot *snap = [DYYYDiagSnapshot new];
-    snap.files = [NSMutableArray array];
-    // 主线程采集（UIKit 只读）
-    @try { DYYYDiagCaptureMain(snap); } @catch (NSException *e) { NSLog(@"[DYYY][diag] capture: %@", e.name); }
-
+// 后台：只做写盘与压缩，绝不碰 UIKit。
+static void DYYYDiagCompressAndShare(DYYYDiagSnapshot *snap, UIAlertController *progress) {
     NSDateFormatter *f = [NSDateFormatter new]; f.dateFormat = @"yyyyMMdd-HHmmss";
     NSString *name = [NSString stringWithFormat:@"DYYY-diag-%@", [f stringFromDate:[NSDate date]]];
     NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
     NSString *dir = [[docs stringByAppendingPathComponent:@"DYYY"] stringByAppendingPathComponent:@"logs"];
-    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     NSString *root = [dir stringByAppendingPathComponent:name];
-    [[NSFileManager defaultManager] createDirectoryAtPath:root withIntermediateDirectories:YES attributes:nil error:nil];
+    [fm createDirectoryAtPath:root withIntermediateDirectories:YES attributes:nil error:nil];
 
-    // 纯 POSIX 落盘（避开 Foundation writeToFile 的 C++ 异常）
+    // createFileAtPath:contents: 是纯 C 写入，避开 NSString writeToFile 的 fsync/C++ 异常路径
+    NSMutableArray *rel = [NSMutableArray array];
     for (NSDictionary *item in snap.files) {
         NSString *p = [root stringByAppendingPathComponent:item[@"name"]];
         NSData *d = item[@"data"];
-        if ([d isKindOfClass:[NSData class]]) [d writeToFile:p atomically:NO];
+        if ([d isKindOfClass:[NSData class]] && [fm createFileAtPath:p contents:d attributes:nil]) {
+            [rel addObject:item[@"name"]];
+        }
     }
 
-    // 原样用已验证的 ZIP 写入器压缩成一个包
     NSString *zipPath = [dir stringByAppendingPathComponent:[name stringByAppendingString:@".zip"]];
-    NSMutableArray *rel = [NSMutableArray array];
-    for (NSDictionary *item in snap.files) [rel addObject:item[@"name"]];
     BOOL ok = [DYYYDiagZip createZipAtPath:zipPath rootDir:root files:rel progress:nil error:nil];
 
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -230,10 +227,17 @@ static void DYYYDiagRunExport(UIAlertController *progress) {
 static void DYYYDiagStartExport(void) {
     if (gBusy) { [DYYYToast showSuccessToastWithMessage:@"正在导出，请稍候"]; return; }
     gBusy = YES;
-    UIAlertController *p = [UIAlertController alertControllerWithTitle:@"DYYY 诊断" message:@"正在采集…" preferredStyle:UIAlertControllerStyleAlert];
+
+    // 主线程采集（UIKit 只读：视图树 / 截图 / 窗口过滤），采完立刻冻结为纯数据
+    DYYYDiagSnapshot *snap = [DYYYDiagSnapshot new];
+    snap.files = [NSMutableArray array];
+    @try { DYYYDiagCaptureMain(snap); }
+    @catch (NSException *e) { NSLog(@"[DYYY][diag] capture: %@", e.name); }
+
+    UIAlertController *p = [UIAlertController alertControllerWithTitle:@"DYYY 诊断" message:@"正在生成诊断包…" preferredStyle:UIAlertControllerStyleAlert];
     [gController presentViewController:p animated:YES completion:^{
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-            DYYYDiagRunExport(p);
+            DYYYDiagCompressAndShare(snap, p);
         });
     }];
 }

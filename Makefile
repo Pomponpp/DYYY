@@ -45,7 +45,7 @@ DYYY_FILES += DYYYLoginBypassManager.m DYYYLoginRepairHooks.m DYYYPrivacyRecordU
 DYYY_FILES += DYYYProgressUnderlineFix.xm DYYYDiag.m DYYYDiagZip.m
 # 运行时探针：定位 40.9 头像保存新链路（测完可在设置页关闭）
 DYYY_CFLAGS = -fobjc-arc -w
-DYYY_LDFLAGS = -weak_framework AVFAudio
+DYYY_LDFLAGS = -weak_framework AVFAudio -lz
 DYYY_FRAMEWORKS = CoreAudio
 CXXFLAGS += -std=c++11
 CCFLAGS += -std=c++11
