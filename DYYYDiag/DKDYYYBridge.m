@@ -2,6 +2,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import "AwemeHeaders.h"
+#import "../DYYYClassRegistry.h"
 #import "DKDYYYBridge.h"
 #import "Debug/DKDebugInspector.h"
 #import "DYYYToast.h"
