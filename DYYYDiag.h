@@ -13,6 +13,7 @@
 extern "C" {
 #endif
 
++ (UIViewController *)diagPresenter;   // 设置页导出用的安全 presenter（浮窗 rootVC）
 void DYYYDiagInstall(void);
 void DYYYDiagRefresh(void);
 

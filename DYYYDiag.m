@@ -343,6 +343,12 @@ static void DYYYDiagEnsureWindow(void) {
     gWindow.hidden = YES;
 }
 
++ (UIViewController *)diagPresenter {
+    [DYYYDiagEnsureWindow];
+    gWindow.hidden = NO;
+    return gController;   // presenter 恒为自己窗口 rootVC，与浮窗同一条安全路径
+}
+
 void DYYYDiagRefresh(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         BOOL on = DYYYGetBool(@"DYYYDiagEntryEnabled");

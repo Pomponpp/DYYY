@@ -263,8 +263,18 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
          atomically:YES encoding:NSUTF8StringEncoding error:nil];
 
     gDYYYExportBusy = NO;
-    [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"诊断包已保存\n文件App → DYYY/logs/\n%@", [dir lastPathComponent]]];
-    NSLog(@"[DYYY][diag] bundle written to %@ (no UI present)", dir);
+    NSURL *zipless = [NSURL fileURLWithPath:dir];
+    UIActivityViewController *activity = [[UIActivityViewController alloc] initWithActivityItems:@[ zipless ] applicationActivities:nil];
+    if (activity.popoverPresentationController) {
+        activity.popoverPresentationController.sourceView = presenter.view ?: [UIApplication sharedApplication].keyWindow;
+        activity.popoverPresentationController.sourceRect = presenter.view ? presenter.view.bounds : CGRectMake(0, 0, 1, 1);
+    }
+    [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"诊断包已生成\n文件App → DYYY/logs/%@", [dir lastPathComponent]]];
+    if (presenter && presenter.view.window) {
+        [presenter presentViewController:activity animated:YES completion:nil];
+    } else {
+        NSLog(@"[DYYY][diag] no presenter window, bundle at %@", dir);
+    }
 }
 
 + (void)exportRuntimeLogFromViewController:(UIViewController *)presenter {
@@ -277,7 +287,18 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
     NSString *src = [self runtimeLogPath];
     NSFileManager *fm = [NSFileManager defaultManager];
     if ([fm fileExistsAtPath:src]) [fm copyItemAtPath:src toPath:dst error:nil];
-    [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"日志已保存\n文件App → DYYY/logs/%@", name]];
+    NSURL *logURL = [NSURL fileURLWithPath:dst];
+    UIActivityViewController *activity = [[UIActivityViewController alloc] initWithActivityItems:@[ logURL ] applicationActivities:nil];
+    if (activity.popoverPresentationController) {
+        activity.popoverPresentationController.sourceView = presenter.view ?: [UIApplication sharedApplication].keyWindow;
+        activity.popoverPresentationController.sourceRect = presenter.view ? presenter.view.bounds : CGRectMake(0, 0, 1, 1);
+    }
+    [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"日志已导出\n文件App → DYYY/logs/%@", name]];
+    if (presenter && presenter.view.window) {
+        [presenter presentViewController:activity animated:YES completion:nil];
+    } else {
+        NSLog(@"[DYYY][diag] log at %@", dst);
+    }
 }
 
 + (void)showAuditReportFromViewController:(UIViewController *)presenter {
