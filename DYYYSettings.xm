@@ -4453,7 +4453,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       if (!strongItem || !strongItem.isEnable) return;
       BOOL newValue = !strongItem.isSwitchOn;
       strongItem.isSwitchOn = newValue;
-      [[DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier]];
+      [DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier];
     };
     [diagnosticItems addObject:pageIsoItem];
 
