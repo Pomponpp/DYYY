@@ -26,20 +26,13 @@
 + (UIViewController *)diagPresenter {
     DKDebugInspectorInstall();
     DKDebugInspectorRefreshOverlay();
-    // 等浮层窗口真正就绪（下一帧）再取，避免 present 到未挂窗口的 VC
-    __block UIViewController *found = nil;
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        for (UIWindow *w in [UIApplication sharedApplication].windows) {
-            if ([NSStringFromClass(w.class) hasPrefix:@"DKDebug"] && w.rootViewController && !w.hidden) {
-                found = w.rootViewController;
-            }
+    // 调用方在主线程：直接同步查窗口（无 dispatch_sync，避免主队列死锁）
+    for (UIWindow *w in [UIApplication sharedApplication].windows) {
+        if ([NSStringFromClass(w.class) hasPrefix:@"DKDebug"] && w.rootViewController && !w.hidden) {
+            return w.rootViewController;
         }
-    });
-    if (!found) {
-        // 浮层未就绪：退回设置页自己（调用方传 nil 时由 Diagnostics 自处理）
-        found = nil;
     }
-    return found;
+    return nil;  // 浮层未就绪：调用方退化处理
 }
 
 @end
