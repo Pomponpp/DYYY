@@ -224,6 +224,9 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
     // 在这条路径上物理不存在。产物固定落在 文件App→DYYY/logs/DYYY-diag-时间戳/。
     if (gDYYYExportBusy) { [DYYYToast showSuccessToastWithMessage:@"正在导出，请稍候"]; return; }
     gDYYYExportBusy = YES;
+    [self appendRuntimeLogLine:[NSString stringWithFormat:
+        @"[DYYY][diag] stepP1 presenter=%@ window=%d busy已置",
+        NSStringFromClass(presenter.class), presenter.view.window ? 1 : 0]];
 
     [self appendRuntimeLogLine:@"—— 导出时刻开关状态 ——"];
     [self appendRuntimeLogLine:[NSString stringWithFormat:
@@ -270,6 +273,7 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
     [self safeWriteString:@"screenshot disabled: Metal layer abort risk" toPath:[dir stringByAppendingPathComponent:@"screenshot-skip.txt"]];
 
     gDYYYExportBusy = NO;
+    [self appendRuntimeLogLine:@"[DYYY][diag] stepP2 采集完成，准备分享面板"];
     NSURL *zipless = [NSURL fileURLWithPath:dir];
     UIActivityViewController *activity = [[UIActivityViewController alloc] initWithActivityItems:@[ zipless ] applicationActivities:nil];
     if (activity.popoverPresentationController) {
@@ -277,10 +281,19 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
         activity.popoverPresentationController.sourceRect = presenter.view ? presenter.view.bounds : CGRectMake(0, 0, 1, 1);
     }
     [DYYYToast showSuccessToastWithMessage:[NSString stringWithFormat:@"诊断包已生成\n文件App → DYYY/logs/%@", [dir lastPathComponent]]];
+    [self appendRuntimeLogLine:[NSString stringWithFormat:
+        @"[DYYY][diag] stepP3 present到%@ window=%d",
+        NSStringFromClass(presenter.class), presenter.view.window ? 1 : 0]];
+    @try {
     if (presenter && presenter.view.window) {
         [presenter presentViewController:activity animated:YES completion:nil];
+        [self appendRuntimeLogLine:@"[DYYY][diag] stepP4 present调用已发出"];
     } else {
         NSLog(@"[DYYY][diag] no presenter window, bundle at %@", dir);
+        [self appendRuntimeLogLine:@"[DYYY][diag] stepP4 无窗口presenter，跳过分享"];
+    }
+    } @catch (NSException *e) {
+        [self appendRuntimeLogLine:[NSString stringWithFormat:@"[DYYY][diag] stepP4 present异常: %@", e.name]];
     }
 }
 

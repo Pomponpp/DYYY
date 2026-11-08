@@ -256,6 +256,9 @@ static void DKEnsureDebugWindow(void) {
     [self.view addSubview:self.wrenchButton];
 
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleWrenchPan:)];
+    pan.cancelsTouchesInView = NO;   // 拖扳手不取消视频触摸链（防播放暂停）
+    pan.delaysTouchesBegan = NO;
+    pan.delaysTouchesEnded = NO;
     [self.wrenchButton addGestureRecognizer:pan];
 }
 

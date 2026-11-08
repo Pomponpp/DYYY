@@ -4440,6 +4440,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     diagBundleItem.isEnable = YES;
     diagBundleItem.cellTappedBlock = ^{
       UIViewController *presenter = [DKDYYYBridge diagPresenter];
+      if (!presenter) presenter = [[[UIApplication sharedApplication] windows] firstObject].rootViewController;
       [DYYYDiagnostics exportDiagnosticsBundleFromViewController:presenter];
     };
     [diagnosticItems addObject:diagBundleItem];
