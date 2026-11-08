@@ -17,9 +17,8 @@ static BOOL DYYYDiagExportBusy = NO;
 
 + (NSString *)exportFingerprint {
     return [NSString stringWithFormat:
-        @"全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d 设备=%@ 系统=%@ 抖音=%@",
+        @"全屏=%d 评论避让视频=%d 毛玻璃=%d 设备=%@ 系统=%@ 抖音=%@",
         DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
-        DYYYGetBool(@"DYYYFullNewDetailTable") ? 1 : 0,
         DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
         DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0,
         [UIDevice currentDevice].model,

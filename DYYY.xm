@@ -32,6 +32,7 @@
 #import "DYYYToast.h"
 #import "DYYYUtils.h"
 #import "DYYYFullscreenCoordinator.h"
+#import "DYYYFullscreenEngine.h"
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "DYYYClassRegistry.h"
@@ -6280,8 +6281,7 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 %hook AWEIMFeedVideoQuickReplayInputViewController
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    CGFloat height = %orig;
-    return [DYYYFullscreenCoordinator heightForDetailRow:height table:tableView controller:self];
+    return %orig;
 }
 
 - (void)viewDidLayoutSubviews {
@@ -7222,45 +7222,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 // 主页状态栏
 %hook AWEAwemeDetailTableViewController
-- (CGFloat)baseTableViewBottomInset {
-    CGFloat inset = %orig;
-    // #20 教训：默认停用 inset 归零导致他人主页作品页底栏不透明、
-    // 不满屏（原生 83pt 预留回来了）。旧机制恢复默认开启；
-    // 新实验档 DYYYFullNewDetailTable 打开时才停用（配合 setFrame 拦截）。
-    if (DYYYGetBool(@"DYYYFullNewDetailTable")) return inset;
-    return [DYYYFullscreenCoordinator bottomInsetForDetail:inset controller:self];
-}
-
-- (void)viewDidLayoutSubviews {
-    // 40.9 拔河根修：停用「表高对齐窗口」。表高 926 与抖音内部认知
-    // （表高 = 窗口 - 底栏 83）互相矛盾是 cell 高度 843↔926 拔河的另一半
-    // 来源。表高也交还原生，全屏视觉由媒体容器在 cell 内撑满补偿。
-    %orig;
-    // #32 取证 C 路：表高变化观察（A/B 两路 setFrame 都无记录时的裁决线）
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYFullscreenDiag") && [NSThread isMainThread]) {
-        @try {
-            UITableView *table = [(id)self tableView];
-            if (table) {
-                static CGFloat lastLoggedHeight = 0;
-                CGFloat h = CGRectGetHeight(table.frame);
-                if (fabs(h - lastLoggedHeight) > 0.5) {
-                    lastLoggedHeight = h;
-                    NSLog(@"[DYYY][table] layout[C] 表高变化 → %.1f（父视图%.1f）",
-                          h, table.superview ? CGRectGetHeight(table.superview.bounds) : -1);
-                }
-            }
-        } @catch (__unused NSException *e) {
-        }
-    }
-    [DYYYFullscreenCoordinator reconcileDetailPaging:self];
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    %orig;
-    // #30：不在控制器方法里顶表，全屏由表的 setFrame: 出口单点负责。
-    [DYYYFullscreenCoordinator reconcileDetailPaging:self];
-}
-
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {
         return YES;
@@ -7274,138 +7235,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     }
     return NO;
 }
-%end
-
-// 热点状态栏
-// 重构全屏·招③行高查询：行高只"回答"表视口高，不改写 cell（只答不改）。
-// 生效条件：实验档 DYYYFullNewDetailTable 开启（默认关=旧机制原样）。
-%hook AWEAwemeDetailTableViewController
-
-- (double)fixedCellHeight {
-    if (!DYYYGetBool(@"DYYYFullNewDetailTable") || !DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
-        return %orig;
-    }
-    // #31 闭环：先准备表（记原高/撑回满视口），再按同源规则回答。
-    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    double nativeHeight = %orig;
-    return [DYYYFullscreenCoordinator detailRowHeight:[self tableView] nativeHeight:nativeHeight];
-}
-
-- (double)cellHeightAtIndex:(long long)index {
-    return [self fixedCellHeight];
-}
-
-- (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (!DYYYGetBool(@"DYYYFullNewDetailTable") || !DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
-        return %orig;
-    }
-    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    double nativeHeight = %orig;
-    return [DYYYFullscreenCoordinator detailRowHeight:table nativeHeight:nativeHeight];
-}
-
-// #31 闭环入口：建行/落点/分页的每个必经入口先准备表，再放行原生。
-// 准备 = 首次记原高、之后把被压回的表撑回满视口；行高回答与它同源。
-- (void)setupDetailTableView {
-    %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
-- (void)viewWillLayoutSubviews {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-    %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
-- (double)contentOffsetYForCellAtIndex:(long long)index {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-    return %orig;
-}
-
-- (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        // 翻页必经入口：落点已在 %orig 内算定，此处只做两件安全事——
-        // 撑回满视口（B路顶回的兜底）+ 对齐存量 843 cell（清混住残留）。
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-        UITableView *t = [(id)self tableView];
-        if (t) [DYYYFullscreenCoordinator alignExistingCellsIfNeeded:t target:CGRectGetHeight(t.superview.bounds)];
-    }
-}
-
-%end
-
-// #30：全屏收敛为「表视图写入出口」单点接管。
-// 生效条件：新版模式 + 全屏开启；控制器侧零时机干预。
-%hook AWEAwemeDetailTableView
-
-- (void)setFrame:(CGRect)frame {
-    CGRect adjusted = frame;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && [NSThread isMainThread]) {
-        UIView *parent = self.superview;
-        CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-        // 出口与 prepare 共享同一份原高记录：压缩写入顶回满视口前，
-        // 先把原值记为未撑高时的高度，行高同源规则依赖它。
-        if (target > 0 && frame.size.height < target - 0.5 && frame.size.height >= target * 0.5) {
-            if (!objc_getAssociatedObject(self, @selector(prepareDetailTableNew:))) {
-                objc_setAssociatedObject(self, @selector(prepareDetailTableNew:), @(frame.size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                    NSLog(@"[DYYY][table] setFrame 记原高=%.1f", frame.size.height);
-                }
-            }
-            adjusted.size.height = target;
-            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                NSLog(@"[DYYY][table] setFrame[A] 子类出口 原高=%.1f → 顶高=%.1f（父视图%.1f）",
-                      frame.size.height, adjusted.size.height, target);
-            }
-        }
-    }
-    %orig(adjusted);
-}
-
-%end
-
-// #32 日志裁决（l32）：B 路 110 条、A 路 0 条——41.0 详情表写入全部走
-// 基类 AWEFeedDataSafeTableView 的 setFrame:，子类出口永远等不到。
-// #32 同时实锤点A弹B机制：落点已按 926 同源计算，但建行早于撑高的
-// 843 旧 cell 残留在表里（y=-249/H=843 与 y=594/H=926 同 offset 共存）。
-//
-// #33 本 hook 升级为「写入顶回 + 记原高」：基类出口是唯一活的写入通道，
-// 在此把压缩写入顶回满视口、并记录原高供行高同源规则使用。仅对
-// 详情表实例生效（AWEFeedTableView 等其他子类不受影响）。
-%hook AWEFeedDataSafeTableView
-
-- (void)setFrame:(CGRect)frame {
-    CGRect adjusted = frame;
-    BOOL isDetailTable = [NSStringFromClass([self class]) isEqualToString:@"AWEAwemeDetailTableView"];
-    if (isDetailTable && DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && [NSThread isMainThread]) {
-        UIView *parent = self.superview;
-        CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-        if (target > 0 && frame.size.height < target - 0.5 && frame.size.height >= target * 0.5) {
-            // 与 prepare 共享同一份原高记录（行高同源规则依赖它）
-            if (!objc_getAssociatedObject(self, @selector(prepareDetailTableNew:))) {
-                objc_setAssociatedObject(self, @selector(prepareDetailTableNew:), @(frame.size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                    NSLog(@"[DYYY][table] setFrame[B] 记原高=%.1f", frame.size.height);
-                }
-            }
-            adjusted.size.height = target;
-            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                NSLog(@"[DYYY][table] setFrame[B] 原高=%.1f → 顶高=%.1f", frame.size.height, target);
-            }
-        }
-    }
-    %orig(adjusted);
-}
-
 %end
 
 // #34：诊断扳手挂载——独立顶层 hook，不受「禁用设置手势」开关影响。
@@ -13119,9 +12948,8 @@ static void findTargetViewInView(UIView *view) {
                      [DYYYClassRegistry runStartupAudit];
                      // 状态自证日志：导出的日志首段即可确认实验档是否生效，
                      // 避免"拨了开关但代码没干活"与"没拨开关"两种情况混淆。
-                     NSLog(@"[DYYY][fullscreen] 启动状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
+                     NSLog(@"[DYYY][fullscreen] 启动状态：全屏=%d 评论避让视频=%d 毛玻璃=%d",
                            DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
-                           DYYYGetBool(@"DYYYFullNewDetailTable") ? 1 : 0,
                            DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
                            DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0);
                    });

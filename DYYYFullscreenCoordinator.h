@@ -7,15 +7,9 @@
 + (BOOL)usesDetailLayoutForController:(UIViewController *)controller;
 + (BOOL)usesFullscreenLayoutForController:(UIViewController *)controller;
 + (CGRect)frameForPureModeContainer:(UIViewController *)controller proposed:(CGRect)frame;
-+ (CGFloat)bottomInsetForDetail:(CGFloat)inset controller:(UIViewController *)controller;
 + (void)reconcileDetailPaging:(UIViewController *)controller;
 // #31 详情页全屏闭环：建行/落点计算前主动准备表（撑满+记原高），
 // 行高查询用同源规则回答。两者必须成对使用。
-+ (void)prepareDetailTableNew:(UIViewController *)controller;
-+ (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight;
-+ (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
-+ (UIViewController *)controllerForTable:(UITableView *)table;
-+ (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;
 + (BOOL)isImageContentController:(UIViewController *)controller;
 + (void)registerTabBar:(UIView *)tabBar;
