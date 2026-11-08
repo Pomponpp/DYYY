@@ -5,6 +5,46 @@
 #import "AwemeHeaders.h"
 #import <objc/runtime.h>
 
+@interface DYYYFullscreenPlayerState : NSObject
+@property(nonatomic, weak) UIViewController *owner;
+@property(nonatomic, assign) CGSize layoutWindowSize;
+@property(nonatomic, assign) UIEdgeInsets layoutSafeArea;
+@property(nonatomic, assign) CGRect nativeFrame;
+@property(nonatomic, assign) CGRect lastAppliedFrame;
+@property(nonatomic, assign) BOOL hasNativeFrame;
+@property(nonatomic, assign) CGSize closedInteractionSize;
+@property(nonatomic, assign) CGRect captionWindowFrame;
+@property(nonatomic, assign) BOOL hasCaptionFrame;
+@property(nonatomic, assign) BOOL captionAdjusted;
+@property(nonatomic, assign) CGPoint captionNativeCenter;
+@property(nonatomic, assign) CGPoint captionAppliedCenter;
+@property(nonatomic, assign) BOOL applying;
+@property(nonatomic, assign) BOOL adjusted;
+@property(nonatomic, assign) CGRect normalWindowFrame;
+@property(nonatomic, assign) BOOL hasNormalWindowFrame;
+@property(nonatomic, assign) CGSize normalRenderSize;
+@property(nonatomic, weak) UIWindow *normalWindow;
+@property(nonatomic, weak) UIView *normalCell;
+@property(nonatomic, assign) CGRect normalCellWindowFrame;
+@property(nonatomic, assign) CGAffineTransform nativeImageTransform;
+@property(nonatomic, assign) CGAffineTransform closedImageTransform;
+@property(nonatomic, assign) BOOL hasImageTransform;
+@property(nonatomic, assign) BOOL hasClosedImageTransform;
+@property(nonatomic, assign) BOOL imageAdjusted;
+@property(nonatomic, weak) UIImageView *imageContent;
+@property(nonatomic, assign) BOOL mediaHost;
+@property(nonatomic, assign) CGRect mediaHostParentBounds;
+@property(nonatomic, assign) BOOL bottomBarEnabled;
+@property(nonatomic, assign) CGRect nativeHostFrame;
+@property(nonatomic, assign) CGRect fullscreenHostFrame;
+@property(nonatomic, strong) NSMapTable<UIView *, NSDictionary *> *bottomBackgrounds;
+@property(nonatomic, weak) UIView *transparentBottomBar;
+@property(nonatomic, assign) BOOL applyingBottomBackground;
+@property(nonatomic, assign) BOOL updatingBottomBar;
+@end
+@implementation DYYYFullscreenPlayerState
+@end
+
 @implementation DYYYFullscreenCoordinator
 + (NSString *)buildIdentifier { return @"fullscreen-creator-native-20261024.2"; }
 + (NSString *)contentSourceForController:(UIViewController *)controller {
