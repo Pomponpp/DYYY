@@ -78,7 +78,11 @@ jobs:
 
       - name: Prepare Theos
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: huami1314/theos-action@main
+        run: |
+          # 第三方 theos-action 仓库被 GitHub 封锁（Repository access blocked），
+          # 改为官方 theos 直接安装；缓存命中时本步骤跳过，不重复付费。
+          git clone --depth=1 --recursive https://github.com/theos/theos.git "$GITHUB_WORKSPACE/theos"
+          brew install ldid || true
 
       - name: Verify cached theos
         if: steps.cache.outputs.cache-hit == 'true'
@@ -93,7 +97,10 @@ jobs:
 
       - name: Prepare Theos (cache invalid rebuild)
         if: env.CACHE_INVALID == '1'
-        uses: huami1314/theos-action@main
+        run: |
+          rm -rf "$GITHUB_WORKSPACE/theos"
+          git clone --depth=1 --recursive https://github.com/theos/theos.git "$GITHUB_WORKSPACE/theos"
+          brew install ldid || true
 
       - name: Setup GNU Make
         run: |
