@@ -4407,8 +4407,9 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     auditReportItem.colorStyle = 0;
     auditReportItem.isEnable = YES;
     auditReportItem.cellTappedBlock = ^{
-      // 诊断类只依赖 UIKit，这里直接找顶层控制器弹出。
-      DYYYDiagRefresh();
+      UIViewController *presenter = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      [DYYYDiagnostics showAuditReportFromViewController:presenter];
     };
     [diagnosticItems addObject:auditReportItem];
 
@@ -4422,7 +4423,9 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     exportLogItem.colorStyle = 0;
     exportLogItem.isEnable = YES;
     exportLogItem.cellTappedBlock = ^{
-      DYYYDiagRefresh();
+      UIViewController *presenter = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      [DYYYDiagnostics exportRuntimeLogFromViewController:presenter];
     };
     [diagnosticItems addObject:exportLogItem];
 
@@ -4437,7 +4440,9 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     diagBundleItem.colorStyle = 0;
     diagBundleItem.isEnable = YES;
     diagBundleItem.cellTappedBlock = ^{
-      DYYYDiagRefresh();
+      UIViewController *presenter = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      [DYYYDiagnostics exportDiagnosticsBundleFromViewController:presenter];
     };
     [diagnosticItems addObject:diagBundleItem];
 
@@ -4467,18 +4472,31 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     clearLogItem.colorStyle = 0;
     clearLogItem.isEnable = YES;
     clearLogItem.cellTappedBlock = ^{
-      DYYYDiagRefresh();
+      UIViewController *presenter = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      [DYYYDiagnostics clearRuntimeLogFromViewController:presenter];
     };
     [diagnosticItems addObject:clearLogItem];
 
-    // 诊断悬浮入口开关（临时调试用，不进备份）
-    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
-                             @"identifier" : @"DYYYDiagEntryEnabled",
-                             @"title" : @"诊断悬浮入口",
-                             @"detail" : @"开启后屏幕显示扳手按钮，随时一键导出诊断包取证",
-                             @"cellType" : @6,
-                             @"imageName" : @"ic_bug_outlined_20"
-                         }]];
+    // 诊断悬浮入口开关（临时调试用，不进备份）：标准翻转 + 通知浮层刷新
+    AWESettingItemModel *diagEntryItem = [[%c(AWESettingItemModel) alloc] init];
+    diagEntryItem.identifier = @"DYYYDiagEntryEnabled";
+    diagEntryItem.title = @"诊断悬浮入口";
+    diagEntryItem.detail = @"开启后屏幕显示扳手按钮，随时一键导出诊断包取证";
+    diagEntryItem.type = 1;
+    diagEntryItem.cellType = 6;
+    diagEntryItem.isEnable = YES;
+    diagEntryItem.isSwitchOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
+    __block AWESettingItemModel *weakDiagItem = diagEntryItem;
+    diagEntryItem.switchChangedBlock = ^{
+      __strong AWESettingItemModel *strongItem = weakDiagItem;
+      if (!strongItem || !strongItem.isEnable) return;
+      BOOL newValue = !strongItem.isSwitchOn;      // 标准翻转：基于当前 UI 值
+      strongItem.isSwitchOn = newValue;
+      [[DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier] ];
+      DYYYDiagRefresh();                            // 用写入后的新值刷新浮层
+    };
+    [diagnosticItems addObject:diagEntryItem];
 
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;

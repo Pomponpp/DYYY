@@ -26,12 +26,16 @@
 @end
 @implementation DYYYDiagOverlayWindow
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    DYYYDiagController *c = self.rootViewController isKindOfClass:DYYYDiagController.class ? (DYYYDiagController *)self.rootViewController : nil;
+    if (c.capturesOverlayTouches) return [super pointInside:point withEvent:event];  // 面板在场：全量收
     if (!_wrench || _wrench.hidden) return NO;
     CGPoint p = [_wrench convertPoint:point fromView:self];
     return [_wrench pointInside:p withEvent:event];
 }
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    DYYYDiagController *c = self.rootViewController isKindOfClass:DYYYDiagController.class ? (DYYYDiagController *)self.rootViewController : nil;
     UIView *hit = [super hitTest:point withEvent:event];
+    if (c.capturesOverlayTouches) return hit ?: c.view;
     if (!hit || hit == self || hit == self.rootViewController.view) return nil;
     return hit;
 }
@@ -246,6 +250,7 @@ static void DYYYDiagStartExport(void) {
 
 @interface DYYYDiagController ()
 @property (nonatomic, assign) BOOL didPlace;
+- (BOOL)capturesOverlayTouches;
 @end
 
 @implementation DYYYDiagController
@@ -298,6 +303,11 @@ static void DYYYDiagStartExport(void) {
     [self viewDidLayoutSubviews];
 }
 
+// 有面板（菜单/进度/分享）在场时窗口恢复全量命中——否则"关闭"的触摸被穿透
+- (BOOL)capturesOverlayTouches {
+    return self.presentedViewController != nil;
+}
+
 - (void)tapWrench {
     if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
     UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"DYYY 诊断" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
@@ -315,7 +325,14 @@ static void DYYYDiagStartExport(void) {
 #pragma mark - 安装 / 刷新（启动早期装好，hidden 待命，只翻 hidden）
 
 static void DYYYDiagEnsureWindow(void) {
-    if (gWindow && gController) return;
+    if (gWindow && gController) {
+        // 启动早期建的窗口可能没有 scene；获得前台 scene 后补挂
+        if (@available(iOS 13.0, *)) {
+            UIWindowScene *scene = DYYYDiagForegroundScene();
+            if (scene && gWindow.windowScene != scene) gWindow.windowScene = scene;
+        }
+        return;
+    }
     gController = [DYYYDiagController new];
     UIWindowScene *scene = DYYYDiagForegroundScene();
     gWindow = scene ? [[DYYYDiagOverlayWindow alloc] initWithWindowScene:scene]
