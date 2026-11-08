@@ -33,7 +33,7 @@
     return [_wrench pointInside:p withEvent:event];
 }
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    DYYYDiagController *c = self.rootViewController isKindOfClass:DYYYDiagController.class ? (DYYYDiagController *)self.rootViewController : nil;
+    DYYYDiagController *c = [self.rootViewController isKindOfClass:DYYYDiagController.class] ? (DYYYDiagController *)self.rootViewController : nil;
     UIView *hit = [super hitTest:point withEvent:event];
     if (c.capturesOverlayTouches) return hit ?: c.view;
     if (!hit || hit == self || hit == self.rootViewController.view) return nil;
