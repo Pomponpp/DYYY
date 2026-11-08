@@ -1,5 +1,5 @@
 #import "AwemeHeaders.h"
-#import "DYYYDiag.h"
+#import "DYYYDiag/DKDYYYBridge.h"
 #import "DYYYManager.h"
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <math.h>
@@ -4407,7 +4407,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     auditReportItem.colorStyle = 0;
     auditReportItem.isEnable = YES;
     auditReportItem.cellTappedBlock = ^{
-      UIViewController *presenter = [DYYYDiagController diagPresenter];
+      UIViewController *presenter = [DKDYYYBridge diagPresenter];
       [DYYYDiagnostics showAuditReportFromViewController:presenter];
     };
     [diagnosticItems addObject:auditReportItem];
@@ -4422,7 +4422,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     exportLogItem.colorStyle = 0;
     exportLogItem.isEnable = YES;
     exportLogItem.cellTappedBlock = ^{
-      UIViewController *presenter = [DYYYDiagController diagPresenter];
+      UIViewController *presenter = [DKDYYYBridge diagPresenter];
       [DYYYDiagnostics exportRuntimeLogFromViewController:presenter];
     };
     [diagnosticItems addObject:exportLogItem];
@@ -4438,7 +4438,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     diagBundleItem.colorStyle = 0;
     diagBundleItem.isEnable = YES;
     diagBundleItem.cellTappedBlock = ^{
-      UIViewController *presenter = [DYYYDiagController diagPresenter];
+      UIViewController *presenter = [DKDYYYBridge diagPresenter];
       [DYYYDiagnostics exportDiagnosticsBundleFromViewController:presenter];
     };
     [diagnosticItems addObject:diagBundleItem];
@@ -4469,7 +4469,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     clearLogItem.colorStyle = 0;
     clearLogItem.isEnable = YES;
     clearLogItem.cellTappedBlock = ^{
-      UIViewController *presenter = [DYYYDiagController diagPresenter];
+      UIViewController *presenter = [DKDYYYBridge diagPresenter];
       [DYYYDiagnostics clearRuntimeLogFromViewController:presenter];
     };
     [diagnosticItems addObject:clearLogItem];
@@ -4490,7 +4490,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       BOOL newValue = !strongItem.isSwitchOn;      // 标准翻转：基于当前 UI 值
       strongItem.isSwitchOn = newValue;
       [DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier];
-      DYYYDiagRefresh();                            // 用写入后的新值刷新浮层
+      DKDebugInspectorRefreshOverlay();                            // 用写入后的新值刷新浮层
     };
     [diagnosticItems addObject:diagEntryItem];
 

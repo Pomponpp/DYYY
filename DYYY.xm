@@ -35,7 +35,7 @@
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "DYYYClassRegistry.h"
-#import "DYYYDiag.h"
+#import "DYYYDiag/Debug/DKDebugInspector.h"
 
 static CGFloat gStartY = 0.0;
 static CGFloat gStartVal = 0.0;
@@ -13109,7 +13109,7 @@ static void findTargetViewInView(UIView *view) {
 
 %ctor {
     // 诊断浮层：启动早期一次性安装（hidden 待命），不抢焦点、不参与转场
-    DYYYDiagInstall();
+    DKDebugInspectorInstall();
     [DYYYDiagnostics installUncaughtExceptionHandler];
     // 40.9 优化：启动自检关键 hook 类存在性，改版失效时日志直接给出缺失类清单。
     // 注意：%ctor 执行时抖音自己的 ObjC 类可能尚未全部注册（dyld 尚未完成其初始化），

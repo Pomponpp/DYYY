@@ -1,31 +1,31 @@
 //
-//  DYYYDiagZip.h
+//  DKZipWriter.h
 //  DYKiller
 //
 //  调试导出使用的最小 ZIP 写入器。
 //  以不压缩方式写入文件，使用 zlib 计算 CRC32，并支持 ZIP64 条目计数。
 //
 
-#ifndef DYYYDiagZip_h
-#define DYYYDiagZip_h
+#ifndef DKZipWriter_h
+#define DKZipWriter_h
 
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef void (^DYYYDiagZipProgressBlock)(CGFloat progress);
+typedef void (^DKZipProgressBlock)(CGFloat progress);
 
-@interface DYYYDiagZip : NSObject
+@interface DKZipWriter : NSObject
 
 + (BOOL)createZipAtPath:(NSString *)zipPath
                 rootDir:(NSString *)rootDir
                   files:(NSArray<NSString *> *)files
-               progress:(DYYYDiagZipProgressBlock _Nullable)progress
+               progress:(DKZipProgressBlock _Nullable)progress
                   error:(NSError **)error;
 
 @end
 
 NS_ASSUME_NONNULL_END
 
-#endif /* DYYYDiagZip_h */
+#endif /* DKZipWriter_h */

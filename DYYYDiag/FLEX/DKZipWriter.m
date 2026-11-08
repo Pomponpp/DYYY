@@ -1,121 +1,121 @@
 //
-//  DYYYDiagZip.m
+//  DKZipWriter.m
 //  DYKiller
 //
 //  调试导出使用的最小 ZIP 写入器。
 //  写入存储条目，并使用 zlib 计算 CRC32。
 //
 
-#import "DYYYDiagZip.h"
+#import "DKZipWriter.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <zlib.h>
 
-static void DYYYDiagZipAppendUInt16(NSMutableData *data, uint16_t value) {
+static void DKZipAppendUInt16(NSMutableData *data, uint16_t value) {
     uint16_t v = CFSwapInt16HostToLittle(value);
     [data appendBytes:&v length:sizeof(v)];
 }
 
-static void DYYYDiagZipAppendUInt32(NSMutableData *data, uint32_t value) {
+static void DKZipAppendUInt32(NSMutableData *data, uint32_t value) {
     uint32_t v = CFSwapInt32HostToLittle(value);
     [data appendBytes:&v length:sizeof(v)];
 }
 
-static void DYYYDiagZipAppendUInt64(NSMutableData *data, uint64_t value) {
+static void DKZipAppendUInt64(NSMutableData *data, uint64_t value) {
     uint64_t v = CFSwapInt64HostToLittle(value);
     [data appendBytes:&v length:sizeof(v)];
 }
 
-static NSString *DYYYDiagZipRelativePath(NSString *path, NSString *rootDir) {
+static NSString *DKZipRelativePath(NSString *path, NSString *rootDir) {
     NSString *prefix = [rootDir stringByAppendingString:@"/"];
     if ([path hasPrefix:prefix]) return [path substringFromIndex:prefix.length];
     return path.lastPathComponent ?: @"file";
 }
 
-static NSError *DYYYDiagZipError(NSInteger code, NSString *message) {
+static NSError *DKZipError(NSInteger code, NSString *message) {
     return [NSError errorWithDomain:@"DYKiller.Zip" code:code
                            userInfo:@{NSLocalizedDescriptionKey: message ?: @"ZIP failed"}];
 }
 
-static NSData *DYYYDiagZipLocalHeader(NSData *nameData, uint32_t crc, uint32_t size) {
+static NSData *DKZipLocalHeader(NSData *nameData, uint32_t crc, uint32_t size) {
     NSMutableData *d = [NSMutableData data];
-    DYYYDiagZipAppendUInt32(d, 0x04034b50);
-    DYYYDiagZipAppendUInt16(d, 20);
-    DYYYDiagZipAppendUInt16(d, 0x0800);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt32(d, crc);
-    DYYYDiagZipAppendUInt32(d, size);
-    DYYYDiagZipAppendUInt32(d, size);
-    DYYYDiagZipAppendUInt16(d, (uint16_t)nameData.length);
-    DYYYDiagZipAppendUInt16(d, 0);
+    DKZipAppendUInt32(d, 0x04034b50);
+    DKZipAppendUInt16(d, 20);
+    DKZipAppendUInt16(d, 0x0800);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt32(d, crc);
+    DKZipAppendUInt32(d, size);
+    DKZipAppendUInt32(d, size);
+    DKZipAppendUInt16(d, (uint16_t)nameData.length);
+    DKZipAppendUInt16(d, 0);
     [d appendData:nameData];
     return d;
 }
 
-static NSData *DYYYDiagZipCentralHeader(NSData *nameData, uint32_t crc, uint32_t size, uint32_t offset) {
+static NSData *DKZipCentralHeader(NSData *nameData, uint32_t crc, uint32_t size, uint32_t offset) {
     NSMutableData *d = [NSMutableData data];
-    DYYYDiagZipAppendUInt32(d, 0x02014b50);
-    DYYYDiagZipAppendUInt16(d, 20);
-    DYYYDiagZipAppendUInt16(d, 20);
-    DYYYDiagZipAppendUInt16(d, 0x0800);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt32(d, crc);
-    DYYYDiagZipAppendUInt32(d, size);
-    DYYYDiagZipAppendUInt32(d, size);
-    DYYYDiagZipAppendUInt16(d, (uint16_t)nameData.length);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt16(d, 0);
-    DYYYDiagZipAppendUInt32(d, 0);
-    DYYYDiagZipAppendUInt32(d, offset);
+    DKZipAppendUInt32(d, 0x02014b50);
+    DKZipAppendUInt16(d, 20);
+    DKZipAppendUInt16(d, 20);
+    DKZipAppendUInt16(d, 0x0800);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt32(d, crc);
+    DKZipAppendUInt32(d, size);
+    DKZipAppendUInt32(d, size);
+    DKZipAppendUInt16(d, (uint16_t)nameData.length);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt16(d, 0);
+    DKZipAppendUInt32(d, 0);
+    DKZipAppendUInt32(d, offset);
     [d appendData:nameData];
     return d;
 }
 
-static NSData *DYYYDiagZipEndRecords(uint64_t entryCount, uint64_t centralSize, uint64_t centralOffset) {
+static NSData *DKZipEndRecords(uint64_t entryCount, uint64_t centralSize, uint64_t centralOffset) {
     NSMutableData *end = [NSMutableData data];
     BOOL needsZip64 = entryCount >= UINT16_MAX;
     if (needsZip64) {
         uint64_t zip64EndOffset = centralOffset + centralSize;
-        DYYYDiagZipAppendUInt32(end, 0x06064b50);
-        DYYYDiagZipAppendUInt64(end, 44);
-        DYYYDiagZipAppendUInt16(end, 45);
-        DYYYDiagZipAppendUInt16(end, 45);
-        DYYYDiagZipAppendUInt32(end, 0);
-        DYYYDiagZipAppendUInt32(end, 0);
-        DYYYDiagZipAppendUInt64(end, entryCount);
-        DYYYDiagZipAppendUInt64(end, entryCount);
-        DYYYDiagZipAppendUInt64(end, centralSize);
-        DYYYDiagZipAppendUInt64(end, centralOffset);
+        DKZipAppendUInt32(end, 0x06064b50);
+        DKZipAppendUInt64(end, 44);
+        DKZipAppendUInt16(end, 45);
+        DKZipAppendUInt16(end, 45);
+        DKZipAppendUInt32(end, 0);
+        DKZipAppendUInt32(end, 0);
+        DKZipAppendUInt64(end, entryCount);
+        DKZipAppendUInt64(end, entryCount);
+        DKZipAppendUInt64(end, centralSize);
+        DKZipAppendUInt64(end, centralOffset);
 
-        DYYYDiagZipAppendUInt32(end, 0x07064b50);
-        DYYYDiagZipAppendUInt32(end, 0);
-        DYYYDiagZipAppendUInt64(end, zip64EndOffset);
-        DYYYDiagZipAppendUInt32(end, 1);
+        DKZipAppendUInt32(end, 0x07064b50);
+        DKZipAppendUInt32(end, 0);
+        DKZipAppendUInt64(end, zip64EndOffset);
+        DKZipAppendUInt32(end, 1);
     }
 
     uint16_t legacyEntryCount = entryCount >= UINT16_MAX ? UINT16_MAX : (uint16_t)entryCount;
-    DYYYDiagZipAppendUInt32(end, 0x06054b50);
-    DYYYDiagZipAppendUInt16(end, 0);
-    DYYYDiagZipAppendUInt16(end, 0);
-    DYYYDiagZipAppendUInt16(end, legacyEntryCount);
-    DYYYDiagZipAppendUInt16(end, legacyEntryCount);
-    DYYYDiagZipAppendUInt32(end, (uint32_t)centralSize);
-    DYYYDiagZipAppendUInt32(end, (uint32_t)centralOffset);
-    DYYYDiagZipAppendUInt16(end, 0);
+    DKZipAppendUInt32(end, 0x06054b50);
+    DKZipAppendUInt16(end, 0);
+    DKZipAppendUInt16(end, 0);
+    DKZipAppendUInt16(end, legacyEntryCount);
+    DKZipAppendUInt16(end, legacyEntryCount);
+    DKZipAppendUInt32(end, (uint32_t)centralSize);
+    DKZipAppendUInt32(end, (uint32_t)centralOffset);
+    DKZipAppendUInt16(end, 0);
     return end;
 }
 
-@implementation DYYYDiagZip
+@implementation DKZipWriter
 
 + (BOOL)createZipAtPath:(NSString *)zipPath
                 rootDir:(NSString *)rootDir
                   files:(NSArray<NSString *> *)files
-               progress:(DYYYDiagZipProgressBlock)progress
+               progress:(DKZipProgressBlock)progress
                   error:(NSError **)error {
     NSFileManager *fm = NSFileManager.defaultManager;
     NSString *parent = zipPath.stringByDeletingLastPathComponent;
@@ -160,11 +160,11 @@ static NSData *DYYYDiagZipEndRecords(uint64_t entryCount, uint64_t centralSize, 
             do {
                 BOOL isDir = NO;
                 if (![fm fileExistsAtPath:file isDirectory:&isDir] || isDir) {
-                    entryError = DYYYDiagZipError(-3, [NSString stringWithFormat:@"ZIP source file missing: %@", file]);
+                    entryError = DKZipError(-3, [NSString stringWithFormat:@"ZIP source file missing: %@", file]);
                     break;
                 }
 
-                NSString *relative = DYYYDiagZipRelativePath(file, rootDir);
+                NSString *relative = DKZipRelativePath(file, rootDir);
                 if ([seenPaths containsObject:relative]) {   // 同一相对路径只写最终文件内容一次
                     done++;
                     break;
@@ -173,25 +173,25 @@ static NSData *DYYYDiagZipEndRecords(uint64_t entryCount, uint64_t centralSize, 
                 NSData *content = [NSData dataWithContentsOfFile:file];
                 NSData *nameData = [relative dataUsingEncoding:NSUTF8StringEncoding];
                 if (!content || !nameData.length || nameData.length > UINT16_MAX || content.length > UINT32_MAX) {
-                    entryError = DYYYDiagZipError(-4, [NSString stringWithFormat:@"ZIP entry unsupported: %@", relative]);
+                    entryError = DKZipError(-4, [NSString stringWithFormat:@"ZIP entry unsupported: %@", relative]);
                     break;
                 }
 
                 uint32_t size = (uint32_t)content.length;
                 uint32_t crc = (uint32_t)crc32(0, content.bytes, (uInt)content.length);
-                NSData *local = DYYYDiagZipLocalHeader(nameData, crc, size);
+                NSData *local = DKZipLocalHeader(nameData, crc, size);
                 if (local.length + content.length > UINT32_MAX - offset) {
-                    entryError = DYYYDiagZipError(-8, @"ZIP32 data offset overflow");
+                    entryError = DKZipError(-8, @"ZIP32 data offset overflow");
                     break;
                 }
                 @try {
                     [handle writeData:local];
                     [handle writeData:content];
                 } @catch (NSException *exception) {
-                    entryError = DYYYDiagZipError(-5, exception.reason ?: @"ZIP entry write failed");
+                    entryError = DKZipError(-5, exception.reason ?: @"ZIP entry write failed");
                     break;
                 }
-                [central appendData:DYYYDiagZipCentralHeader(nameData, crc, size, offset)];
+                [central appendData:DKZipCentralHeader(nameData, crc, size, offset)];
 
                 offset += (uint32_t)(local.length + content.length);
                 entryCount++;
@@ -208,7 +208,7 @@ static NSData *DYYYDiagZipEndRecords(uint64_t entryCount, uint64_t centralSize, 
 
     if (central.length > UINT32_MAX) {
         [handle closeFile];
-        if (error) *error = DYYYDiagZipError(-9, @"ZIP32 central directory overflow");
+        if (error) *error = DKZipError(-9, @"ZIP32 central directory overflow");
         return NO;
     }
     uint64_t centralOffset = offset;
@@ -217,15 +217,15 @@ static NSData *DYYYDiagZipEndRecords(uint64_t entryCount, uint64_t centralSize, 
         [handle writeData:central];
     } @catch (NSException *exception) {
         [handle closeFile];
-        if (error) *error = DYYYDiagZipError(-6, exception.reason ?: @"ZIP central directory write failed");
+        if (error) *error = DKZipError(-6, exception.reason ?: @"ZIP central directory write failed");
         return NO;
     }
-    NSData *end = DYYYDiagZipEndRecords(entryCount, centralSize, centralOffset);
+    NSData *end = DKZipEndRecords(entryCount, centralSize, centralOffset);
     @try {
         [handle writeData:end];
     } @catch (NSException *exception) {
         [handle closeFile];
-        if (error) *error = DYYYDiagZipError(-7, exception.reason ?: @"ZIP footer write failed");
+        if (error) *error = DKZipError(-7, exception.reason ?: @"ZIP footer write failed");
         return NO;
     }
     [handle closeFile];
