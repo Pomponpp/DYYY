@@ -26,7 +26,7 @@
 @end
 @implementation DYYYDiagOverlayWindow
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    DYYYDiagController *c = self.rootViewController isKindOfClass:DYYYDiagController.class ? (DYYYDiagController *)self.rootViewController : nil;
+    DYYYDiagController *c = [self.rootViewController isKindOfClass:DYYYDiagController.class] ? (DYYYDiagController *)self.rootViewController : nil;
     if (c.capturesOverlayTouches) return [super pointInside:point withEvent:event];  // 面板在场：全量收
     if (!_wrench || _wrench.hidden) return NO;
     CGPoint p = [_wrench convertPoint:point fromView:self];
@@ -250,7 +250,6 @@ static void DYYYDiagStartExport(void) {
 
 @interface DYYYDiagController ()
 @property (nonatomic, assign) BOOL didPlace;
-- (BOOL)capturesOverlayTouches;
 @end
 
 @implementation DYYYDiagController

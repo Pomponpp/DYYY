@@ -5,6 +5,7 @@
 
 @interface DYYYDiagController : UIViewController
 @property (nonatomic, strong) UIButton *wrenchButton;
+- (BOOL)capturesOverlayTouches;
 @end
 
 // .xm 按 ObjC++ 编译，C 函数声明必须带 extern "C" 才能与 .m 的 C 链接对上
