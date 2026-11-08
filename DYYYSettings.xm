@@ -4407,7 +4407,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     auditReportItem.colorStyle = 0;
     auditReportItem.isEnable = YES;
     auditReportItem.cellTappedBlock = ^{
-      UIViewController *presenter = [DYYYDiag diagPresenter];
+      UIViewController *presenter = [DYYYDiagController diagPresenter];
       [DYYYDiagnostics showAuditReportFromViewController:presenter];
     };
     [diagnosticItems addObject:auditReportItem];
@@ -4422,7 +4422,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     exportLogItem.colorStyle = 0;
     exportLogItem.isEnable = YES;
     exportLogItem.cellTappedBlock = ^{
-      UIViewController *presenter = [DYYYDiag diagPresenter];
+      UIViewController *presenter = [DYYYDiagController diagPresenter];
       [DYYYDiagnostics exportRuntimeLogFromViewController:presenter];
     };
     [diagnosticItems addObject:exportLogItem];
@@ -4438,7 +4438,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     diagBundleItem.colorStyle = 0;
     diagBundleItem.isEnable = YES;
     diagBundleItem.cellTappedBlock = ^{
-      UIViewController *presenter = [DYYYDiag diagPresenter];
+      UIViewController *presenter = [DYYYDiagController diagPresenter];
       [DYYYDiagnostics exportDiagnosticsBundleFromViewController:presenter];
     };
     [diagnosticItems addObject:diagBundleItem];
@@ -4469,7 +4469,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     clearLogItem.colorStyle = 0;
     clearLogItem.isEnable = YES;
     clearLogItem.cellTappedBlock = ^{
-      UIViewController *presenter = [DYYYDiag diagPresenter];
+      UIViewController *presenter = [DYYYDiagController diagPresenter];
       [DYYYDiagnostics clearRuntimeLogFromViewController:presenter];
     };
     [diagnosticItems addObject:clearLogItem];
