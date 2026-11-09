@@ -4409,7 +4409,13 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                              @"imageName" : @"ic_bug_outlined_20"
                          }]];
 
-    
+    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
+                             @"identifier" : @"DYYYFullNewDetailTable",
+                             @"title" : @"详情页新机制(实验)",
+                             @"detail" : @"详情页全屏改用表高拦截+行高只答不改；关闭时使用旧机制（默认关）",
+                             @"cellType" : @6,
+                             @"imageName" : @"ic_bug_outlined_20"
+                         }]];
 
 
     // 诊断悬浮入口开关（临时调试用，不进备份）：标准翻转 + 通知浮层刷新
@@ -4431,8 +4437,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       DKDebugInspectorRefreshOverlay();                            // 用写入后的新值刷新浮层
     };
     [diagnosticItems addObject:diagEntryItem];
-
-
 
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;

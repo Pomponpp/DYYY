@@ -396,6 +396,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"环境自检" key:@"DYYYShowAuditReport" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"导出日志" key:@"DYYYExportRuntimeLog" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"全屏诊断日志" key:@"DYYYFullscreenDiag" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"详情页新机制(实验)" key:@"DYYYFullNewDetailTable" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"清空日志" key:@"DYYYClearRuntimeLog" type:DYYYSettingItemTypeAction]
         ]
     ];

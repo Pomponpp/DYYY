@@ -540,33 +540,24 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
 
     %init;
 
-    // 启动期死锁根修（.ips 实证）：
-    // 若在 dyld/启动早期从【后台队列】触碰 AwemeCore，AwemeCore 的懒初始化
-    // (dispatch_once) 会在后台线程执行；其内部会同步 post 通知并 wait 一个
-    // 需要主线程的 NSOperation，而主线程正卡在同一个 dispatch_once 上等待
-    // → 线程互锁 → watchdog SIGKILL（抖音打不开）。
-    // 因此：延后 2 秒到主队列再派发，确保 AwemeCore 已由抖音自己在主线程
-    // 完成初始化，之后后台应用配置才安全。
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-      dispatch_async(DYYYABTestQueue(), ^{
-        s_abTestBlockEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYABTestBlockEnabled"];
+    // 在队列上异步读取初始状态并加载/应用配置
+    dispatch_async(DYYYABTestQueue(), ^{
+      s_abTestBlockEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYABTestBlockEnabled"];
 
-        NSString *currentMode = nil;
-        if ([DYYYABTestHook isRemoteMode]) {
-            currentMode = [DYYYABTestHook isPatchMode] ? @"远程模式(覆写)" : @"远程模式(替换)";
-        } else {
-            currentMode = [DYYYABTestHook isPatchMode] ? @"覆写模式" : @"替换模式";
-        }
+      NSString *currentMode = nil;
+      if ([DYYYABTestHook isRemoteMode]) {
+          currentMode = [DYYYABTestHook isPatchMode] ? @"远程模式(覆写)" : @"远程模式(替换)";
+      } else {
+          currentMode = [DYYYABTestHook isPatchMode] ? @"覆写模式" : @"替换模式";
+      }
 
-        NSLog(@"[DYYY] ABTest Hook已启动: 禁止下发=%@, 当前模式=%@", s_abTestBlockEnabled ? @"开启" : @"关闭", currentMode);
+      NSLog(@"[DYYY] ABTest Hook已启动: 禁止下发=%@, 当前模式=%@", s_abTestBlockEnabled ? @"开启" : @"关闭", currentMode);
 
-        [DYYYABTestHook loadLocalABTestConfig];
-        [DYYYABTestHook applyFixedABTestData];
-        DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded();
-        if ([DYYYABTestHook isRemoteMode]) {
-            [DYYYABTestHook checkForRemoteConfigUpdate:NO];
-        }
-      });
+      [DYYYABTestHook loadLocalABTestConfig];
+      [DYYYABTestHook applyFixedABTestData];
+      DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded();
+      if ([DYYYABTestHook isRemoteMode]) {
+          [DYYYABTestHook checkForRemoteConfigUpdate:NO];
+      }
     });
 }

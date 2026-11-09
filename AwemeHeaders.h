@@ -514,7 +514,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEFeedTableViewController : UIViewController
-@property(nonatomic, strong) UITableView *tableView;
 @end
 
 @interface AWEFeedTableView : UIView

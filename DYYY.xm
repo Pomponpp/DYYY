@@ -12025,45 +12025,36 @@ static void DYYYRemoveKeyboardObserver(void) {
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     BOOL result = %orig;
+    initTargetClassNames();
 
-    // 启动期死锁根修（.ips 080733 实证，全线程栈）：
-    // 主线程在本 hook 内同步调 initTargetClassNames / reloadConfiguration 等，
-    // 会进入 AwemeCore 懒初始化（dispatch_once）；同时其他线程（t5/t6/t10）
-    // 也在初始化同一模块并等主线程的 NSOperation → 双向互锁
-    // → watchdog SIGKILL（抖音打不开）。
-    // 修复：本 hook 只放行 %orig，DYYY 启动初始化整体延到下一个主队列周期。
-    dispatch_async(dispatch_get_main_queue(), ^{
-      initTargetClassNames();
+    updateGlobalTransparencyCache();
 
-      updateGlobalTransparencyCache();
+    [[NSUserDefaults standardUserDefaults] addObserver:(NSObject *)self forKeyPath:kDYYYGlobalTransparencyKey options:NSKeyValueObservingOptionNew context:DYYYGlobalTransparencyContext];
 
-      [[NSUserDefaults standardUserDefaults] addObserver:(NSObject *)self forKeyPath:kDYYYGlobalTransparencyKey options:NSKeyValueObservingOptionNew context:DYYYGlobalTransparencyContext];
+    [DYYYFloatingButtonCoordinator reloadConfiguration];
+    DYYYRemoveAppLifecycleObservers();
 
-      [DYYYFloatingButtonCoordinator reloadConfiguration];
-      DYYYRemoveAppLifecycleObservers();
-
-      dyyyWindowKeyObserverToken = [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidBecomeKeyNotification
-                                                                                     object:nil
-                                                                                      queue:[NSOperationQueue mainQueue]
-                                                                                 usingBlock:^(NSNotification *_Nonnull notification) {
-                                                                                   [DYYYFloatingButtonCoordinator reloadConfiguration];
-                                                                                 }];
-
-      dyyyDidBecomeActiveToken = [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
-                                                                                    object:nil
-                                                                                     queue:[NSOperationQueue mainQueue]
+    dyyyWindowKeyObserverToken = [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidBecomeKeyNotification
+                                                                                   object:nil
+                                                                                    queue:[NSOperationQueue mainQueue]
                                                                                usingBlock:^(NSNotification *_Nonnull notification) {
-                                                                                 [DYYYFloatingButtonCoordinator setApplicationActive:YES];
                                                                                  [DYYYFloatingButtonCoordinator reloadConfiguration];
                                                                                }];
 
-      dyyyWillResignActiveToken = [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillResignActiveNotification
-                                                                                     object:nil
-                                                                                      queue:[NSOperationQueue mainQueue]
-                                                                                 usingBlock:^(NSNotification *_Nonnull notification) {
-                                                                                   [DYYYFloatingButtonCoordinator setApplicationActive:NO];
-                                                                                 }];
-    });
+    dyyyDidBecomeActiveToken = [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
+                                                                                 object:nil
+                                                                                  queue:[NSOperationQueue mainQueue]
+                                                                             usingBlock:^(NSNotification *_Nonnull notification) {
+                                                                               [DYYYFloatingButtonCoordinator setApplicationActive:YES];
+                                                                               [DYYYFloatingButtonCoordinator reloadConfiguration];
+                                                                             }];
+
+    dyyyWillResignActiveToken = [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillResignActiveNotification
+                                                                                  object:nil
+                                                                                   queue:[NSOperationQueue mainQueue]
+                                                                              usingBlock:^(NSNotification *_Nonnull notification) {
+                                                                                [DYYYFloatingButtonCoordinator setApplicationActive:NO];
+                                                                              }];
 
     return result;
 }
