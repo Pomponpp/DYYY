@@ -151,14 +151,14 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
 
 // 表写入通道的统一规则（首页表与详情表共用）：
 // 返回 CGRectNull = 放行不干预。
-+ (CGRect)adjustDetailTableFrame:(UITableView *)table frame:(CGRect)frame {
++ (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame {
     if (!table) return CGRectNull;
     UIView *parent = table.superview;
     CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
     return [self adjustDetailTableFrame:table frame:frame target:target];
 }
 
-+ (CGRect)adjustDetailTableFrame:(UITableView *)table frame:(CGRect)frame target:(CGFloat)target {
++ (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target {
     if (!table) return CGRectNull;
     if (!DYYYGetBool(@"DYYYEnableFullScreen")) {
         // 关闭后一律放行，抖音写什么就是什么；标记清掉避免继续干预。

@@ -13,8 +13,8 @@
 //   detailRowHeight 只"回答"行高，不改写任何东西。
 + (UIViewController *)controllerForTable:(UITableView *)table;
 + (void)prepareDetailTableNew:(UIViewController *)controller;
-+ (CGRect)adjustDetailTableFrame:(UITableView *)table frame:(CGRect)frame;
-+ (CGRect)adjustDetailTableFrame:(UITableView *)table frame:(CGRect)frame target:(CGFloat)target;
++ (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame;
++ (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target;
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight;
 + (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
