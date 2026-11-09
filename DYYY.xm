@@ -7235,7 +7235,14 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     // 40.9 拔河根修：停用「表高对齐窗口」。表高 926 与抖音内部认知
     // （表高 = 窗口 - 底栏 83）互相矛盾是 cell 高度 843↔926 拔河的另一半
     // 来源。表高也交还原生，全屏视觉由媒体容器在 cell 内撑满补偿。
+    // #69：布局前也准备一次（与翻页时序同源，消除落点早于撑高的窗口）。
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
     %orig;
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
     // #32 取证 C 路：表高变化观察（A/B 两路 setFrame 都无记录时的裁决线）
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYFullscreenDiag") && [NSThread isMainThread]) {
         @try {
@@ -7331,10 +7338,16 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 - (void)adjustTableViewHeightForTargetIndex:(long long)index {
+    // #69 点A弹B根修（对照长期验证的顺序）：
+    // 落点在 %orig 内算定。原来 prepare 在 %orig 之后才跑，等于落点用的是
+    // 撑高前的旧高度，cell 随后才变高 → 落到隔壁页。
+    // 改为：%orig 前先撑高 → 落点与 cell 高度同源；%orig 后再补一次兜底。
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        // 翻页必经入口：落点已在 %orig 内算定，此处只做两件安全事——
-        // 撑回满视口（B路顶回的兜底）+ 对齐存量 843 cell（清混住残留）。
+        // 兜底：B 路可能把表写回压缩值，并清掉存量 843 cell 的混住残留。
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
         UITableView *t = [(id)self tableView];
         if (t) [DYYYFullscreenCoordinator alignExistingCellsIfNeeded:t target:CGRectGetHeight(t.superview.bounds)];

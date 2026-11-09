@@ -37,6 +37,14 @@
 
 @implementation DKDebugOverlayWindow
 
+// #69 浮窗拖动导致视频暂停的根修：
+// 浮层 windowLevel 极高，若它成为 key window，抖音的视频窗口会在拖动期间
+// 反复失去 key → 播放器/触摸链中断 → 暂停。
+// 浮层只负责显示扳手按钮与面板，从不承载键盘输入，因此不该当 key window。
+- (BOOL)canBecomeKeyWindow {
+    return NO;
+}
+
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     DKDebugOverlayViewController *controller = [self.rootViewController isKindOfClass:DKDebugOverlayViewController.class]
                                                ? (DKDebugOverlayViewController *)self.rootViewController
