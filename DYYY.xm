@@ -11988,17 +11988,50 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 %end
 
+// 首页 feed 表的撑高：必须在【控制器布局前后】做，不能等表自己 layoutSubviews。
+// 原因（诊断包实证）：表在 layoutSubviews 里改高时，cell 已经按旧高度排完了，
+// 表变高但 cell 没重排 → offset 按 926、cell 按 843，每页差 83，
+// 累计到一页时就是画面错位/跳动。
+// 改到控制器 viewDidLayoutSubviews 前后各同步一次，表高变化早于 cell 排版。
+%hook AWEFeedTableViewController
+
+- (void)viewDidLayoutSubviews {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [self dyyy_syncFeedTableHeight];
+    }
+    %orig;
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [self dyyy_syncFeedTableHeight];
+    }
+}
+
+%new
+- (void)dyyy_syncFeedTableHeight {
+    UITableView *table = nil;
+    if ([self respondsToSelector:@selector(tableView)]) {
+        table = [(id)self tableView];
+    }
+    if (!table) return;
+    UIView *parent = table.superview;
+    if (!parent) return;
+    CGFloat target = CGRectGetHeight(parent.bounds);
+    if (!isfinite(target) || target <= 0) return;
+
+    CGRect frame = table.frame;
+    if (fabs(CGRectGetHeight(frame) - target) <= 0.5) return;   // 已达标
+    frame.size.height = target;
+    table.frame = frame;
+}
+
+%end
+
 %hook AWEFeedTableView
 - (void)layoutSubviews {
     %orig;
 
-    // 首页 feed 表的撑高（DYYY 原有实现，与详情页的 setFrame 通道互不干扰：
-    // 首页表和详情表是两个不同实例，各管各的）。
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        CGRect frame = self.frame;
-        frame.size.height = self.superview.frame.size.height;
-        self.frame = frame;
-    } else if (gCurrentTabBarHeight > 0) {
+    // 首页 feed 表的撑高兜底（控制器入口已做，这里只处理关闭全屏时的收拢）。
+    // 全屏时不在这里改高：此时 cell 已排版，改表高会让 offset 与 cell 网格错位。
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") && gCurrentTabBarHeight > 0) {
         UIWindow *keyWindow = [DYYYUtils getActiveWindow];
         if (keyWindow && keyWindow.safeAreaInsets.bottom == 0) {
             return;
