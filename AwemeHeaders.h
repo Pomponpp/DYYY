@@ -106,6 +106,8 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEVideoModel : NSObject
+@property(nonatomic, strong) NSNumber *width;
+@property(nonatomic, strong) NSNumber *height;
 @property(nonatomic, strong) AWEURLModel *playLowBitURL;
 @property(retain, nonatomic) AWEURLModel *playURL;
 @property(copy, nonatomic) NSArray *manualBitrateModels;
@@ -1400,6 +1402,9 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @interface AWEDPlayerViewController_Merge : UIViewController
 @property(nonatomic) UIView *contentView;
+@property(nonatomic, strong) AWEAwemeModel *model;
+@property(nonatomic, assign) BOOL hasInlandscape;
+- (BOOL)isInLandscapeFeedStatus;
 - (BOOL)enableHDR;
 - (void)setVideoControllerPlaybackRate:(double)arg0;
 @end

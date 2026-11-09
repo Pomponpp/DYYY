@@ -11408,7 +11408,176 @@ static Class tabBarButtonClass = nil;
 
 %end
 
+// ===== 视频几何钉位（对齐已验证的全屏机制）=====
+// 全屏"画面满"的真正来源不是把 table 撑高，而是把【播放器容器】钉满：
+//   · 写入方是 AWEDPlayerViewController_Merge（视频容器）→ 钉成 (0,0,W,H)
+//   · 写入方是 AWEPlayInteractionViewController（HUD 互动层）→ 高度钉回原高
+// 后者保证底部文案/点赞栏不随表撑高整体下移。
+// 两个规则共用同一个 UIView setFrame 拦截点，按写入方归属分派，
+// 避免多个 hook 抢同一个最热方法。
+
+static const CGFloat kDYYYGeoAspectMin = 1.70;   // 高/宽达到此比例才拉满（竖屏视频）
+static const CGFloat kDYYYGeoTolerance = 0.5;
+static const long long kDYYYAwemeTypeImage = 68;
+static char kDYYYGeoOriginalHeightKey;
+
+static Class DYYYGeoMergeClass(void) {
+    static Class cls;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cls = NSClassFromString(@"AWEDPlayerViewController_Merge"); });
+    return cls;
+}
+
+static Class DYYYGeoInteractionClass(void) {
+    static Class cls;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cls = NSClassFromString(@"AWEPlayInteractionViewController"); });
+    return cls;
+}
+
+// 该视图往上第 8 层以内是否在视频表里；不在返回 nil。
+// 用于 HUD 钉位：只有"表被撑高过"的页面才钉，其余页面 HUD 跟着原生走。
+static UIView *DYYYGeoTableForView(UIView *view) {
+    Class tableClass = NSClassFromString(@"AWEFeedDataSafeTableView");
+    if (!tableClass) return nil;
+    UIView *ancestor = view.superview;
+    for (NSUInteger depth = 0; ancestor && depth < 8; depth++, ancestor = ancestor.superview) {
+        if ([ancestor isKindOfClass:tableClass]) return ancestor;
+    }
+    return nil;
+}
+
+// cell 满高：播放器所在 cell contentView 的高度（视频要铺满的目标）
+static CGFloat DYYYGeoFullCellHeight(UIView *view) {
+    UIView *container = view.superview;
+    for (NSUInteger depth = 0; container && depth < 6; depth++, container = container.superview) {
+        if ([container isKindOfClass:[UITableViewCell class]] ||
+            [container isKindOfClass:[UICollectionViewCell class]]) {
+            break;
+        }
+    }
+    // 找到 cell 的 contentView
+    UIView *cell = nil;
+    for (UIView *cursor = view.superview; cursor; cursor = cursor.superview) {
+        if ([cursor isKindOfClass:[UITableViewCell class]] ||
+            [cursor isKindOfClass:[UICollectionViewCell class]]) {
+            cell = cursor;
+            break;
+        }
+    }
+    if (!cell) return 0.0;
+    if ([cell isKindOfClass:[UITableViewCell class]]) {
+        UIView *content = ((UITableViewCell *)cell).contentView;
+        return content ? CGRectGetHeight(content.bounds) : 0.0;
+    }
+    return CGRectGetHeight(cell.bounds);
+}
+
+// 该视频是否应该拉满：图文、横屏、低比例竖屏都不拉（拉满会 aspect-fill 过裁）。
+static BOOL DYYYGeoCanCoverScreen(UIView *view) {
+    UIResponder *owner = view.nextResponder;
+    Class mergeClass = DYYYGeoMergeClass();
+    if (!mergeClass || ![owner isKindOfClass:mergeClass]) return NO;
+
+    AWEDPlayerViewController_Merge *merge = (AWEDPlayerViewController_Merge *)owner;
+    AWEAwemeModel *model = merge.model;
+    if ([model respondsToSelector:@selector(awemeType)] && model.awemeType == kDYYYAwemeTypeImage) return NO;
+    if ([merge respondsToSelector:@selector(hasInlandscape)] && merge.hasInlandscape) return NO;
+    if ([merge respondsToSelector:@selector(isInLandscapeFeedStatus)] && [merge isInLandscapeFeedStatus]) return NO;
+
+    AWEVideoModel *video = [model respondsToSelector:@selector(video)] ? model.video : nil;
+    double width = [video respondsToSelector:@selector(width)] ? video.width.doubleValue : 0.0;
+    double height = [video respondsToSelector:@selector(height)] ? video.height.doubleValue : 0.0;
+    return width <= 0.0 || height <= 0.0 || (height / width) >= kDYYYGeoAspectMin;
+}
+
+// 视频容器的目标 frame；返回 CGRectNull 表示放行（不干预）。
+static CGRect DYYYGeoContainerTarget(UIView *view) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
+    // 作用域只到主窗口：画中画/横屏播放器自带一整套同样层级的视图，
+    // 钉满会把小窗撑成盖住整页的全屏播放器。
+    UIWindow *window = view.window;
+    if (window && window.windowLevel != UIWindowLevelNormal) return CGRectNull;
+
+    UIView *parent = view.superview;
+    CGFloat width = CGRectGetWidth(parent.bounds);
+    CGFloat height = CGRectGetHeight(parent.bounds);
+    if (width <= 0.0 || height <= 0.0) return CGRectNull;
+
+    if (DYYYGeoCanCoverScreen(view)) {
+        CGFloat full = DYYYGeoFullCellHeight(view);
+        if (full > height) height = full;
+    }
+    return CGRectMake(0.0, 0.0, width, height);
+}
+
+// HUD 钉位：写入高度超过"表撑高前的原高"时钉回原高；返回 CGRectNull 放行。
+static CGRect DYYYGeoHUDAdjustFrame(UIView *view, CGRect frame) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
+    UIView *table = DYYYGeoTableForView(view);
+    if (!table) return CGRectNull;
+    NSNumber *original = objc_getAssociatedObject(table, &kDYYYGeoOriginalHeightKey);
+    if (!original) return CGRectNull;
+
+    CGFloat pinned = original.doubleValue;
+    if (!isfinite(pinned) || pinned <= 0.0) return CGRectNull;
+    // 没超过原高 → 原生缩小态，放行
+    if (CGRectGetHeight(frame) <= pinned + kDYYYGeoTolerance) return CGRectNull;
+
+    frame.origin.y = 0.0;
+    frame.size.height = pinned;
+    return frame;
+}
+
+// 撑高 table 时顺带记录原高（HUD 钉位的依据）。
+static void DYYYGeoRememberOriginalHeight(UIView *table, CGFloat height) {
+    if (!table || height <= 0.0 || !isfinite(height)) return;
+    if (objc_getAssociatedObject(table, &kDYYYGeoOriginalHeightKey)) return;
+    objc_setAssociatedObject(table, &kDYYYGeoOriginalHeightKey, @(height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+// 统一分派：只在两个已知写入方上做几何修正，其余一律放行。
+static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
+    UIResponder *owner = view.nextResponder;
+    if (!owner) return CGRectNull;
+
+    Class mergeClass = DYYYGeoMergeClass();
+    if (mergeClass && [owner isKindOfClass:mergeClass]) {
+        CGRect target = DYYYGeoContainerTarget(view);
+        if (CGRectIsNull(target)) return CGRectNull;
+        if (fabs(CGRectGetMinX(frame) - target.origin.x) <= kDYYYGeoTolerance &&
+            fabs(CGRectGetMinY(frame) - target.origin.y) <= kDYYYGeoTolerance &&
+            fabs(CGRectGetWidth(frame) - target.size.width) <= kDYYYGeoTolerance &&
+            fabs(CGRectGetHeight(frame) - target.size.height) <= kDYYYGeoTolerance) {
+            return CGRectNull;   // 已经是目标值，不必重复写
+        }
+        return target;
+    }
+
+    Class interactionClass = DYYYGeoInteractionClass();
+    if (interactionClass && [owner isKindOfClass:interactionClass]) {
+        // 表撑高时记原高（HUD 后续按它钉位）
+        UIView *table = DYYYGeoTableForView(view);
+        if (table) DYYYGeoRememberOriginalHeight(table, CGRectGetHeight(frame));
+        return DYYYGeoHUDAdjustFrame(view, frame);
+    }
+    return CGRectNull;
+}
+
 %hook UIView
+
+- (void)setFrame:(CGRect)frame {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        %orig;
+        return;
+    }
+    CGRect adjusted = DYYYGeoAdjustFrame(self, frame);
+    if (CGRectIsNull(adjusted)) {
+        %orig;
+        return;
+    }
+    %orig(adjusted);
+}
 
 - (void)setHidden:(BOOL)hidden {
     // 40.9 优化：两个头像功能开关都关闭时直接透传，省掉两次关联对象查询。
