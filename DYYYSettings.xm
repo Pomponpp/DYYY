@@ -4403,23 +4403,16 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
     [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
                              @"identifier" : @"DYYYFullscreenDiag",
-                             @"title" : @"全屏诊断日志",
-                             @"detail" : @"记录全屏撑满判定到运行日志，用于排查双视频问题",
+                             @"title" : @"诊断日志",
+                             @"detail" : @"记录全屏、底栏、毛玻璃、音频的判定过程到运行日志",
                              @"cellType" : @6,
                              @"imageName" : @"ic_bug_outlined_20"
                          }]];
 
 
-    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
-                             @"identifier" : @"DYYYFullNewDetailTable",
-                             @"title" : @"详情页新机制(实验)",
-                             @"detail" : @"详情页全屏改用表高拦截+行高只答不改；关闭时使用旧机制（默认关）",
-                             @"cellType" : @6,
-                             @"imageName" : @"ic_bug_outlined_20"
-                         }]];
 
 
-    // 诊断悬浮入口开关（临时调试用，不进备份）：标准翻转 + 通知浮层刷新
+    // 诊断悬浮入口开关（不进备份）：开启后常驻扳手，随时导出诊断包
     AWESettingItemModel *diagEntryItem = [[%c(AWESettingItemModel) alloc] init];
     diagEntryItem.identifier = @"DYYYDiagEntryEnabled";
     diagEntryItem.title = @"诊断悬浮入口";

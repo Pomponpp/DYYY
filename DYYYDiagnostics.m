@@ -232,7 +232,7 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
     [self appendRuntimeLogLine:[NSString stringWithFormat:
         @"[DYYY][fullscreen] 导出状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
         DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
-        DYYYGetBool(@"DYYYFullNewDetailTable") ? 1 : 0,
+        1,
         DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
         DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0]];
 
@@ -264,7 +264,7 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
     st[@"appVersion"] = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
     st[@"screenBounds"] = NSStringFromCGRect([UIScreen mainScreen].bounds);
     st[@"fullScreen"] = @(DYYYGetBool(@"DYYYEnableFullScreen"));
-    st[@"fullNewDetailTable"] = @(DYYYGetBool(@"DYYYFullNewDetailTable"));
+    st[@"fullNewDetailTable"] = @(1);
     st[@"commentBlur"] = @(DYYYGetBool(@"DYYYEnableCommentBlur"));
     NSData *jd = [NSJSONSerialization dataWithJSONObject:st options:NSJSONWritingPrettyPrinted error:nil];
     if (jd) [self safeWriteData:jd toPath:[dir stringByAppendingPathComponent:@"state.json"]];

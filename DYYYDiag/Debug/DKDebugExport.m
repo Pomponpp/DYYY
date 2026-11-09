@@ -257,10 +257,17 @@ DKDebugExportResult *DKDebugCreateExport(DKDebugExportContext *context,
     }
 
     NSString *state = mode == DKDebugExportModeAudio ? (context.audioCapture.declaredState ?: @"unknown") : @"";
-    NSString *suffix = state.length ? [NSString stringWithFormat:@"-%@", DKSafeFileName(state)] : @"";
-    NSString *rootName = [NSString stringWithFormat:@"DYDebug-%@%@-%@-%lld",
-                          DKModeName(mode), suffix, NSBundle.mainBundle.bundleIdentifier ?: @"Aweme",
-                          (long long)NSDate.date.timeIntervalSince1970];
+    (void)state;
+    // 文件名：DYDebug-日期时间（如 DYDebug-20261110-073045）
+    static NSDateFormatter *sStampFormatter;
+    static dispatch_once_t stampOnce;
+    dispatch_once(&stampOnce, ^{
+      sStampFormatter = [[NSDateFormatter alloc] init];
+      sStampFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+      sStampFormatter.dateFormat = @"yyyyMMdd-HHmmss";
+    });
+    NSString *stamp = [sStampFormatter stringFromDate:NSDate.date] ?: @"unknown";
+    NSString *rootName = [NSString stringWithFormat:@"DYDebug-%@", stamp];
     NSString *temporary = NSTemporaryDirectory();
     NSString *rootDir = [temporary stringByAppendingPathComponent:rootName];
     NSString *zipPath = [temporary stringByAppendingPathComponent:[rootName stringByAppendingString:@".zip"]];

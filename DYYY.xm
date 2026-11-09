@@ -7232,11 +7232,11 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     // 对齐已验证实现：只在布局【前后】各同步一次表高。
     // 不碰 inset、不做 beginUpdates/endUpdates、不分页状态——
     // 表高只有一个来源，避免两套体系各摆一次造成位移。
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
     %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
@@ -7259,11 +7259,11 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 // 热点状态栏
 // 重构全屏·招③行高查询：行高只"回答"表视口高，不改写 cell（只答不改）。
-// 生效条件：实验档 DYYYFullNewDetailTable 开启（默认关=旧机制原样）。
+// 生效条件：实验档 
 %hook AWEAwemeDetailTableViewController
 
 - (double)fixedCellHeight {
-    if (!DYYYGetBool(@"DYYYFullNewDetailTable") || !DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
         return %orig;
     }
     // #31 闭环：先准备表（记原高/撑回满视口），再按同源规则回答。
@@ -7277,7 +7277,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 - (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (!DYYYGetBool(@"DYYYFullNewDetailTable") || !DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
         return %orig;
     }
     [DYYYFullscreenCoordinator prepareDetailTableNew:self];
@@ -7290,34 +7290,34 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 翻页入口在 %orig 前后各准备一次（落点在 %orig 内算定，前后都需同源）。
 - (void)setupDetailTableView {
     %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
 
 - (void)viewWillLayoutSubviews {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
     %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
 
 - (double)contentOffsetYForCellAtIndex:(long long)index {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
     return %orig;
 }
 
 - (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
     %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
@@ -13281,7 +13281,7 @@ static void findTargetViewInView(UIView *view) {
                      // 避免"拨了开关但代码没干活"与"没拨开关"两种情况混淆。
                      NSLog(@"[DYYY][fullscreen] 启动状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
                            DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
-                           DYYYGetBool(@"DYYYFullNewDetailTable") ? 1 : 0,
+                           1,
                            DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
                            DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0);
                    });
