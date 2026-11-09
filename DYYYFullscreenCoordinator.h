@@ -24,6 +24,7 @@
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;
 + (BOOL)isImageContentController:(UIViewController *)controller;
 + (void)registerTabBar:(UIView *)tabBar;
++ (BOOL)tabBarHostsProfilePage:(UIView *)bar;
 + (void)invalidateGuides;
 + (CGFloat)bottomOccupiedHeightForView:(UIView *)view;
 + (void)layoutBottomInput:(UIView *)view controller:(UIViewController *)controller;

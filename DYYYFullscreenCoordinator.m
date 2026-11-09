@@ -438,8 +438,51 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
         playback = YES;
         break;
     }
+    // 个人主页 / 作品页这类页面没有播放互动层（无 HUD），playback 永远为 NO，
+    // 底栏因此保持不透明。但全屏开启时这些页面同样是全屏浏览，
+    // 底栏应当与播放页保持一致（透明）。只按当前顶层控制器判断，
+    // 消息页/搜索页等不受影响。
+    if (!playback && DYYYGetBool(@"DYYYEnableFullScreen") && [self tabBarHostsProfilePage:bar]) {
+        playback = YES;
+    }
     BOOL enabled = DYYYGetBool(@"DYYYHideBottomBg") || (DYYYGetBool(@"DYYYEnableFullScreen") && playback);
     [self layoutBottomBar:bar controller:nil enabled:enabled];
+}
+
+// 当前 tabBar 所在窗口的顶层页面是否为个人主页 / 作品页栈。
++ (BOOL)tabBarHostsProfilePage:(UIView *)bar {
+    static Class sProfileContainer;
+    static Class sPostWork;
+    static Class sUserHome;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      sProfileContainer = NSClassFromString(@"AWEProfileBaseContainerViewController");
+      sPostWork = NSClassFromString(@"AWEPostWorkViewControllerV2");
+      sUserHome = NSClassFromString(@"AWEUserHomeViewController");
+    });
+    if (!sProfileContainer && !sPostWork && !sUserHome) return NO;
+
+    UIWindow *window = bar.window;
+    if (!window) return NO;
+    UITabBarController *tab = nil;
+    UIViewController *root = window.rootViewController;
+    if ([root isKindOfClass:[UITabBarController class]]) tab = (UITabBarController *)root;
+    if (!tab) return NO;
+
+    UIViewController *top = tab.selectedViewController;
+    if ([top isKindOfClass:[UINavigationController class]]) {
+        top = ((UINavigationController *)top).topViewController;
+    }
+    if (!top) return NO;
+
+    for (UIViewController *cursor = top; cursor; cursor = cursor.parentViewController) {
+        if ((sProfileContainer && [cursor isKindOfClass:sProfileContainer]) ||
+            (sPostWork && [cursor isKindOfClass:sPostWork]) ||
+            (sUserHome && [cursor isKindOfClass:sUserHome])) {
+            return YES;
+        }
+    }
+    return NO;
 }
 + (void)registerTabBar:(UIView *)tabBar {
     if (![NSThread isMainThread]) return;

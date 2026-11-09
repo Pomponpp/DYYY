@@ -11811,6 +11811,28 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
         }
     }
 
+    // 个人主页 / 作品页：抖音原生就带底栏（内容 843 + 底栏 83 = 926）。
+    // 这类页面的 HUD referString 常为 nil，会被上面的规则误判成「该撑满」，
+    // 撑到 926 后与停在 843 的底栏重叠 → 底栏回显/露出。
+    // 排除优先：只要在 Profile 页面栈内，一律不撑满。
+    if (useFullHeight) {
+        static Class sProfileContainerClass;
+        static Class sPostWorkClass;
+        static dispatch_once_t profileOnce;
+        dispatch_once(&profileOnce, ^{
+          sProfileContainerClass = NSClassFromString(@"AWEProfileBaseContainerViewController");
+          sPostWorkClass = NSClassFromString(@"AWEPostWorkViewControllerV2");
+        });
+        for (UIViewController *parent = directParentVC; parent; parent = parent.parentViewController) {
+            BOOL isProfilePage = (sProfileContainerClass && [parent isKindOfClass:sProfileContainerClass]) ||
+                                 (sPostWorkClass && [parent isKindOfClass:sPostWorkClass]);
+            if (isProfilePage) {
+                useFullHeight = NO;
+                break;
+            }
+        }
+    }
+
     // 40.9 清理：原 "chat 来源 + 版本号 <= 39.2.0 走全高" 分支已删除。
     // 目标版本固定 40.9，版本条件恒为假，整段为死代码（且注释自述依赖 abtest 不可靠）。
 
