@@ -151,6 +151,24 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
 
 // 表写入通道的统一规则（首页表与详情表共用）：
 // 返回 CGRectNull = 放行不干预。
+// 首页 feed 表撑高：在控制器布局前后调用，让表高变化早于 cell 排版。
+// 表在 layoutSubviews 里改高时 cell 已排完，会造成 offset 与 cell 网格错位。
++ (void)syncFeedTableHeight:(UIViewController *)controller {
+    if (!controller || !DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return;
+    if (![controller respondsToSelector:@selector(tableView)]) return;
+    UITableView *table = [(id)controller tableView];
+    if (!table) return;
+    UIView *parent = table.superview;
+    if (!parent) return;
+    CGFloat target = CGRectGetHeight(parent.bounds);
+    if (!isfinite(target) || target <= 0.0) return;
+
+    CGRect frame = table.frame;
+    if (fabs(CGRectGetHeight(frame) - target) <= kDYYYDetailHeightTol) return;
+    frame.size.height = target;
+    table.frame = frame;
+}
+
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame {
     if (!table) return CGRectNull;
     UIView *parent = table.superview;

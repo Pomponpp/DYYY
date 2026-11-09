@@ -11996,31 +11996,9 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 %hook AWEFeedTableViewController
 
 - (void)viewDidLayoutSubviews {
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [self dyyy_syncFeedTableHeight];
-    }
+    [DYYYFullscreenCoordinator syncFeedTableHeight:self];
     %orig;
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [self dyyy_syncFeedTableHeight];
-    }
-}
-
-%new
-- (void)dyyy_syncFeedTableHeight {
-    UITableView *table = nil;
-    if ([self respondsToSelector:@selector(tableView)]) {
-        table = [(id)self tableView];
-    }
-    if (!table) return;
-    UIView *parent = table.superview;
-    if (!parent) return;
-    CGFloat target = CGRectGetHeight(parent.bounds);
-    if (!isfinite(target) || target <= 0) return;
-
-    CGRect frame = table.frame;
-    if (fabs(CGRectGetHeight(frame) - target) <= 0.5) return;   // 已达标
-    frame.size.height = target;
-    table.frame = frame;
+    [DYYYFullscreenCoordinator syncFeedTableHeight:self];
 }
 
 %end

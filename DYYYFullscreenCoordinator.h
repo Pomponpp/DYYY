@@ -13,6 +13,9 @@
 //   detailRowHeight 只"回答"行高，不改写任何东西。
 + (UIViewController *)controllerForTable:(UITableView *)table;
 + (void)prepareDetailTableNew:(UIViewController *)controller;
+// 首页 feed 表撑高：由 AWEFeedTableViewController 布局前后调用。
+// 必须早于 cell 排版，否则表变高而 cell 仍按旧高度排，造成网格错位。
++ (void)syncFeedTableHeight:(UIViewController *)controller;
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame;
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target;
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight;
