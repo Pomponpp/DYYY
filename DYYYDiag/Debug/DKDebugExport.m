@@ -15,6 +15,7 @@
 #import "../FLEX/DKClassDump.h"
 #import "../Shared/DKKeys.h"
 #import "../FLEX/DKZipWriter.h"
+#import "../DKDYYYBridge.h"
 
 NSString *const DKDebugExportWorkingDirectoryKey = @"DKDebugExportWorkingDirectory";
 
@@ -218,6 +219,69 @@ static void DKWritePageFiles(DKExportSink *sink,
     DKWritePageClasses(sink, context.pageClassNames ?: @[]);
 }
 
+#pragma mark - 崩溃与运行日志
+
+// 抖音崩溃时系统会把报告写到 CrashReporter 目录（.ips）。导出时把
+// 【本 App 最近几条】带进包里，省得再从「设置-隐私-分析与改进」里翻。
+// 只读、只统计、不改动原文件。
+static void DKWriteCrashFiles(DKExportSink *sink, void (^progress)(NSString *text)) {
+    if (progress) progress(@"收集崩溃报告...");
+    NSString *bundleID = NSBundle.mainBundle.bundleIdentifier ?: @"";
+    NSMutableArray<NSString *> *roots = [NSMutableArray array];
+    NSString *home = NSHomeDirectory();
+    // iOS 16 起在 ~/Library/Logs/CrashReporter；更早的在 /var/mobile/Library/Logs
+    [roots addObject:[home stringByAppendingPathComponent:@"Library/Logs/CrashReporter"]];
+    [roots addObject:@"/var/mobile/Library/Logs/CrashReporter"];
+    [roots addObject:@"/var/mobile/Library/Logs/CrashReporter/DiagnosticLogs"];
+
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSMutableArray<NSDictionary *> *found = [NSMutableArray array];
+    NSDateFormatter *df = [[NSDateFormatter alloc] init];
+    df.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    df.dateFormat = @"yyyyMMdd-HHmmss";
+
+    for (NSString *root in roots) {
+        NSArray<NSString *> *names = [fm contentsOfDirectoryAtPath:root error:nil];
+        if (!names.count) continue;
+        for (NSString *name in names) {
+            BOOL looksLikeOurs = [name containsString:@"Aweme"] || (bundleID.length && [name containsString:bundleID]);
+            BOOL isReport = [name.pathExtension isEqualToString:@"ips"] || [name.pathExtension isEqualToString:@"crash"];
+            if (!looksLikeOurs || !isReport) continue;
+            NSString *full = [root stringByAppendingPathComponent:name];
+            NSDictionary *attrs = [fm attributesOfItemAtPath:full error:nil];
+            NSDate *mtime = attrs[NSFileModificationDate];
+            [found addObject:@{@"path": full, @"name": name, @"mtime": mtime ?: NSDate.date}];
+        }
+    }
+    [found sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+      return [b[@"mtime"] compare:a[@"mtime"]];
+    }];
+
+    if (!found.count) {
+        DKWriteString(sink, @"crash/none.txt", @"未找到本 App 的崩溃报告。\r\n"
+                       "若确认发生过闪退，可从「设置 → 隐私与安全性 → 分析与改进 → 分析数据」\r\n"
+                       "搜索 Aweme 查找对应 .ips。\r\n", NO);
+        return;
+    }
+    // 最多带最近 5 条，避免包过大
+    NSUInteger limit = MIN(found.count, (NSUInteger)5);
+    NSMutableString *index = [NSMutableString string];
+    [index appendFormat:@"共找到 %lu 条崩溃报告，本包携带最近 %lu 条：\r\n\r\n",
+                        (unsigned long)found.count, (unsigned long)limit];
+    for (NSUInteger i = 0; i < limit; i++) {
+        NSDictionary *item = found[i];
+        NSString *full = item[@"path"];
+        NSData *data = [NSData dataWithContentsOfFile:full];
+        if (!data) continue;
+        NSString *stamp = [df stringFromDate:item[@"mtime"]];
+        NSString *target = [NSString stringWithFormat:@"crash/%@-%@", stamp, item[@"name"]];
+        DKWriteData(sink, target, data, NO);
+        [index appendFormat:@"· %@  →  %@\r\n", stamp, target];
+    }
+    DKWriteString(sink, @"crash/index.txt", index, NO);
+}
+
+
 #pragma mark - 音频内容
 
 static void DKWriteAudioFiles(DKExportSink *sink,
@@ -290,6 +354,20 @@ DKDebugExportResult *DKDebugCreateExport(DKDebugExportContext *context,
         DKWriteAudioFiles(sink, context.audioCapture, progress);
     } else {
         DKWritePageFiles(sink, context, progress);
+        // 崩溃报告随包携带：排查闪退时不用再去系统设置里翻 .ips。
+        @try {
+            DKWriteCrashFiles(sink, progress);
+        } @catch (NSException *exception) {
+            DKRecordError(sink, @"crash", @"crash-collect",
+                          DKMakeExportError(30, exception.reason ?: @"崩溃报告收集异常", nil), NO);
+        }
+        // 运行日志全文单独成文件（probe/tabbar.txt 里也有，但那里是拼接后的）。
+        if (progress) progress(@"写入运行日志全文...");
+        NSString *runtime = [NSString stringWithContentsOfFile:[DKDYYYBridge runtimeLogPath]
+                                                      encoding:NSUTF8StringEncoding error:nil];
+        if (runtime.length) {
+            DKWriteString(sink, @"probe/runtime.log", runtime, NO);
+        }
     }
 
     NSDictionary *manifest = @{

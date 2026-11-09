@@ -118,6 +118,18 @@ jobs:
           rm -rf .theos/obj .theos/build 2>/dev/null || true
           echo "stale intermediates cleaned"
 
+      # 几何回归：纯数学，不依赖抖音运行时，秒级。放在编译之前，
+      # 让视口裁剪/等比适配算错了就立刻失败，不必等 8 分钟编译。
+      - name: Geometry regression tests
+        run: |
+          set -o pipefail
+          xcrun clang -fobjc-arc -fblocks \
+            -framework Foundation -framework UIKit -framework CoreGraphics \
+            -I . \
+            DYYYFullscreenGeometry.m tests/FullscreenGeometryTests.m \
+            -o "$RUNNER_TEMP/dyyy-geometry-tests"
+          "$RUNNER_TEMP/dyyy-geometry-tests"
+
       - name: Build dylib only (arm64)
         run: |
           rm -rf packages && mkdir -p packages

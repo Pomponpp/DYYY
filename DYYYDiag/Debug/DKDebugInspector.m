@@ -158,8 +158,46 @@ static void DKCreateExportInBackground(DKDebugExportContext *context,
     });
 }
 
-static void DKStartExport(DKDebugExportContext *context, DKDebugExportMode mode) {
-    UIViewController *presenter = context.presenter ?: DKDebugController;
+// 当前页面标识：顶层 VC 类名 + referString + 选中 tab。
+// 定位问题时先知道在哪，比从截图猜快。
+static NSString *DKDebugPageIdentity(void) {
+    NSMutableString *out = [NSMutableString string];
+    UIWindow *window = DKDebugTargetWindow();
+    UIViewController *root = window.rootViewController;
+    if (!root) {
+        [out appendString:@"(无窗口或无根控制器)"];
+        return out;
+    }
+    UIViewController *top = root;
+    if ([top isKindOfClass:[UITabBarController class]]) {
+        UIViewController *sel = ((UITabBarController *)top).selectedViewController;
+        [out appendFormat:@"tab=%@\r\n", NSStringFromClass(sel.class)];
+        if (sel) top = sel;
+    }
+    if ([top isKindOfClass:[UINavigationController class]]) {
+        top = ((UINavigationController *)top).topViewController ?: top;
+    }
+    [out appendFormat:@"顶层=%@\r\n", NSStringFromClass(top.class)];
+
+    // 父链（最多 8 层），能看出是 feed / 详情 / 主页 / 作品
+    NSMutableArray<NSString *> *chain = [NSMutableArray array];
+    for (UIViewController *c = top; c && chain.count < 8; c = c.parentViewController) {
+        [chain addObject:NSStringFromClass(c.class)];
+    }
+    [out appendFormat:@"父链=%@\r\n", [chain componentsJoinedByString:@" < "]];
+
+    // 互动层 referString：区分同一 VC 下的不同入口
+    if ([top respondsToSelector:NSSelectorFromString(@"referString")]) {
+        @try {
+            id refer = [top valueForKey:@"referString"];
+            [out appendFormat:@"referString=%@\r\n", refer ?: @"(nil)"];
+        } @catch (__unused NSException *e) {
+        }
+    }
+    return out;
+}
+
+static void DKStartExport(DKDebugExportContext *context, DKDebugExportMode mode) {    UIViewController *presenter = context.presenter ?: DKDebugController;
     if (!presenter) return;
     if (DKDebugExportBusy) {
         DKPresentError(presenter, @"已有调试采集或导出正在进行");
@@ -168,13 +206,19 @@ static void DKStartExport(DKDebugExportContext *context, DKDebugExportMode mode)
     DKDebugExportBusy = YES;
 
     // 探针读 UIKit，必须在主线程生成后塞进上下文；后台任务只做序列化与压缩。
-    // 探针文本换成 DYYY 运行流水（导出时快照，与 zip 内容对齐）
+    // 探针文本含：状态指纹 + 当前页面标识 + 运行流水全文。
     {
         NSString *runtime = [NSString stringWithContentsOfFile:[DKDYYYBridge runtimeLogPath]
                                                       encoding:NSUTF8StringEncoding error:nil];
+        if (!runtime) runtime = @"";
         NSString *fp = [DKDYYYBridge exportFingerprint];
-        context.probeText = [NSString stringWithFormat:@"== DYYY 状态指纹 ==\r\n%@\r\n== 运行流水（截尾 4000 字）==\r\n%@",
-                             fp, runtime.length > 4000 ? [runtime substringFromIndex:runtime.length - 4000] : (runtime ?: @"(空)")];
+        // 页面标识：定位问题时先知道在哪个 VC、什么 referString，比截图精确。
+        NSString *pageTag = DKDebugPageIdentity();
+        context.probeText = [NSString stringWithFormat:
+            @"== DYYY 状态指纹 ==\r\n%@\r\n"
+             "== 当前页面 ==\r\n%@\r\n"
+             "== 运行流水（全文 %lu 字，完整内容见 runtime.log）==\r\n%@",
+            fp, pageTag, (unsigned long)runtime.length, runtime];
     }
 
     UIAlertController *progressAlert = [UIAlertController alertControllerWithTitle:@"DYYY"
