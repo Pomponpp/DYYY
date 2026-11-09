@@ -230,8 +230,19 @@ static void DYYYPageIsolationPrune(void) {
             if (DYYYGetBool(@"DYYYFullscreenDiag")) {
                 NSLog(@"[DYYY][table] prepare 记录原高=%.1f 目标=%.1f", current, target);
             }
+            // #72 位移根修：首次记录【同时就撑高】，不等第二次调用。
+            // 原来这里 return 不撑高 → 第一批行在"表高 843"时创建，UIKit 问行高
+            // 得到 843 并缓存；之后才撑高 926，行高缓存已钉死 843
+            // → cell 按 843 摆、offset 按 926 算 → 每页漂移 83，几页后差一整页（点A弹B）。
+            // 提前撑高后，建行时表已是 926，第一批行就按 926 缓存，两边同源。
+            CGRect firstAdjusted = table.frame;
+            firstAdjusted.size.height = target;
+            table.frame = firstAdjusted;
+            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                NSLog(@"[DYYY][table] prepare 首次撑高 %.1f → %.1f", current, target);
+            }
         }
-        return; // 首次只记录原高，不撑高（不抢抖音建行意图）
+        return;
     }
     // 已接管：表被写回压缩值时撑回满视口
     if (current >= target - kDYYYDetailHeightTol || current < target * 0.5) return;

@@ -7351,31 +7351,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
         UITableView *t = [(id)self tableView];
         if (t) [DYYYFullscreenCoordinator alignExistingCellsIfNeeded:t target:CGRectGetHeight(t.superview.bounds)];
-
-        // #71 位移根修（日志实证：同 offset 下 cell y=-332 与 511 差 843 = 一页）：
-        // 抖音的 offset 按撑高后的高度算（926 体系），但它摆 cell 时仍按内部
-        // 缓存的 843 分页尺寸回调，两套体系各摆一次 → 位置混住。
-        // 在 %orig 之后让它按【当前真实高度】重摆一次落点，两边同源。
-        // 防递归：重摆内部会再次进到本 hook，用静默标志挡住。
-        static BOOL relayoutGuard = NO;
-        if (!relayoutGuard) {
-            NSInteger targetIndex = -1;
-            if ([self respondsToSelector:@selector(currentVisibleCellIndex)]) {
-                targetIndex = (NSInteger)[(id)self currentVisibleCellIndex];
-            }
-            if (targetIndex >= 0 && t && !t.tracking && !t.dragging && !t.decelerating) {
-                relayoutGuard = YES;
-                @try {
-                    [UIView performWithoutAnimation:^{
-                        [(id)self updateTableViewLayoutForTargetPageIndex:targetIndex];
-                        [t layoutIfNeeded];
-                    }];
-                } @catch (__unused NSException *e) {
-                } @finally {
-                    relayoutGuard = NO;
-                }
-            }
-        }
     }
 }
 
