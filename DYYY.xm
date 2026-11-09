@@ -11566,19 +11566,6 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 %hook UIView
 
-- (void)setFrame:(CGRect)frame {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
-        %orig;
-        return;
-    }
-    CGRect adjusted = DYYYGeoAdjustFrame(self, frame);
-    if (CGRectIsNull(adjusted)) {
-        %orig;
-        return;
-    }
-    %orig(adjusted);
-}
-
 - (void)setHidden:(BOOL)hidden {
     // 40.9 优化：两个头像功能开关都关闭时直接透传，省掉两次关联对象查询。
     // 标记视图在开关关闭时本就返回 NO，提前返回与旧行为一致。
@@ -11704,6 +11691,16 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
           [self setFrame:frame];
         });
         return;
+    }
+
+    // #70 视频几何钉位（先于毛玻璃逻辑执行）：
+    // 播放器容器钉满 / HUD 高度钉回原高。只在两个已知写入方上生效。
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        CGRect geoAdjusted = DYYYGeoAdjustFrame(self, frame);
+        if (!CGRectIsNull(geoAdjusted)) {
+            %orig(geoAdjusted);
+            return;
+        }
     }
 
     BOOL enableBlur = DYYYGetBool(@"DYYYEnableCommentBlur");
