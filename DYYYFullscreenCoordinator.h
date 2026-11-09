@@ -7,12 +7,14 @@
 + (BOOL)usesDetailLayoutForController:(UIViewController *)controller;
 + (BOOL)usesFullscreenLayoutForController:(UIViewController *)controller;
 + (CGRect)frameForPureModeContainer:(UIViewController *)controller proposed:(CGRect)frame;
-+ (CGFloat)bottomInsetForDetail:(CGFloat)inset controller:(UIViewController *)controller;
-+ (void)reconcileDetailPaging:(UIViewController *)controller;
-// #31 详情页全屏闭环：建行/落点计算前主动准备表（撑满+记原高），
-// 行高查询用同源规则回答。两者必须成对使用。
+// 详情页全屏（对齐验证过的机制）：
+//   adjustDetailTableFrame 是表高的唯一写入通道；
+//   prepareDetailTableNew 供建行/落点/翻页入口在放行原生之前同步表高；
+//   detailRowHeight 只"回答"行高，不改写任何东西。
 + (UIViewController *)controllerForTable:(UITableView *)table;
 + (void)prepareDetailTableNew:(UIViewController *)controller;
++ (CGRect)adjustDetailTableFrame:(UITableView *)table frame:(CGRect)frame;
++ (CGRect)adjustDetailTableFrame:(UITableView *)table frame:(CGRect)frame target:(CGFloat)target;
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight;
 + (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;

@@ -4409,15 +4409,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                              @"imageName" : @"ic_bug_outlined_20"
                          }]];
 
-    // 分页状态隔离（实验）：修切页导致的点A弹B与画面跳动。
-    // 每页各自持有撑高状态，切页不带着上一页的状态跑。
-    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
-                             @"identifier" : @"DYYYPageIsolation",
-                             @"title" : @"分页状态隔离 (实验)",
-                             @"detail" : @"画面按页独立记录撑高状态，修切页后点A弹B与上下跳动；异常时关闭即回退",
-                             @"cellType" : @6,
-                             @"imageName" : @"ic_bug_outlined_20"
-                         }]];
 
     [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
                              @"identifier" : @"DYYYFullNewDetailTable",

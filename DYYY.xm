@@ -3344,8 +3344,14 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %hook AWEBaseListViewController
 - (void)viewDidLayoutSubviews {
+    // 对齐已验证实现：布局前后各同步一次表高（不碰 inset、不做 beginUpdates）
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
     %orig;
-    [self applyBlurEffectIfNeeded];
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
 }
 
 %new
@@ -7222,20 +7228,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 // 主页状态栏
 %hook AWEAwemeDetailTableViewController
-- (CGFloat)baseTableViewBottomInset {
-    CGFloat inset = %orig;
-    // #20 教训：默认停用 inset 归零导致他人主页作品页底栏不透明、
-    // 不满屏（原生 83pt 预留回来了）。旧机制恢复默认开启；
-    // 新实验档 DYYYFullNewDetailTable 打开时才停用（配合 setFrame 拦截）。
-    if (DYYYGetBool(@"DYYYFullNewDetailTable")) return inset;
-    return [DYYYFullscreenCoordinator bottomInsetForDetail:inset controller:self];
-}
-
 - (void)viewDidLayoutSubviews {
-    // 40.9 拔河根修：停用「表高对齐窗口」。表高 926 与抖音内部认知
-    // （表高 = 窗口 - 底栏 83）互相矛盾是 cell 高度 843↔926 拔河的另一半
-    // 来源。表高也交还原生，全屏视觉由媒体容器在 cell 内撑满补偿。
-    // #69：布局前也准备一次（与翻页时序同源，消除落点早于撑高的窗口）。
+    // 对齐已验证实现：布局前后各同步一次表高。
+    // 不碰 inset、不做 beginUpdates/endUpdates、不分页状态——
+    // 表高只有一个来源，避免两套体系各摆一次造成位移。
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
@@ -7243,30 +7239,15 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
-    // #32 取证 C 路：表高变化观察（A/B 两路 setFrame 都无记录时的裁决线）
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYFullscreenDiag") && [NSThread isMainThread]) {
-        @try {
-            UITableView *table = [(id)self tableView];
-            if (table) {
-                static CGFloat lastLoggedHeight = 0;
-                CGFloat h = CGRectGetHeight(table.frame);
-                if (fabs(h - lastLoggedHeight) > 0.5) {
-                    lastLoggedHeight = h;
-                    NSLog(@"[DYYY][table] layout[C] 表高变化 → %.1f（父视图%.1f）",
-                          h, table.superview ? CGRectGetHeight(table.superview.bounds) : -1);
-                }
-            }
-        } @catch (__unused NSException *e) {
-        }
-    }
-    [DYYYFullscreenCoordinator reconcileDetailPaging:self];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
-    // #30：不在控制器方法里顶表，全屏由表的 setFrame: 出口单点负责。
-    [DYYYFullscreenCoordinator reconcileDetailPaging:self];
+    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
 }
+
 
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {
@@ -7311,8 +7292,9 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     return [DYYYFullscreenCoordinator detailRowHeight:table nativeHeight:nativeHeight];
 }
 
-// #31 闭环入口：建行/落点/分页的每个必经入口先准备表，再放行原生。
-// 准备 = 首次记原高、之后把被压回的表撑回满视口；行高回答与它同源。
+// 详情页建行/落点/翻页入口（对齐已验证实现的同源纪律）：
+// 每个入口都先 prepare 撑高表，再放行原生——建行、落点、分页看到同一个表高。
+// 翻页入口在 %orig 前后各准备一次（落点在 %orig 内算定，前后都需同源）。
 - (void)setupDetailTableView {
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
@@ -7338,88 +7320,59 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 - (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    // #69 点A弹B根修（对照长期验证的顺序）：
-    // 落点在 %orig 内算定。原来 prepare 在 %orig 之后才跑，等于落点用的是
-    // 撑高前的旧高度，cell 随后才变高 → 落到隔壁页。
-    // 改为：%orig 前先撑高 → 落点与 cell 高度同源；%orig 后再补一次兜底。
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        // 兜底：B 路可能把表写回压缩值，并清掉存量 843 cell 的混住残留。
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-        UITableView *t = [(id)self tableView];
-        if (t) [DYYYFullscreenCoordinator alignExistingCellsIfNeeded:t target:CGRectGetHeight(t.superview.bounds)];
     }
 }
 
 %end
 
-// #30：全屏收敛为「表视图写入出口」单点接管。
-// 生效条件：新版模式 + 全屏开启；控制器侧零时机干预。
-%hook AWEAwemeDetailTableView
-
-- (void)setFrame:(CGRect)frame {
-    CGRect adjusted = frame;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && [NSThread isMainThread]) {
-        UIView *parent = self.superview;
-        CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-        // 出口与 prepare 共享同一份原高记录：压缩写入顶回满视口前，
-        // 先把原值记为未撑高时的高度，行高同源规则依赖它。
-        if (target > 0 && frame.size.height < target - 0.5 && frame.size.height >= target * 0.5) {
-            if (!objc_getAssociatedObject(self, @selector(prepareDetailTableNew:))) {
-                objc_setAssociatedObject(self, @selector(prepareDetailTableNew:), @(frame.size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                    NSLog(@"[DYYY][table] setFrame 记原高=%.1f", frame.size.height);
-                }
-            }
-            adjusted.size.height = target;
-            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                NSLog(@"[DYYY][table] setFrame[A] 子类出口 原高=%.1f → 顶高=%.1f（父视图%.1f）",
-                      frame.size.height, adjusted.size.height, target);
-            }
-        }
-    }
-    %orig(adjusted);
-}
-
-%end
-
-// #32 日志裁决（l32）：B 路 110 条、A 路 0 条——41.0 详情表写入全部走
-// 基类 AWEFeedDataSafeTableView 的 setFrame:，子类出口永远等不到。
-// #32 同时实锤点A弹B机制：落点已按 926 同源计算，但建行早于撑高的
-// 843 旧 cell 残留在表里（y=-249/H=843 与 y=594/H=926 同 offset 共存）。
-//
-// #33 本 hook 升级为「写入顶回 + 记原高」：基类出口是唯一活的写入通道，
-// 在此把压缩写入顶回满视口、并记录原高供行高同源规则使用。仅对
-// 详情表实例生效（AWEFeedTableView 等其他子类不受影响）。
+// 视频表写入通道（唯一撑高入口，对齐已验证实现）：
+// 抖音把表高写回压缩值时，在【写入那一刻】就顶回满视口——不等下次布局。
+// 首页表与详情表共用同一规则：详情表继承自 AWEFeedDataSafeTableView，
+// 只挂基类即可覆盖；再挂子类会造成同一高度两处写（已证明会互相打架）。
 %hook AWEFeedDataSafeTableView
 
 - (void)setFrame:(CGRect)frame {
-    CGRect adjusted = frame;
-    BOOL isDetailTable = [NSStringFromClass([self class]) isEqualToString:@"AWEAwemeDetailTableView"];
-    if (isDetailTable && DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen") && [NSThread isMainThread]) {
-        UIView *parent = self.superview;
-        CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-        if (target > 0 && frame.size.height < target - 0.5 && frame.size.height >= target * 0.5) {
-            // 与 prepare 共享同一份原高记录（行高同源规则依赖它）
-            if (!objc_getAssociatedObject(self, @selector(prepareDetailTableNew:))) {
-                objc_setAssociatedObject(self, @selector(prepareDetailTableNew:), @(frame.size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                    NSLog(@"[DYYY][table] setFrame[B] 记原高=%.1f", frame.size.height);
-                }
-            }
-            adjusted.size.height = target;
-            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
-                NSLog(@"[DYYY][table] setFrame[B] 原高=%.1f → 顶高=%.1f", frame.size.height, target);
-            }
-        }
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        %orig;
+        return;
+    }
+    CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:frame];
+    if (CGRectIsNull(adjusted)) {
+        %orig;
+        return;
+    }
+    if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+        NSLog(@"[DYYY][table] setFrame 顶高 %.1f → %.1f", CGRectGetHeight(frame), CGRectGetHeight(adjusted));
     }
     %orig(adjusted);
 }
 
 %end
+
+// 首页表（独立类，不继承上面的基类）走同一规则。
+%hook AWEFeedTableView
+
+- (void)setFrame:(CGRect)frame {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        %orig;
+        return;
+    }
+    CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:frame];
+    if (CGRectIsNull(adjusted)) {
+        %orig;
+        return;
+    }
+    %orig(adjusted);
+}
+
+%end
+
 
 // #34：诊断扳手挂载——独立顶层 hook，不受「禁用设置手势」开关影响。
 // keyWindow 变化即刷新（原挂载埋在 DYYYSettingsGesture group 内，
