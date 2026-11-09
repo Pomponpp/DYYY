@@ -7229,19 +7229,12 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 主页状态栏
 %hook AWEAwemeDetailTableViewController
 - (void)viewDidLayoutSubviews {
-    // 对齐已验证实现：布局前后各同步一次表高。
+    // 对齐已验证实现：只在布局【前后】各同步一次表高。
     // 不碰 inset、不做 beginUpdates/endUpdates、不分页状态——
     // 表高只有一个来源，避免两套体系各摆一次造成位移。
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
-    %orig;
-    if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
-- (void)viewDidAppear:(BOOL)animated {
     %orig;
     if (DYYYGetBool(@"DYYYFullNewDetailTable") && DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
@@ -11998,12 +11991,10 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 %hook AWEFeedTableView
 - (void)layoutSubviews {
     %orig;
-
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        CGRect frame = self.frame;
-        frame.size.height = self.superview.frame.size.height;
-        self.frame = frame;
-    } else if (gCurrentTabBarHeight > 0) {
+    // 表高不在这里改：全屏时由 setFrame: 唯一通道顶回满视口，
+    // 布局里再写一次会和它抢同一个高度（已证明会互相打架）。
+    // 关闭全屏时只处理 tabBar 预留的收拢。
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") && gCurrentTabBarHeight > 0) {
         UIWindow *keyWindow = [DYYYUtils getActiveWindow];
         if (keyWindow && keyWindow.safeAreaInsets.bottom == 0) {
             return;
