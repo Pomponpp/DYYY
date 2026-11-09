@@ -11991,10 +11991,14 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 %hook AWEFeedTableView
 - (void)layoutSubviews {
     %orig;
-    // 表高不在这里改：全屏时由 setFrame: 唯一通道顶回满视口，
-    // 布局里再写一次会和它抢同一个高度（已证明会互相打架）。
-    // 关闭全屏时只处理 tabBar 预留的收拢。
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") && gCurrentTabBarHeight > 0) {
+
+    // 首页 feed 表的撑高（DYYY 原有实现，与详情页的 setFrame 通道互不干扰：
+    // 首页表和详情表是两个不同实例，各管各的）。
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        CGRect frame = self.frame;
+        frame.size.height = self.superview.frame.size.height;
+        self.frame = frame;
+    } else if (gCurrentTabBarHeight > 0) {
         UIWindow *keyWindow = [DYYYUtils getActiveWindow];
         if (keyWindow && keyWindow.safeAreaInsets.bottom == 0) {
             return;
