@@ -42,6 +42,14 @@
 @property(nonatomic, assign) BOOL applyingBottomBackground;
 @property(nonatomic, assign) BOOL updatingBottomBar;
 @end
+@interface DYYYPageIsolationState : NSObject
+@property(nonatomic, assign) CGFloat originalHeight;   // 该页表未撑高时的高度
+@property(nonatomic, assign) BOOL stretched;           // 该页是否已接管撑高
+@end
+
+@implementation DYYYPageIsolationState
+@end
+
 @implementation DYYYFullscreenPlayerState
 @end
 
@@ -128,6 +136,47 @@
 // 落点(N×行高)与建行同源：点A弹A 与 全屏 同时成立。
 static const CGFloat kDYYYDetailHeightTol = 0.5;
 
+// ===== 分页状态隔离（实验开关 DYYYPageIsolation，默认关）=====
+// #59 的撑高状态挂在 table 上、整条 pager 共用一份：
+//   切页时抖音按原生认知建 843 新 cell，我们才顶到 926 并回答 926 行高，
+//   同一张表里旧 cell 843 / 新 cell 926 混住 → 点 A 弹 B、切页跳动。
+// 本档把「原高 + 是否接管」按 (VC, 当前页索引) 分键保存/恢复，
+// 让每页各自持有自己的撑高状态，切页不再带着上一页的状态跑。
+// 关闭时完全不进入本分支 = #59 原行为。
+
+
+static NSMutableDictionary<NSString *, DYYYPageIsolationState *> *DYYYPageIsolationStates(void) {
+    static NSMutableDictionary *states;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ states = [NSMutableDictionary dictionary]; });
+    return states;
+}
+
+// 键 = VC 指针 + 当前页索引；同一 VC 管整条 pager 时按页隔离。
+static NSString *DYYYPageIsolationKey(UIViewController *controller, UITableView *table) {
+    long pageIndex = -1;
+    if ([controller respondsToSelector:@selector(currentVisibleCellIndex)]) {
+        pageIndex = (long)[(id)controller currentVisibleCellIndex];
+    }
+    return [NSString stringWithFormat:@"%p#%ld", controller, pageIndex];
+}
+
+static DYYYPageIsolationState *DYYYPageIsolationStateFor(UIViewController *controller, UITableView *table) {
+    NSString *key = DYYYPageIsolationKey(controller, table);
+    DYYYPageIsolationState *state = DYYYPageIsolationStates()[key];
+    if (!state) {
+        state = [DYYYPageIsolationState new];
+        state.originalHeight = -1;
+        DYYYPageIsolationStates()[key] = state;
+    }
+    return state;
+}
+
+// 页包过多时整体清理（避免无限增长；只影响已离屏页的历史状态）
+static void DYYYPageIsolationPrune(void) {
+    if (DYYYPageIsolationStates().count > 40) [DYYYPageIsolationStates() removeAllObjects];
+}
+
 + (void)prepareDetailTableNew:(UIViewController *)controller {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !controller) return;
     if (![controller respondsToSelector:@selector(tableView)]) return;
@@ -145,6 +194,35 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     CGFloat current = CGRectGetHeight(table.frame);
     if (target <= 0 || !isfinite(target) || current <= 0) return;
 
+    // ----- 实验档：分页状态隔离 -----
+    if (DYYYGetBool(@"DYYYPageIsolation")) {
+        DYYYPageIsolationPrune();
+        DYYYPageIsolationState *pageState = DYYYPageIsolationStateFor(controller, table);
+        if (pageState.originalHeight <= 0) {
+            if (current < target - kDYYYDetailHeightTol && current >= target * 0.5) {
+                pageState.originalHeight = current;
+                if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+                    NSLog(@"[DYYY][page] 记录原高=%.1f 目标=%.1f 键=%@", current, target, DYYYPageIsolationKey(controller, table));
+                }
+            }
+            return; // 本页首次：只记录，不撑高
+        }
+        if (current >= target - kDYYYDetailHeightTol || current < target * 0.5) {
+            pageState.stretched = YES;
+            return;
+        }
+        CGRect pageAdjusted = table.frame;
+        pageAdjusted.size.height = target;
+        pageState.stretched = YES;
+        if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+            NSLog(@"[DYYY][page] 撑高 %.1f → %.1f 键=%@", current, target, DYYYPageIsolationKey(controller, table));
+        }
+        table.frame = pageAdjusted;
+        [self alignExistingCellsIfNeeded:table target:target];
+        return;
+    }
+
+    // ----- 原 #59 行为（table 级状态，全局共用）------
     NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
     if (!original) {
         if (current < target - kDYYYDetailHeightTol && current >= target * 0.5) {
@@ -186,8 +264,28 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
 
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !table) return nativeHeight;
-    NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
     CGFloat target = CGRectGetHeight(table.bounds);
+
+    // ----- 实验档：行高原高取自本页页包（与 prepare 同一份来源）-----
+    if (DYYYGetBool(@"DYYYPageIsolation")) {
+        UIViewController *pageOwner = [self controllerForTable:table];
+        if (!pageOwner) return nativeHeight;
+        DYYYPageIsolationState *pageState = DYYYPageIsolationStateFor(pageOwner, table);
+        if (pageState.originalHeight <= 0 || !isfinite(nativeHeight) || !isfinite(target)
+            || nativeHeight <= 0 || target <= 0) {
+            return nativeHeight;
+        }
+        // 本页还没被撑高：透传，不让行高先于撑高回答
+        if (!pageState.stretched || target <= pageState.originalHeight + kDYYYDetailHeightTol) return nativeHeight;
+        if (fabs(nativeHeight - pageState.originalHeight) > kDYYYDetailHeightTol &&
+            fabs(nativeHeight - target) > kDYYYDetailHeightTol) {
+            return nativeHeight;
+        }
+        return target;
+    }
+
+    // ----- 原 #59 行为 -----
+    NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
     if (!original || !isfinite(nativeHeight) || !isfinite(target) || nativeHeight <= 0 || target <= 0) {
         return nativeHeight;
     }
@@ -199,6 +297,15 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
         return nativeHeight;
     }
     return target;
+}
+
+// 由 table 沿响应链反查所属详情页 VC（分页状态的分键归属者）
++ (UIViewController *)controllerForTable:(UITableView *)table {
+    UIResponder *responder = table;
+    for (int depth = 0; responder && depth < 40; depth++, responder = responder.nextResponder) {
+        if ([responder isKindOfClass:[UIViewController class]]) return (UIViewController *)responder;
+    }
+    return nil;
 }
 
 + (void)reconcileDetailPaging:(UIViewController *)controller {
