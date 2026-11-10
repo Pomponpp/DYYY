@@ -37,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook DYYY_T_AWENORMAL_MODE_TAB_BAR_GENERAL_PLUS_BUTTON
+%hook AWENormalModeTabBarGeneralPlusButton
 - (void)setImage:(UIImage *)image forState:(UIControlState)state {
 
     UIImage *imageToApply = image;
@@ -52,7 +52,7 @@
 }
 %end
 
-%hook DYYY_T_AWENORMAL_MODE_TAB_BAR_PLUS_BUTTON
+%hook AWENormalModeTabBarPlusButton
 
 - (void)setHidden:(BOOL)hidden {
     BOOL hidePlus = DYYYGetBool(@"DYYYHidePlusButton");
@@ -83,7 +83,7 @@
 
 %end
 
-%hook DYYY_T_AWETAB_BAR_ELEMENT_CONTAINER_VIEW
+%hook AWETabBarElementContainerView
 
 - (void)setHidden:(BOOL)hidden {
     if (DYYYGetBool(@"DYYYHidePadTabBarElements")) {
@@ -96,7 +96,7 @@
 
 %end
 
-%hook DYYY_T_AWENORMAL_MODE_TAB_BAR_BADGE_CONTAINER_VIEW
+%hook AWENormalModeTabBarBadgeContainerView
 
 - (void)layoutSubviews {
     %orig;
@@ -124,7 +124,7 @@
 
 %end
 
-%hook DYYY_T_AWENORMAL_MODE_TAB_BAR_GENERAL_BUTTON
+%hook AWENormalModeTabBarGeneralButton
 
 - (BOOL)enableRefresh {
     if ([self.accessibilityLabel isEqualToString:@"首页"]) {
@@ -137,7 +137,7 @@
 
 %end
 
-%hook DYYY_T_AWENORMAL_MODE_TAB_BAR_TEXT_VIEW
+%hook AWENormalModeTabBarTextView
 
 - (void)layoutSubviews {
     @try {
@@ -231,7 +231,7 @@
 }
 %end
 
-%hook DYYY_T_AWENORMAL_MODE_TAB_BAR_FEED_VIEW
+%hook AWENormalModeTabBarFeedView
 
 - (void)layoutSubviews {
     @try {
@@ -330,7 +330,7 @@
 }
 %end
 
-%hook DYYY_T_AWENORMAL_MODE_TAB_BAR_CONTROLLER
+%hook AWENormalModeTabBarController
 - (void)setSelectedIndex:(NSUInteger)index {
     %orig;
     [DYYYFloatingButtonCoordinator refresh];

@@ -37,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook DYYY_T_AWELEFT_SIDE_BAR_ADD_CHILD_TRANSITION_OBJECT
+%hook AWELeftSideBarAddChildTransitionObject
 
 - (void)handleShowSliderPanGesture:(id)gr {
     if (DYYYGetBool(@"DYYYDisableSidebarGesture")) {
@@ -48,7 +48,7 @@
 
 %end
 
-%hook DYYY_T_AWELEFT_SIDE_BAR_ENTRANCE_VIEW
+%hook AWELeftSideBarEntranceView
 
 - (void)setRedDot:(id)redDot {
     %orig(nil);

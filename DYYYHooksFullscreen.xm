@@ -37,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_ELEMENT
+%hook AWEPlayInteractionUserAvatarElement
 - (void)onFollowViewClicked:(UITapGestureRecognizer *)gesture {
     if (DYYYGetBool(@"DYYYFollowTips")) {
         // 获取用户信息
@@ -97,7 +97,7 @@
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_FOLLOW_CONTROLLER
+%hook AWEPlayInteractionUserAvatarFollowController
 - (void)onFollowViewClicked:(UITapGestureRecognizer *)gesture {
     if (DYYYGetBool(@"DYYYFollowTips")) {
         // 获取用户信息
@@ -157,7 +157,7 @@
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_PROGRESS_CONTAINER_VIEW
+%hook AWEPlayInteractionProgressContainerView
 - (void)layoutSubviews {
     %orig;
     DYYYApplyFloatClearProgressStateToView(self);
@@ -186,7 +186,7 @@
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_PROGRESS_CONTROLLER
+%hook AWEPlayInteractionProgressController
 
 %new
 - (void)dyyy_syncScheduleLabelsWithCurrentTime:(CGFloat)currentTime totalDuration:(CGFloat)totalDuration {
@@ -212,7 +212,7 @@
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_DESCRIPTION_SCROLL_VIEW
+%hook AWEPlayInteractionDescriptionScrollView
 
 - (void)layoutSubviews {
     %orig;
@@ -240,7 +240,7 @@
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_DESCRIPTION_LABEL
+%hook AWEPlayInteractionDescriptionLabel
 
 static char kLongPressGestureKey;
 static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEnabled";
@@ -339,7 +339,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_STRONGIFY_SHARE_CONTENT_VIEW
+%hook AWEPlayInteractionStrongifyShareContentView
 
 - (void)layoutSubviews {
     %orig;
@@ -355,7 +355,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_LISTEN_FEED_VIEW
+%hook AWEPlayInteractionListenFeedView
 - (void)layoutSubviews {
     %orig;
 
@@ -366,7 +366,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 }
 %end
 
-%hook DYYY_T_AWEFEED_DATA_SAFE_TABLE_VIEW
+%hook AWEFeedDataSafeTableView
 
 - (void)setFrame:(CGRect)frame {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
@@ -386,7 +386,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_SEARCH_ANCHOR_VIEW
+%hook AWEPlayInteractionSearchAnchorView
 
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideInteractionSearch")) {
@@ -398,7 +398,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_TEMPLATE_BUTTON
+%hook AWEPlayInteractionTemplateButton
 - (id)button {
 	BOOL DYYYHideBottomInteraction = DYYYGetBool(@"DYYYHideBottomInteraction");
 	if (DYYYHideBottomInteraction) {
@@ -416,7 +416,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_LIVE_EXTEND_GUIDE_VIEW
+%hook AWEPlayInteractionLiveExtendGuideView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveCapsuleView")) {
         [self removeFromSuperview];
@@ -426,7 +426,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 }
 %end
 
-%hook DYYY_T_AWEFEED_TABLE_VIEW_CONTROLLER
+%hook AWEFeedTableViewController
 
 - (void)viewDidLayoutSubviews {
     [DYYYFullscreenCoordinator syncFeedTableHeight:self];
@@ -436,7 +436,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %end
 
-%hook DYYY_T_AWEFEED_TABLE_VIEW_CELL
+%hook AWEFeedTableViewCell
 - (void)prepareForReuse {
     if (hideButton && hideButton.isElementsHidden) {
         [hideButton hideUIElements];
@@ -452,7 +452,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 }
 %end
 
-%hook DYYY_T_AWEDPLAYER_PROGRESS_CONTAINER_VIEW
+%hook AWEDPlayerProgressContainerView
 
 - (void)layoutSubviews {
     %orig;
@@ -479,7 +479,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_COMMENT_PANEL_CONTROLLER
+%hook AWEPlayInteractionCommentPanelController
 - (void)performCommentAction {
     [DYYYFullscreenCoordinator beginCommentInWindow:[DYYYUtils getActiveWindow]];
     %orig;

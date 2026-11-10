@@ -824,7 +824,7 @@ static BOOL DYYYShouldBlockFeedNowPlayingSystemInfoWrite(void) {
     return DYYYGetBool(@"DYYYDisableFeedNowPlayingInfo") && !dyyyClearingFeedNowPlayingSystemInfo;
 }
 
-%hook DYYY_T_AWEAWEME_BACKGROUND_PLAY_MODULE
+%hook AWEAwemeBackgroundPlayModule
 
 - (id)nowPlayingInfo {
     if (DYYYGetBool(@"DYYYDisableFeedNowPlayingInfo")) {
@@ -855,7 +855,7 @@ static BOOL DYYYShouldBlockFeedNowPlayingSystemInfoWrite(void) {
 
 %end
 
-%hook DYYY_T_AWEFEED_BACKGROUND_PLAY_MANAGER
+%hook AWEFeedBackgroundPlayManager
 
 - (id)nowPlayingInfo {
     if (DYYYGetBool(@"DYYYDisableFeedNowPlayingInfo")) {
@@ -914,7 +914,7 @@ static BOOL DYYYShouldBlockFeedNowPlayingSystemInfoWrite(void) {
 %end
 
 // 采用 HideNowPlayingInfo 的强屏蔽思路：播放中心写入时直接清空系统 Now Playing，不再走原实现。
-%hook DYYY_T_AWENOW_PLAYING_INFO_CENTER
+%hook AWENowPlayingInfoCenter
 
 - (void)becomePlayingPlayer:(id)player {
     if (DYYYGetBool(@"DYYYDisableFeedNowPlayingInfo")) {
@@ -946,7 +946,7 @@ static BOOL DYYYShouldBlockFeedNowPlayingSystemInfoWrite(void) {
 %end
 
 // 耳机或系统媒体会话可能绕过抖音播放中心，最终都要写入 MPNowPlayingInfoCenter。
-%hook DYYY_T_MPNOW_PLAYING_INFO_CENTER
+%hook MPNowPlayingInfoCenter
 
 - (void)setNowPlayingInfo:(NSDictionary *)nowPlayingInfo {
     if (DYYYShouldBlockFeedNowPlayingSystemInfoWrite()) {
@@ -974,7 +974,7 @@ static NSArray *DYYYFilteredSDRRawBitrateData(NSArray *rawData);
 static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
 
 // 默认视频流最高画质
-%hook DYYY_T_AWEVIDEO_MODEL
+%hook AWEVideoModel
 
 - (AWEURLModel *)playURL {
     if (!DYYYGetBool(@"DYYYEnableVideoHighestQuality")) {
@@ -1685,7 +1685,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 // 保留 HDR 解码及原生 HDR -> SDR 转换，只关闭亮度增强、SDR -> HDR 和最终 EDR 输出。
 
-%hook DYYY_T_AVPLAYER
+%hook AVPlayer
 
 + (AVPlayerHDRMode)availableHDRModes {
     if (DYYYShouldDisableAllHDR()) {
@@ -1730,7 +1730,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AVPLAYER_ITEM
+%hook AVPlayerItem
 
 + (instancetype)playerItemWithURL:(NSURL *)URL {
     AVPlayerItem *item = %orig;
@@ -1781,7 +1781,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AVPLAYER_LAYER
+%hook AVPlayerLayer
 
 - (void)setPlayer:(AVPlayer *)player {
     DYYYDisableAVPlayerItemHDRMetadata(player.currentItem);
@@ -1797,7 +1797,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEKNOWLEDGE_ABTEST_SETTINGS
+%hook AWEKnowledgeABTestSettings
 
 + (BOOL)enableHDRAutomaticIdentification {
     if (DYYYShouldDisableAllHDR()) {
@@ -1808,7 +1808,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEFEED_ABSETTINGS
+%hook AWEFeedABSettings
 
 + (BOOL)enableHDRBrightnessOpt {
     if (DYYYShouldDisableAllHDR()) {
@@ -1847,7 +1847,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEFEED_ABTEST_SERVICE_OBJC
+%hook AWEFeedABTestServiceObjc
 
 + (BOOL)enableProfilePreloadHDRBrightnessFilter {
     if (DYYYShouldDisableAllHDR()) {
@@ -1858,7 +1858,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_BDSIM_PLAYER_BIZ_CONFIG
+%hook BDSimPlayerBizConfig
 
 - (BOOL)enableHDRBrightnessOpt {
     if (DYYYShouldDisableAllHDR()) {
@@ -1883,7 +1883,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEBDSIM_PLAYER_BIZ_CONFIG
+%hook AWEBDSimPlayerBizConfig
 
 - (BOOL)enableHDRBrightnessOpt {
     if (DYYYShouldDisableAllHDR()) {
@@ -1908,7 +1908,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEVIDEO_PLAYER_CONFIGURATION
+%hook AWEVideoPlayerConfiguration
 
 + (void)setHDRBrightnessStrategy:(id)strategy {
     if (!DYYYShouldDisableAllHDR()) {
@@ -1925,7 +1925,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEDPLAYER_VIDEO_DISPLAY_OPT_STATE
+%hook AWEDPlayerVideoDisplayOptState
 
 - (BOOL)enableHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -1940,7 +1940,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEPLAY_VIDEO_PLAYER_CONTEXT
+%hook AWEPlayVideoPlayerContext
 
 - (BOOL)enableHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -1955,7 +1955,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEDPLAYER_VIDEO_MODEL
+%hook AWEDPlayerVideoModel
 
 - (BOOL)awe_isHDRVideo {
     if (DYYYShouldDisableAllHDR()) {
@@ -1970,7 +1970,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEPLAY_VIDEO_VIEW_CONTROLLER
+%hook AWEPlayVideoViewController
 
 - (BOOL)enableHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -1996,7 +1996,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEDPLAYER_BRIGHTNESS_CONTAINER
+%hook AWEDPlayerBrightnessContainer
 
 - (BOOL)awe_isCurrentVideoHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -2007,7 +2007,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEVIDEO_PLAYER_SCREEN_BRIGHTNESS_MANAGER
+%hook AWEVideoPlayerScreenBrightnessManager
 
 - (BOOL)isHDRVideo {
     if (DYYYShouldDisableAllHDR()) {
@@ -2023,7 +2023,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_ALMOWN_PLAYER_WRAPPER
+%hook ALMOwnPlayerWrapper
 
 - (void)setLutFilter:(id)lutFilter HDRLutImage:(id)HDRLutImage {
     %orig(lutFilter, DYYYShouldDisableAllHDR() ? nil : HDRLutImage);
@@ -2031,7 +2031,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_ALMSYS_PLAYER_WRAPPER
+%hook ALMSysPlayerWrapper
 
 - (void)setLutFilter:(id)lutFilter HDRLutImage:(id)HDRLutImage {
     %orig(lutFilter, DYYYShouldDisableAllHDR() ? nil : HDRLutImage);
@@ -2039,7 +2039,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_ALMVIDEO_PLAYER_CONFIG
+%hook ALMVideoPlayerConfig
 
 + (void)setPlayerEffectHDRLutImageEnable:(BOOL)enable {
     %orig(DYYYShouldDisableAllHDR() ? NO : enable);
@@ -2047,7 +2047,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_IESVIDEO_PLAYER_CONFIG
+%hook IESVideoPlayerConfig
 
 + (void)setPlayerEffectHDRLutImageEnable:(BOOL)enable {
     %orig(DYYYShouldDisableAllHDR() ? NO : enable);
@@ -2055,7 +2055,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEIMMODULE_SERVICE
+%hook AWEIMModuleService
 
 - (BOOL)im_forceHDRToSDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -2066,7 +2066,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_IESIMVIDEO_PLAYER_WRAPPER
+%hook IESIMVideoPlayerWrapper
 
 - (void)setupHDREnable:(BOOL)enable {
     %orig(DYYYShouldDisableAllHDR() ? NO : enable);
@@ -2074,7 +2074,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWEIMVIDEO_BROWSER_COLLECTION_VIEW_CELL
+%hook AWEIMVideoBrowserCollectionViewCell
 
 - (void)setEnablePlayHDR:(BOOL)enable {
     %orig(DYYYShouldDisableAllHDR() ? NO : enable);
@@ -2085,7 +2085,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 // 40.9 移除：AWEECOMIMAppSettingsService.enableVideoPreviewSupportHDR 方法已删除，
 // 空 hook 只会产生安装警告日志；商城私信预览的 HDR 由 AVPlayerItem/CALayer 等其余 hook 覆盖。
 
-%hook DYYY_T_IESLIVE_AUDIENCE_HDRCONTROLLER
+%hook IESLiveAudienceHDRController
 
 + (BOOL)currentHDRStatusForRoomID:(id)roomID {
     if (DYYYShouldDisableAllHDR()) {
@@ -2142,7 +2142,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_IESLIVE_PLAYER_CONTROLLER
+%hook IESLivePlayerController
 
 - (BOOL)isVideoSDR2HDRSupport {
     if (DYYYShouldDisableAllHDR()) {
@@ -2164,7 +2164,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_AWELIVE_PRE_STREAM_PLAYER
+%hook AWELivePreStreamPlayer
 
 - (void)changeSDR2HDRWithStrategy {
     if (!DYYYShouldDisableAllHDR()) {
@@ -2174,7 +2174,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_HTSLIVE_STREAM_PLAYER
+%hook HTSLiveStreamPlayer
 
 - (void)setEnableVideoSDR2HDR:(BOOL)enable callTrace:(id)callTrace {
     %orig(DYYYShouldDisableAllHDR() ? NO : enable, callTrace);
@@ -2188,7 +2188,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_IESLIVE_STREAM_PLAYER_VIDEO_AUDIO_EFFECT_PLUGIN
+%hook IESLiveStreamPlayerVideoAudioEffectPlugin
 
 - (void)setEnableVideoSDR2HDR:(BOOL)enable callTrace:(id)callTrace {
     %orig(DYYYShouldDisableAllHDR() ? NO : enable, callTrace);
@@ -2202,7 +2202,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_TVLMANAGER
+%hook TVLManager
 
 - (BOOL)shouldForbidHDR10Render {
     if (DYYYShouldDisableAllHDR()) {
@@ -2223,7 +2223,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_TVLPLAYER_ITEM_PREFERENCES
+%hook TVLPlayerItemPreferences
 
 - (BOOL)forbidSDR2HDRInPreview {
     if (DYYYShouldDisableAllHDR()) {
@@ -2249,7 +2249,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_TVLSETTINGS_MANAGER
+%hook TVLSettingsManager
 
 - (BOOL)enableMetalRenderHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -2260,7 +2260,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_BDIMAGE_DECODER_FACTORY
+%hook BDImageDecoderFactory
 
 + (BOOL)isHDRImageData:(id)data withHeifDecoderClass:(Class)decoderClass {
     if (DYYYShouldDisableAllHDR()) {
@@ -2271,7 +2271,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_BDIMAGE_DECODER_IMAGE_IO
+%hook BDImageDecoderImageIO
 
 - (BOOL)isHDRCGImage:(CGImageRef)image decodedToHDR:(BOOL)decodedToHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -2292,7 +2292,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_BDIMAGE_DECODER_HEIC
+%hook BDImageDecoderHeic
 
 + (BOOL)isHDRData:(id)data {
     if (DYYYShouldDisableAllHDR()) {
@@ -2314,7 +2314,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_BDIMAGE_DECODER_BVC2
+%hook BDImageDecoderBVC2
 
 - (BOOL)isHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -2329,7 +2329,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_BDIMAGE_DECODER_WEB_P
+%hook BDImageDecoderWebP
 
 - (BOOL)isHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -2344,7 +2344,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_BDIMAGE
+%hook BDImage
 
 - (BOOL)isHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -2359,7 +2359,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_HDRMTUIIMAGE_VIEW
+%hook HDRMTUIImageView
 
 - (instancetype)initWithFrame:(CGRect)frame hdrEnabled:(BOOL)hdrEnabled {
     return %orig(frame, DYYYShouldDisableAllHDR() ? NO : hdrEnabled);
@@ -2387,7 +2387,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_HDRMTIMAGE_VIEW
+%hook HDRMTImageView
 
 - (void)setMetalLayer:(CAMetalLayer *)metalLayer {
     %orig;
@@ -2406,7 +2406,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_HDRMTBUTTON
+%hook HDRMTButton
 
 - (void)configHDRContent {
     %orig;
@@ -2415,7 +2415,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_CAMETAL_LAYER
+%hook CAMetalLayer
 
 - (void)setWantsExtendedDynamicRangeContent:(BOOL)wantsExtendedDynamicRangeContent {
     %orig(DYYYShouldDisableAllHDR() ? NO : wantsExtendedDynamicRangeContent);
@@ -2441,7 +2441,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_CALAYER
+%hook CALayer
 
 - (void)setHidden:(BOOL)hidden {
     %orig(DYYYShouldForceHideAvatarActionLayer(self) ? YES : hidden);
@@ -2531,7 +2531,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-%hook DYYY_T_CASHAPE_LAYER
+%hook CAShapeLayer
 
 - (void)setFillColor:(CGColorRef)fillColor {
     %orig(DYYYShouldClearAvatarActionLayer(self) ? UIColor.clearColor.CGColor : fillColor);
@@ -2554,7 +2554,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 // 禁用自动进入直播间
 
 
-%hook DYYY_T_AWELANDSCAPE_FEED_VIEW_CONTROLLER
+%hook AWELandscapeFeedViewController
 - (void)viewDidLoad {
     %orig;
 
@@ -2568,7 +2568,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 }
 %end
 
-%hook DYYY_T_UICOLLECTION_VIEW
+%hook UICollectionView
 
 // 拦截手指拖动
 - (void)handlePan:(UIPanGestureRecognizer *)pan {
@@ -2679,7 +2679,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 
 
-%hook DYYY_T_AWEFEED_VIDEO_BUTTON
+%hook AWEFeedVideoButton
 - (id)touchUpInsideBlock {
     id r = %orig;
 
@@ -2710,7 +2710,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 
 
-%hook DYYY_T_AWEPLAY_INTERACTION_TIMESTAMP_ELEMENT
+%hook AWEPlayInteractionTimestampElement
 
 - (id)timestampLabel {
     UILabel *label = %orig;
@@ -2903,7 +2903,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 // 对新版文案的偏移（33.0以上）
 
 
-%hook DYYY_T_AWEFEED_VIDEO_BUTTON
+%hook AWEFeedVideoButton
 
 - (void)setImage:(id)arg1 {
     UIImage *imageToApply = arg1;
@@ -2955,7 +2955,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 // 调整直播默认清晰度功能
 static NSArray<NSString *> *dyyy_qualityRank = nil;
 
-%hook DYYY_T_HTSLIVE_STREAM_QUALITY_FRAGMENT
+%hook HTSLiveStreamQualityFragment
 
 - (void)setupStreamQuality:(id)arg1 {
     %orig;
@@ -3069,7 +3069,7 @@ static NSArray<NSString *> *dyyy_qualityRank = nil;
 // 禁用个人资料自动进入橱窗
 
 
-%hook DYYY_T_AWEPLAY_INTERACTION_SPEED_CONTROLLER
+%hook AWEPlayInteractionSpeedController
 
 static CGFloat currentLongPressSpeed = 0;
 static CGFloat initialTouchX = 0;
@@ -3165,7 +3165,7 @@ static BOOL isGestureActive = NO;
 %end
 
 %group DYYYLongPressPointCallbacks
-%hook DYYY_T_AWEPLAY_INTERACTION_SPEED_CONTROLLER
+%hook AWEPlayInteractionSpeedController
 - (void)handleLongPressLockedSpeedBegan {
     dyyyLongPressFastSpeedActive = YES;
     dyyyLongPressLockedSpeedActive = NO;
@@ -3188,7 +3188,7 @@ static BOOL isGestureActive = NO;
 %end
 
 %group DYYYLongPressControlCallback
-%hook DYYY_T_AWEPLAY_INTERACTION_SPEED_CONTROLLER
+%hook AWEPlayInteractionSpeedController
 - (void)longPressSpeedControlDidChangeSpeed:(id)speedControl {
     %orig(speedControl);
     // 回调参数是控件对象，是否退出锁速应读取原生状态。
@@ -3199,7 +3199,7 @@ static BOOL isGestureActive = NO;
 %end
 %end
 
-%hook DYYY_T_UILABEL
+%hook UILabel
 
 - (void)setText:(NSString *)text {
     UIView *superview = self.superview;
@@ -3234,7 +3234,7 @@ static BOOL isGestureActive = NO;
 static __weak YYAnimatedImageView *targetStickerView = nil;
 static BOOL dyyyShouldUseLastStickerURL = NO;
 
-%hook DYYY_T_TT_CV28_AWECOMMENT_PANEL_LIST_SWIFT_IMPL6_NEWAPI27_COMMENT_CELL_STICKER_COMPONENT
+%hook _TtCV28AWECommentPanelListSwiftImpl6NEWAPI27CommentCellStickerComponent
 
 - (void)handleLongPressWithGes:(UILongPressGestureRecognizer *)gesture {
     if (gesture.state == UIGestureRecognizerStateBegan) {
@@ -3251,7 +3251,7 @@ static BOOL dyyyShouldUseLastStickerURL = NO;
 
 %end
 
-%hook DYYY_T_AWECOMMENT_LONG_PRESS_PANEL_SWIFT_IMPL37_COMMENT_LONG_PRESS_PANEL_SAVE_IMAGE_ELEMENT
+%hook _TtC33AWECommentLongPressPanelSwiftImpl37CommentLongPressPanelSaveImageElement
 
 - (BOOL)elementShouldShow {
     BOOL shouldShow = %orig;
@@ -3392,7 +3392,7 @@ static BOOL dyyyShouldUseLastStickerURL = NO;
 
 %end
 
-%hook DYYY_T_UIMENU
+%hook UIMenu
 
 + (instancetype)menuWithTitle:(NSString *)title image:(UIImage *)image identifier:(UIMenuIdentifier)identifier options:(UIMenuOptions)options children:(NSArray<UIMenuElement *> *)children {
     BOOL hasAddStickerOption = NO;
@@ -4065,7 +4065,7 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 }
 
 // 隐藏头像加号和透明
-%hook DYYY_T_LOTANIMATION_VIEW
+%hook LOTAnimationView
 - (void)layoutSubviews {
     %orig;
     // 旧版加号动画可能被额外容器包裹，沿父视图向上识别关注提示视图。
@@ -4090,7 +4090,7 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_STATIC_FOLLOW_ANIMATION_VIEW
+%hook AWEPlayInteractionStaticFollowAnimationView
 - (void)layoutSubviews {
     %orig;
     if (DYYYAvatarFollowOptionsEnabled()) {
@@ -4141,7 +4141,7 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 
 
 
-%hook DYYY_T_AWEFEED_VIDEO_BUTTON
+%hook AWEFeedVideoButton
 
 - (void)layoutSubviews {
     %orig;
@@ -4200,7 +4200,7 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 
 
 
-%hook DYYY_T_AWEPLAY_INTERACTION_FOLLOW_PROMPT_VIEW
+%hook AWEPlayInteractionFollowPromptView
 
 - (void)layoutSubviews {
     %orig;
@@ -4779,7 +4779,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     }
 }
 
-%hook DYYY_T_AWELIVE_AUDIENCE_CONTAINER_CONTROLLER
+%hook AWELiveAudienceContainerController
 
 - (id)initWithRoomModel:(id)roomModel {
     id result = %orig;
@@ -4885,7 +4885,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %end
 
-%hook DYYY_T_AWELIVE_AUDIENCE_VIEW_CONTROLLER
+%hook AWELiveAudienceViewController
 
 - (id)initWithRoomModel:(id)roomModel {
     id result = %orig;
@@ -4929,7 +4929,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %end
 
-%hook DYYY_T_IESLIVE_INNER_FEED_LIVE_ROOM_CELL
+%hook IESLiveInnerFeedLiveRoomCell
 
 - (void)setItemModel:(id)itemModel {
     %orig;
@@ -4962,7 +4962,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %end
 
 // 直播状态栏
-%hook DYYY_T_IESLIVE_AUDIENCE_VIEW_CONTROLLER
+%hook IESLiveAudienceViewController
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {
         return YES;
@@ -5017,7 +5017,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %end
 
 // 主页状态栏
-%hook DYYY_T_AWEAWEME_DETAIL_TABLE_VIEW_CONTROLLER
+%hook AWEAwemeDetailTableViewController
 - (void)viewDidLayoutSubviews {
     // 对齐已验证实现：只在布局【前后】各同步一次表高。
     // 不碰 inset、不做 beginUpdates/endUpdates、不分页状态——
@@ -5050,7 +5050,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 热点状态栏
 // 重构全屏·招③行高查询：行高只"回答"表视口高，不改写 cell（只答不改）。
 // 生效条件：实验档 
-%hook DYYY_T_AWEAWEME_DETAIL_TABLE_VIEW_CONTROLLER
+%hook AWEAwemeDetailTableViewController
 
 - (double)fixedCellHeight {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
@@ -5120,7 +5120,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 只挂基类即可覆盖；再挂子类会造成同一高度两处写（已证明会互相打架）。
 
 // 首页表（独立类，不继承上面的基类）走同一规则。
-%hook DYYY_T_AWEFEED_TABLE_VIEW
+%hook AWEFeedTableView
 
 - (void)setFrame:(CGRect)frame {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
@@ -5148,7 +5148,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 // 纯净模式状态栏
 
-%hook DYYY_T_AFDPURE_MODE_PAGE_CONTAINER_VIEW_CONTROLLER
+%hook AFDPureModePageContainerViewController
 - (CGRect)getPureModeContainerFrame {
     CGRect frame = %orig;
     return [DYYYFullscreenCoordinator frameForPureModeContainer:self proposed:frame];
@@ -5192,7 +5192,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 隐藏直播点歌
 
 // 隐藏昵称右侧
-%hook DYYY_T_UILABEL
+%hook UILabel
 
 - (void)setBackgroundColor:(UIColor *)color {
     %orig([DYYYCommentBlurCoordinator backgroundColorForTextView:self proposed:color]);
@@ -5373,7 +5373,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
     }];
 }
 
-%hook DYYY_T_AWEPROFILE_AVATAR_VIEW_CONTROLLER
+%hook AWEProfileAvatarViewController
 
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
@@ -5465,7 +5465,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 
 
 
-%hook DYYY_T_AWEHOT_LIST_DATA_CONTROLLER
+%hook AWEHotListDataController
 
 %new
 - (NSNumber *)dyyy_numberValueForLowLikesFilter:(id)rawValue {
@@ -5681,7 +5681,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 
 %end
 
-%hook DYYY_T_AWEAWEME_MODEL
+%hook AWEAwemeModel
 
 - (id)initWithDictionary:(id)arg1 error:(id *)arg2 {
     id orig = %orig;
@@ -6252,7 +6252,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 
 //以下部分为新增
 // 屏蔽头像直播
-%hook DYYY_T_AWEUSER_MODEL
+%hook AWEUserModel
 
 - (NSNumber *)roomID {
 	BOOL DYYYHideAvatarLive = DYYYGetBool(@"DYYYHideAvatarLive") || DYYYGetBool(@"DYYYHideAvatarButton");
@@ -6266,7 +6266,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 
 
 // 屏蔽头像光圈
-%hook DYYY_T_AWEUSER_MODEL
+%hook AWEUserModel
 
 - (id)storyRing {
 	BOOL DYYYHideAvatarButton = DYYYGetBool(@"DYYYHideAvatarButton");
@@ -6329,7 +6329,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 
 
 
-%hook DYYY_T_MTKVIEW
+%hook MTKView
 
 - (void)layoutSubviews {
     %orig;
@@ -6349,7 +6349,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_VIEW
+%hook AWEPlayInteractionUserAvatarView
 - (void)layoutSubviews {
     %orig;
 
@@ -6397,7 +6397,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_FOLLOW_PROMPT_CONTROLLER
+%hook AWEPlayInteractionUserAvatarFollowPromptController
 - (void)onFollowViewClicked:(UITapGestureRecognizer *)gesture {
     if (DYYYGetBool(@"DYYYHideFollowPromptView")) {
         return;
@@ -6532,7 +6532,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_MAIN_BUSINESS_CONTROLLER
+%hook AWEPlayInteractionUserAvatarMainBusinessController
 - (void)layoutElementView {
     %orig;
     if (DYYYGetBool(@"DYYYHideAvatarButton")) {
@@ -6545,7 +6545,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_OPT_ELEMENT_ELEMENT
+%hook AWEPlayInteractionUserAvatarOptElementElement
 - (void)layoutElementView {
     %orig;
     if (DYYYGetBool(@"DYYYHideAvatarButton")) {
@@ -6572,7 +6572,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_STORY_CONTROLLER
+%hook AWEPlayInteractionUserAvatarStoryController
 - (void)layoutElementView {
     %orig;
     DYYYApplyAvatarSurroundingSettingsForOwner(self);
@@ -6584,7 +6584,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_DECORATION_CONTROLLER
+%hook AWEPlayInteractionUserAvatarDecorationController
 - (void)layoutElementView {
     %orig;
     DYYYApplyAvatarSurroundingSettingsForOwner(self);
@@ -6604,7 +6604,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_SEND_MESSAGE_CONTROLLER
+%hook AWEPlayInteractionUserAvatarSendMessageController
 - (void)controllerViewDidLayout {
     %orig;
     DYYYApplyAvatarFollowPromptSettingsWithRetry(self);
@@ -6674,7 +6674,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_SEND_MSG_CONTROLLER
+%hook AWEPlayInteractionUserAvatarSendMsgController
 - (void)layoutElementView {
     %orig;
     DYYYApplyAvatarFollowPromptSettingsWithRetry(self);
@@ -6753,7 +6753,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_ENTER_STORE_CONTROLLER
+%hook AWEPlayInteractionUserAvatarEnterStoreController
 - (void)layoutElementView {
     %orig;
     DYYYApplyAvatarFollowPromptSettingsWithRetry(self);
@@ -6825,7 +6825,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_USER_AVATAR_AD_LINK_CONTROLLER
+%hook AWEPlayInteractionUserAvatarAdLinkController
 - (void)layoutElementView {
     %orig;
     DYYYApplyAvatarFollowPromptSettingsWithRetry(self);
@@ -6849,7 +6849,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_INTERACTION_VIEW_CONTROLLER
+%hook AWEPlayInteractionViewController
 
 - (void)performCommentAction {
     [DYYYFullscreenCoordinator beginCommentInWindow:self.viewIfLoaded.window];
@@ -7234,7 +7234,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
 
 // 底栏高度
 
-%hook DYYY_T_AWENORMAL_MODE_TAB_BAR
+%hook AWENormalModeTabBar
 
 static Class generalButtonClass = nil;
 static Class plusContainerButtonClass = nil;
@@ -7391,7 +7391,7 @@ static Class tabBarButtonClass = nil;
 
 
 
-%hook DYYY_T_AWECONCERN_CELL_LAST_VIEW
+%hook AWEConcernCellLastView
 - (void)layoutSubviews {
     %orig;
 
@@ -7405,7 +7405,7 @@ static Class tabBarButtonClass = nil;
 }
 %end
 
-%hook DYYY_T_AWECOMMENT_INPUT_BACKGROUND_VIEW
+%hook AWECommentInputBackgroundView
 - (void)layoutSubviews {
     %orig;
 
@@ -7587,7 +7587,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
     return CGRectNull;
 }
 
-%hook DYYY_T_UIVIEW
+%hook UIView
 
 - (void)setHidden:(BOOL)hidden {
     // 40.9 优化：两个头像功能开关都关闭时直接透传，省掉两次关联对象查询。
@@ -7799,7 +7799,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 
 
-%hook DYYY_T_AWEPLAY_INTERACTION_VIEW_CONTROLLER
+%hook AWEPlayInteractionViewController
 
 
 - (void)onVideoPlayerViewDoubleClicked:(id)arg1 {
@@ -7971,7 +7971,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 %end
 
-%hook DYYY_T_AWEAWEME_PLAY_VIDEO_VIEW_CONTROLLER
+%hook AWEAwemePlayVideoViewController
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
     %orig(arg0);
@@ -7995,7 +7995,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 %end
 
-%hook DYYY_T_AWEDPLAYER_FEED_PLAYER_VIEW_CONTROLLER
+%hook AWEDPlayerFeedPlayerViewController
 
 - (BOOL)enableHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -8031,7 +8031,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 %end
 
-%hook DYYY_T_AWEDPLAYER_VIEW_CONTROLLER_MERGE
+%hook AWEDPlayerViewController_Merge
 
 - (BOOL)enableHDR {
     if (DYYYShouldDisableAllHDR()) {
@@ -8073,7 +8073,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 // 累计到一页时就是画面错位/跳动。
 // 改到控制器 viewDidLayoutSubviews 前后各同步一次，表高变化早于 cell 排版。
 
-%hook DYYY_T_AWEFEED_TABLE_VIEW
+%hook AWEFeedTableView
 - (void)layoutSubviews {
     %orig;
 
@@ -8097,7 +8097,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 // 缓存中的 Feed 子控制器不一定重新出现，Tab 选中和内容替换必须主动刷新。
 
-%hook DYYY_T_AFDPURE_MODE_PAGE_CONTAINER_VIEW_CONTROLLER
+%hook AFDPureModePageContainerViewController
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
     [DYYYFloatingButtonCoordinator pureModeController:self visible:YES];
@@ -8111,7 +8111,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 }
 %end
 
-%hook DYYY_T_AWEFEED_CONTAINER_VIEW_CONTROLLER
+%hook AWEFeedContainerViewController
 - (void)aweme:(id)arg1 currentIndexWillChange:(NSInteger)arg2 {
     if (hideButton && hideButton.isElementsHidden) {
         [hideButton hideUIElements];
@@ -8164,7 +8164,7 @@ static void DYYYRemoveKeyboardObserver(void) {
     }
 }
 
-%hook DYYY_T_APP_DELEGATE
+%hook AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     BOOL result = %orig;
@@ -8236,7 +8236,7 @@ static Class GuideViewClass = nil;
 static Class MuteViewClass = nil;
 static Class TagViewClass = nil;
 
-%hook DYYY_T_AWEELEMENT_STACK_VIEW
+%hook AWEElementStackView
 
 - (void)setAlpha:(CGFloat)alpha {
     BOOL isApplyingGlobal = (dyyyGlobalTransparencyMutationDepth > 0 || dyyyIsPerformingFloatClearOperation);
@@ -8442,7 +8442,7 @@ static Class TagViewClass = nil;
 
 %end
 
-%hook DYYY_T_IESLIVE_STACK_VIEW
+%hook IESLiveStackView
 
 + (void)initialize {
     GuideViewClass = NSClassFromString(@"AWELivePrestreamGuideView");
@@ -8535,7 +8535,7 @@ static Class TagViewClass = nil;
 
 %end
 
-%hook DYYY_T_AWESTORY_CONTAINER_COLLECTION_VIEW
+%hook AWEStoryContainerCollectionView
 - (void)layoutSubviews {
     %orig;
     if ([self.subviews count] == 2)
@@ -8604,7 +8604,7 @@ static Class TagViewClass = nil;
 
 
 // 隐藏图片滑条
-%hook DYYY_T_AWESTORY_PROGRESS_CONTAINER_VIEW
+%hook AWEStoryProgressContainerView
 - (void)setCenter:(CGPoint)center {
     UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
     // 40.9: PureModePageCellViewController 点号名不可查，用 mangled 名回退
@@ -8634,7 +8634,7 @@ static Class TagViewClass = nil;
 // 隐藏图片滑条
 
 
-%hook DYYY_T_AWELANDSCAPE_FEED_ENTRY_VIEW
+%hook AWELandscapeFeedEntryView
 
 - (void)setAlpha:(CGFloat)alpha {
     BOOL isApplyingGlobal = (dyyyGlobalTransparencyMutationDepth > 0 || dyyyIsPerformingFloatClearOperation);
@@ -8703,7 +8703,7 @@ static Class TagViewClass = nil;
 // 隐藏上次看到
 
 
-%hook DYYY_T_UIIMAGE_VIEW
+%hook UIImageView
 - (void)setImage:(UIImage *)image {
     DYYYApplySDRDynamicRangeToImageView(self);
     %orig;
@@ -8753,7 +8753,7 @@ static Class TagViewClass = nil;
 static NSString *const kHideRecentAppsKey = @"DYYYHideSidebarRecentApps";
 static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 
-%hook DYYY_T_AWELEFT_SIDE_BAR_MODEL
+%hook AWELeftSideBarModel
 
 - (NSArray *)moduleModels {
     NSArray *originalModels = %orig;
@@ -8866,7 +8866,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 
 // View scaling fix when comment blur is enabled
 
-%hook DYYY_T_AWESTORY_CONTAINER_COLLECTION_VIEW
+%hook AWEStoryContainerCollectionView
 
 - (void)setFrame:(CGRect)frame {
     if (DYYYGetBool(@"DYYYEnableCommentBlur")) {
@@ -8923,7 +8923,7 @@ static void findTargetViewInView(UIView *view) {
 // ===== 以下 13 个 %group 由 DYYYHooksOther.xm 还回：它们的 %init 全在主文件 %ctor 里，
 //      Logos 的 %init 是编译期符号，group 与 %init 必须同文件。=====
 
-%hook DYYY_T_AWEDATE_TIME_FORMATTER
+%hook AWEDateTimeFormatter
 
 + (id)formattedDateForTimestamp:(double)timestamp {
     if (!DYYYGetBool(@"DYYYCommentExactTime")) return %orig(timestamp);
@@ -8932,7 +8932,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWERLVIRTUAL_LABEL
+%hook AWERLVirtualLabel
 
 - (void)setText:(NSString *)text {
     if (!DYYYGetBool(@"DYYYCommentExactTime") || !text || text.length == 0) {
@@ -8985,7 +8985,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group DYYYCommentExactTimeGroup
-%hook DYYY_T_AWECOMMENT_SWIFT_BIZ_UI_COMMENT_INTERACTION_BASE_LABEL
+%hook AWECommentSwiftBizUI_CommentInteractionBaseLabel
 
 - (void)setText:(NSString *)text {
     %orig(text); // 先让系统把文本赋上去
@@ -9056,7 +9056,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 %end
 
-%hook DYYY_T_AWEHPTOP_TAB_ITEM_TEXT_CONTENT_VIEW
+%hook AWEHPTopTabItemTextContentView
 
 - (void)layoutSubviews {
     %orig;
@@ -9087,7 +9087,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEDANMAKU_CONTENT_LABEL
+%hook AWEDanmakuContentLabel
 - (void)setTextColor:(UIColor *)textColor {
     if (DYYYGetBool(@"DYYYEnableDanmuColor")) {
         NSString *danmuColor = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDanmuColor"];
@@ -9118,7 +9118,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_DDANMAKU_PLAYER_VIEW
+%hook DDanmakuPlayerView
 
 - (void)setAlpha:(CGFloat)alpha {
     if (DYYYGetBool(@"DYYYCommentShowDanmaku") && alpha == 0.0) {
@@ -9130,7 +9130,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEMARK_VIEW
+%hook AWEMarkView
 
 - (void)layoutSubviews {
     %orig;
@@ -9145,7 +9145,7 @@ static void findTargetViewInView(UIView *view) {
 
 %group DYYYSettingsGesture
 
-%hook DYYY_T_UIWINDOW
+%hook UIWindow
 - (instancetype)initWithFrame:(CGRect)frame {
     UIWindow *window = %orig(frame);
     if (window) {
@@ -9239,7 +9239,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEDPROGRESS_CORE_CONTAINER
+%hook AWEDProgressCoreContainer
 
 %new
 - (void)dyyy_syncScheduleLabelsWithCurrentTime:(CGFloat)currentTime totalDuration:(CGFloat)totalDuration {
@@ -9270,7 +9270,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEUSER_NAME_LABEL
+%hook AWEUserNameLabel
 
 - (void)layoutSubviews {
     %orig;
@@ -9304,7 +9304,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEURLMODEL
+%hook AWEURLModel
 %new - (NSURL *)getDYYYSrcURLDownload {
     NSURL *bestURL;
     for (NSString *url in self.originURLList) {
@@ -9321,7 +9321,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEUSER_ACTION_SHEET_VIEW
+%hook AWEUserActionSheetView
 
 - (void)layoutSubviews {
     %orig;
@@ -9351,7 +9351,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWECOMMENT_LONG_PRESS_PANEL_SWIFT_IMPL32_COMMENT_LONG_PRESS_PANEL_COPY_ELEMENT
+%hook _TtC33AWECommentLongPressPanelSwiftImpl32CommentLongPressPanelCopyElement
 
 - (void)elementTapped {
     if (!DYYYGetBool(@"DYYYCommentCopyText")) {
@@ -9376,7 +9376,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_BDBYTE_CAST_UTILS
+%hook BDByteCastUtils
 
 + (BOOL)netVPNStatus {
     if (DYYYGetBool(@"DYYYDisableCastVPNCheck")) {
@@ -9387,7 +9387,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_BDBYTE_CAST_NET_UTILITIES
+%hook BDByteCastNetUtilities
 
 - (BOOL)getVPNStatus {
     if (DYYYGetBool(@"DYYYDisableCastVPNCheck")) {
@@ -9398,7 +9398,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_BDBYTE_CAST_MONITOR_MANAGER
+%hook BDByteCastMonitorManager
 
 - (BOOL)netVPNStatus {
     if (DYYYGetBool(@"DYYYDisableCastVPNCheck")) {
@@ -9417,7 +9417,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_BDBYTE_CAST_ENV_INFO
+%hook BDByteCastEnvInfo
 
 - (BOOL)isVPNActive {
     if (DYYYGetBool(@"DYYYDisableCastVPNCheck")) {
@@ -9436,7 +9436,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_BDBYTE_SCREEN_CAST_CONTEXT
+%hook BDByteScreenCastContext
 
 - (BOOL)isVPNActive {
     if (DYYYGetBool(@"DYYYDisableCastVPNCheck")) {
@@ -9455,13 +9455,13 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWELONG_PRESS_PANEL_DATA_MANAGER
+%hook AWELongPressPanelDataManager
 + (BOOL)enableModernLongPressPanelConfigWithSceneIdentifier:(id)arg1 {
     return DYYYGetBool(@"DYYYEnableModernPanel");
 }
 %end
 
-%hook DYYY_T_AWELONG_PRESS_PANEL_ABSETTINGS
+%hook AWELongPressPanelABSettings
 + (NSUInteger)modernLongPressPanelStyleMode {
     if (!DYYYGetBool(@"DYYYEnableModernPanel")) {
         return %orig;
@@ -9479,7 +9479,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEMODERN_LONG_PRESS_PANEL_UICONFIG
+%hook AWEModernLongPressPanelUIConfig
 + (NSUInteger)modernLongPressPanelStyleMode {
     if (!DYYYGetBool(@"DYYYEnableModernPanel")) {
         return %orig;
@@ -9497,7 +9497,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEUSER_TAB_LIST_MODEL
+%hook AWEUserTabListModel
 
 - (NSInteger)profileLandingTab {
     if (DYYYGetBool(@"DYYYDefaultEnterWorks")) {
@@ -9511,7 +9511,7 @@ static void findTargetViewInView(UIView *view) {
 
 %group AutoPlay
 
-%hook DYYY_T_AWEAWEME_DETAIL_TABLE_VIEW_CONTROLLER
+%hook AWEAwemeDetailTableViewController
 
 - (BOOL)hasIphoneAutoPlaySwitch {
     return YES;
@@ -9519,7 +9519,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEAWEME_DETAIL_CONTAINER_PLAY_CONTROL_CONFIG
+%hook AWEAwemeDetailContainerPlayControlConfig
 
 - (BOOL)enableUserProfilePostAutoPlay {
     return YES;
@@ -9527,7 +9527,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEFEED_IPHONE_AUTO_PLAY_MANAGER
+%hook AWEFeedIPhoneAutoPlayManager
 
 - (BOOL)isAutoPlayOpen {
     return YES;
@@ -9535,14 +9535,14 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEFEED_MODULE_SERVICE
+%hook AWEFeedModuleService
 
 - (BOOL)getFeedIphoneAutoPlayState {
     return YES;
 }
 %end
 
-%hook DYYY_T_AWEFEED_IPHONE_AUTO_PLAY_MANAGER
+%hook AWEFeedIPhoneAutoPlayManager
 
 - (BOOL)getFeedIphoneAutoPlayState {
     BOOL r = %orig;
@@ -9553,7 +9553,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group DYYYIMMenuLegacyGroup
-%hook DYYY_T_AWEIMCUSTOM_MENU_COMPONENT
+%hook AWEIMCustomMenuComponent
 - (void)msg_showMenuForBubbleFrameInScreen:(CGRect)bubbleFrame tapLocationInScreen:(CGPoint)tapLocation menuItemList:(NSArray *)menuItems moreEmoticon:(BOOL)moreEmoticon onCell:(id)cell extra:(id)extra {
     NSArray *updatedMenuItems = DYYYIMMenuItemsByAddingDownloadAction(menuItems, cell);
     %orig(bubbleFrame, tapLocation, updatedMenuItems, moreEmoticon, cell, extra);
@@ -9562,7 +9562,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group DYYYIMMenuTapLocationGroup
-%hook DYYY_T_AWEIMCUSTOM_MENU_COMPONENT
+%hook AWEIMCustomMenuComponent
 - (void)msg_showMenuForBubbleFrameInScreen:(CGRect)bubbleFrame tapLocationInScreen:(CGPoint)tapLocation menuItemList:(NSArray *)menuItems menuPanelOptions:(unsigned long long)menuPanelOptions moreEmoticon:(BOOL)moreEmoticon onCell:(id)cell extra:(id)extra {
     NSArray *updatedMenuItems = DYYYIMMenuItemsByAddingDownloadAction(menuItems, cell);
     %orig(bubbleFrame, tapLocation, updatedMenuItems, menuPanelOptions, moreEmoticon, cell, extra);
@@ -9571,7 +9571,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group DYYYIMMenuHighLowGroup
-%hook DYYY_T_AWEIMCUSTOM_MENU_COMPONENT
+%hook AWEIMCustomMenuComponent
 - (void)msg_showMenuForBubbleFrameInScreen:(CGRect)bubbleFrame highLocationInScreen:(CGPoint)highLocation lowLocationInScreen:(CGPoint)lowLocation tryHighLocationFirst:(BOOL)tryHighLocationFirst menuItemList:(NSArray *)menuItems menuPanelOptions:(unsigned long long)menuPanelOptions onCell:(id)cell extra:(id)extra {
     NSArray *updatedMenuItems = DYYYIMMenuItemsByAddingDownloadAction(menuItems, cell);
     %orig(bubbleFrame, highLocation, lowLocation, tryHighLocationFirst, updatedMenuItems, menuPanelOptions, cell, extra);
@@ -9579,7 +9579,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 %end
 
-%hook DYYY_T_AWEAD_AVATAR_VIEW
+%hook AWEAdAvatarView
 - (void)layoutSubviews {
     %orig;
 
@@ -9600,7 +9600,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWENEARBY_SKY_LIGHT_CAPSULE_VIEW
+%hook AWENearbySkyLightCapsuleView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideNearbyCapsuleView")) {
         [self removeFromSuperview];
@@ -9610,7 +9610,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AFDCANCEL_MUTE_AWEME_VIEW
+%hook AFDCancelMuteAwemeView
 - (void)layoutSubviews {
     %orig;
 
@@ -9625,7 +9625,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEPLAY_DANMAKU_INPUT_CONTAIN_VIEW
+%hook AWEPlayDanmakuInputContainView
 
 - (void)layoutSubviews {
     %orig;
@@ -9638,7 +9638,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWESHOW_PLAYLET_COMMENT_HEADER_VIEW
+%hook AWEShowPlayletCommentHeaderView
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideCommentViews")) {
@@ -9649,7 +9649,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEPOIENTRY_ANCHOR_VIEW
+%hook AWEPOIEntryAnchorView
 
 - (void)p_addViews {
     if (DYYYGetBool(@"DYYYHideCommentViews")) {
@@ -9661,7 +9661,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group CommentHeaderGeneralGroup
-%hook DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_GENERAL_VIEW
+%hook AWECommentPanelHeaderSwiftImpl_CommentHeaderGeneralView
 - (void)layoutSubviews {
     %orig;
 
@@ -9673,7 +9673,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group CommentHeaderGoodsGroup
-%hook DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_GOODS_VIEW
+%hook AWECommentPanelHeaderSwiftImpl_CommentHeaderGoodsView
 - (void)layoutSubviews {
     %orig;
 
@@ -9685,7 +9685,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group CommentHeaderTemplateGroup
-%hook DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_TEMPLATE_ANCHOR_VIEW
+%hook AWECommentPanelHeaderSwiftImpl_CommentHeaderTemplateAnchorView
 - (void)layoutSubviews {
     %orig;
 
@@ -9697,7 +9697,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group CommentBottomTipsVCGroup
-%hook DYYY_T_AWECOMMENT_PANEL_LIST_SWIFT_IMPL_COMMENT_BOTTOM_TIPS_CONTAINER_VIEW_CONTROLLER
+%hook AWECommentPanelListSwiftImpl_CommentBottomTipsContainerViewController
 - (void)viewWillAppear:(BOOL)animated {
     %orig(animated);
     if (DYYYGetBool(@"DYYYHideCommentTips")) {
@@ -9707,7 +9707,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 %end
 
-%hook DYYY_T_AWEDISCOVER_FEED_ENTRANCE_VIEW
+%hook AWEDiscoverFeedEntranceView
 - (id)init {
     if (DYYYGetBool(@"DYYYHideInteractionSearch")) {
         return nil;
@@ -9716,7 +9716,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWETEMPLATE_TAGS_COMMON_VIEW
+%hook AWETemplateTagsCommonView
 
 - (void)layoutSubviews {
     %orig;
@@ -9733,7 +9733,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEFAMILIAR_SKYLIGHT_BUBBLE_VIEW
+%hook AWEFamiliarSkylightBubbleView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideAvatarBubble")) {
         [self removeFromSuperview];
@@ -9742,7 +9742,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEFAMILIAR_NAV_VIEW
+%hook AWEFamiliarNavView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideFamiliar")) {
         self.hidden = YES;
@@ -9751,7 +9751,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEHPSEARCH_BUBBLE_ENTRANCE_VIEW
+%hook AWEHPSearchBubbleEntranceView
 - (void)layoutSubviews {
     %orig;
 
@@ -9763,7 +9763,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEGRADIENT_VIEW
+%hook AWEGradientView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideGradient")) {
         UIView *parent = self.superview;
@@ -9777,7 +9777,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWELOADING_AND_VOLUME_VIEW
+%hook AWELoadingAndVolumeView
 
 - (void)layoutSubviews {
     %orig;
@@ -9787,7 +9787,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEAWEME_HOT_SPOT_TABLE_VIEW_CONTROLLER
+%hook AWEAwemeHotSpotTableViewController
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {
         return YES;
@@ -9803,7 +9803,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEFULL_PAGE_FEED_CONTAINER_VIEW_CONTROLLER
+%hook AWEFullPageFeedContainerViewController
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {
         return YES;
@@ -9819,7 +9819,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AFDPURE_MODE_PAGE_LIST_VIEW_CONTROLLER
+%hook AFDPureModePageListViewController
 - (void)viewWillLayoutSubviews {
     // 先提供完整视口，再由原生更新 cell 尺寸、分页偏移和进度条。
     [DYYYFullscreenCoordinator layoutPlayerContainer:self];
@@ -9827,7 +9827,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AFDNEW_FAST_REPLY_VIEW
+%hook AFDNewFastReplyView
 
 - (void)layoutSubviews {
     %orig;
@@ -9844,7 +9844,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_IESLIVE_REVENUE_IMPL34_IESLIVE_DYNAMIC_RANK_LIST_ENTRANCE_VIEW
+%hook _TtC18IESLiveRevenueImpl34IESLiveDynamicRankListEntranceView
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideLiveDetail")) {
@@ -9854,7 +9854,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AFDRECOMMEND_TO_FRIEND_ENTRANCE_LABEL
+%hook AFDRecommendToFriendEntranceLabel
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideRecommendTips")) {
@@ -9866,7 +9866,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWENEW_LIVE_SKYLIGHT_VIEW_CONTROLLER
+%hook AWENewLiveSkylightViewController
 
 - (void)showSkylight:(BOOL)arg0 animated:(BOOL)arg1 actionMethod:(unsigned long long)arg2 {
     if (DYYYGetBool(@"DYYYHideLiveView")) {
@@ -9885,7 +9885,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWENEARBY_FULL_SCREEN_VIEW_MODEL
+%hook AWENearbyFullScreenViewModel
 
 - (void)setShowSkyLight:(id)arg1 {
     if (DYYYGetBool(@"DYYYHideMenuView")) {
@@ -9903,7 +9903,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWECORRELATION_ITEM_TAG
+%hook AWECorrelationItemTag
 
 - (void)layoutSubviews {
     %orig;
@@ -9915,7 +9915,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEHPDISCOVER_FEED_ENTRANCE_VIEW
+%hook AWEHPDiscoverFeedEntranceView
 
 - (void)layoutSubviews {
     %orig;
@@ -9930,7 +9930,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEHPTOP_TAB_ITEM_BADGE_CONTENT_VIEW
+%hook AWEHPTopTabItemBadgeContentView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideConcernCapsuleView")) {
         self.hidden = YES;
@@ -9940,7 +9940,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWETEMPLATE_COMMON_VIEW
+%hook AWETemplateCommonView
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideCameraLocation")) {
@@ -9949,7 +9949,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEHPTOP_BAR_CTAITEM_VIEW
+%hook AWEHPTopBarCTAItemView
 
 - (void)showRedDot {
     if (![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYHideSidebarDot"])
@@ -9987,7 +9987,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_ACCSTICKER_CONTAINER_VIEW
+%hook ACCStickerContainerView
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideSearchSame")) {
@@ -9996,7 +9996,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_BDXWEB_VIEW
+%hook BDXWebView
 - (void)layoutSubviews {
     %orig;
 
@@ -10012,7 +10012,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_IESECLIVE_PLUGIN_LAYOUT_VIEW
+%hook IESECLivePluginLayoutView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveGoodsMsg")) {
         self.hidden = YES;
@@ -10022,7 +10022,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_IESECLIVE_CARD_SIZE_COMPONENT
+%hook IESECLiveCardSizeComponent
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveGoodsMsg")) {
         self.hidden = YES;
@@ -10032,7 +10032,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_IESECLIVE_GOODS_CARD_VIEW
+%hook IESECLiveGoodsCardView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveGoodsMsg")) {
         self.hidden = YES;
@@ -10042,7 +10042,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_IESLLLIVE_PURCHASE_ATMOSPHERE_VIEW
+%hook IESLLLivePurchaseAtmosphereView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveGoodsMsg") && self.superview) {
         self.superview.hidden = YES;
@@ -10052,7 +10052,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_IESLIVE_REVENUE_IMPL32_IESLIVE_SWIFT_DYNAMIC_USER_ENTER_VIEW
+%hook _TtC18IESLiveRevenueImpl32IESLiveSwiftDynamicUserEnterView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLivePopup")) {
         self.hidden = YES;
@@ -10062,7 +10062,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_PLATFORM_CANVAS_VIEW
+%hook PlatformCanvasView
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideLivePopup")) {
@@ -10081,7 +10081,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_IESLIVE_REVENUE_IMPL35_IESLIVE_SWIFT_VIDEO_LAYER_USER_ENTER_VIEW
+%hook _TtC18IESLiveRevenueImpl35IESLiveSwiftVideoLayerUserEnterView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLivePopup")) {
         self.hidden = YES;
@@ -10091,7 +10091,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWELIST_DATA_CONTROLLER
+%hook AWEListDataController
 
 - (void)setDataSource:(NSMutableArray *)dataSource {
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
@@ -10127,7 +10127,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEMIX_VIDEO_LIST_DATA_CONTROLLER
+%hook AWEMixVideoListDataController
 
 - (void)setDataSource:(id)dataSource {
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
@@ -10147,7 +10147,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEMIX_VIDEO_DETAIL_PLAY_LIST_DATA_CONTROLLER
+%hook AWEMixVideoDetailPlayListDataController
 
 - (void)setDataSource:(id)dataSource {
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
@@ -10156,7 +10156,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEMIX_VIDEO_RELATED_LIST_DATA_CONTROLLER
+%hook AWEMixVideoRelatedListDataController
 
 - (void)setDataSource:(id)dataSource {
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
@@ -10176,7 +10176,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWECODE_GEN_STORY_RING_INFO_MODEL
+%hook AWECodeGenStoryRingInfoModel
 
 - (NSArray *)storyRingsModelArray {
 	BOOL DYYYHideAvatarButton = DYYYGetBool(@"DYYYHideAvatarButton");
@@ -10197,7 +10197,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEINTERACTION_HASHTAG_STICKER_MODEL
+%hook AWEInteractionHashtagStickerModel
 
 - (id)hashtagInfo {
 	BOOL DYYYHideChallengeStickers = DYYYGetBool(@"DYYYHideChallengeStickers");
@@ -10234,7 +10234,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEINTERACTION_EDIT_TAG_STICKER_MODEL
+%hook AWEInteractionEditTagStickerModel
 
 - (id)editTagInfo {
 	if (DYYYGetBool(@"DYYYHideEditTag")) {
@@ -10253,7 +10253,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWETEMPLATE_STATIC_LABEL_INFO_MODEL
+%hook AWETemplateStaticLabelInfoModel
 
 - (NSArray *)containers {
 	if (DYYYGetBool(@"DYYYHideTemplateLabel")) {
@@ -10272,7 +10272,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AFDFRIEND_RECOMMEND_TAG_VIEW
+%hook AFDFriendRecommendTagView
 
 - (void)layoutSubviews {
 	if (DYYYGetBool(@"DYYYHideFriendRecommend")) {
@@ -10284,7 +10284,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWERELATED_MUSIC_ANCHOR_MODEL
+%hook AWERelatedMusicAnchorModel
 
 - (instancetype)init {
 	BOOL DYYYHideQuqishuiting = DYYYGetBool(@"DYYYHideQuqishuiting");
@@ -10304,7 +10304,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_TTAD_SPLASH_MODEL
+%hook TTAdSplashModel
 
 + (id)alloc {
 	if (DYYYGetBool(@"DYYYNoAds")) {
@@ -10315,7 +10315,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWEORIGINAL_AD_MODEL
+%hook AWEOriginalAdModel
 - (instancetype)init {
 	BOOL noAds = DYYYGetBool(@"DYYYNoAds");
 	if (noAds) {
@@ -10333,7 +10333,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEGENERAL_SEARCH_MODEL
+%hook AWEGeneralSearchModel
 - (instancetype)initWithDictionary:(id)dict error:(NSError **)error {
 	id orig = %orig;
 	
@@ -10350,7 +10350,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEAWESOME_SPLASH_LIVE_CELL_ACCESSORY_VIEW
+%hook AWEAwesomeSplashLiveCellAccessoryView
 
 - (id)ddExtraView {
 	if (DYYYGetBool(@"DYYYNoAds")) {
@@ -10362,7 +10362,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWETEEN_MODE_ALERT_VIEW
+%hook AWETeenModeAlertView
 - (BOOL)show {
 	if (DYYYGetBool(@"DYYYHideTeenMode")) {
 		return NO;
@@ -10371,7 +10371,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWETEEN_MODE_SIMPLE_ALERT_VIEW
+%hook AWETeenModeSimpleAlertView
 - (BOOL)show {
 	if (DYYYGetBool(@"DYYYHideTeenMode")) {
 		return NO;
@@ -10380,7 +10380,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEAWEME_STATUS_MODEL
+%hook AWEAwemeStatusModel
 - (void)setListenVideoStatus:(NSInteger)status {
     if (status == 1 && DYYYGetBool(@"DYYYEnableBackgroundListen")) {
         status = 2;
@@ -10389,7 +10389,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AFDPRIVACY_HALF_SCREEN_VIEW_CONTROLLER
+%hook AFDPrivacyHalfScreenViewController
 
 %new
 - (void)updateDarkModeAppearance {
@@ -10460,7 +10460,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_UITEXT_FIELD
+%hook UITextField
 
 - (void)willMoveToWindow:(UIWindow *)newWindow {
     %orig;
@@ -10479,7 +10479,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_UITEXT_VIEW
+%hook UITextView
 
 - (void)willMoveToWindow:(UIWindow *)newWindow {
     %orig;
@@ -10498,7 +10498,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AWELIST_KIT_MAGIC_COLLECTION_VIEW
+%hook AWEListKitMagicCollectionView
 
 - (void)layoutSubviews {
     %orig;
@@ -10508,7 +10508,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AFDPURE_MODE_PAGE_TAP_CONTROLLER
+%hook AFDPureModePageTapController
 
 - (void)onVideoPlayerViewDoubleClicked:(id)arg1 {
     BOOL isSwitchOn = DYYYGetBool(@"DYYYDisableDoubleTapLike");
@@ -10519,7 +10519,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_AFDFAST_SPEED_VIEW
+%hook AFDFastSpeedView
 - (void)layoutSubviews {
     %orig;
 
@@ -10546,7 +10546,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_TTPLAYER_VIEW
+%hook TTPlayerView
 - (void)setFrame:(CGRect)frame {
     if (![NSThread isMainThread]) {
         __weak UIView *weakView = self;
@@ -10565,7 +10565,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_TTMETAL_VIEW
+%hook TTMetalView
 - (void)setCenter:(CGPoint)center {
     BOOL shouldAdjust = NO;
     UIView *view = (UIView *)self;
@@ -10596,7 +10596,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_TTMETAL_VIEW_NEW
+%hook TTMetalViewNew
 - (void)setCenter:(CGPoint)center {
     BOOL shouldAdjust = NO;
     UIView *view = (UIView *)self;
@@ -10627,7 +10627,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_TTMETAL_VIEW_VP
+%hook TTMetalViewVP
 - (void)setCenter:(CGPoint)center {
     BOOL shouldAdjust = NO;
     UIView *view = (UIView *)self;
@@ -10658,7 +10658,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEMIX_VIDEO_PANEL_MORE_VIEW
+%hook AWEMixVideoPanelMoreView
 
 - (void)setFrame:(CGRect)frame {
     if (DYYYGetBool(@"DYYYEnableFullScreen")) {
@@ -10685,7 +10685,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_COMMENT_INPUT_CONTAINER_VIEW
+%hook CommentInputContainerView
 
 - (void)layoutSubviews {
     %orig;
@@ -10702,7 +10702,7 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
-%hook DYYY_T_DUXPOPOVER
+%hook DUXPopover
 - (void)layoutSubviews {
     %orig;
 
@@ -10726,7 +10726,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWEINCENTIVE_SWIFT_IMPL20_PENDANT_CONTAINER_VIEW
+%hook _TtC21AWEIncentiveSwiftImpl20PendantContainerView
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHidePendantGroup")) {
@@ -10735,7 +10735,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AWELUCKY_CAT_BANNER_VIEW
+%hook AWELuckyCatBannerView
 - (id)initWithFrame:(CGRect)frame {
     return nil;
 }
@@ -10745,7 +10745,7 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook DYYY_T_AFDVIEWED_BOTTOM_VIEW
+%hook AFDViewedBottomView
 - (void)layoutSubviews {
     %orig;
 
@@ -10759,7 +10759,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group BDMultiContentImageViewGroup
-%hook DYYY_T_BDMULTI_CONTENT_CONTAINER_IMAGE_CONTENT_VIEW
+%hook BDMultiContentContainer_ImageContentView
 
 - (void)setTransform:(CGAffineTransform)transform {
     %orig([DYYYFullscreenCoordinator transformForImageView:self proposed:transform]);
@@ -10774,7 +10774,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group DYYYFullscreenCommentGroup
-%hook DYYY_T_AWECOMMENT_PANEL_CONTAINER_SWIFT_IMPL_COMMENT_CONTAINER_INNER_VIEW_CONTROLLER
+%hook AWECommentPanelContainerSwiftImpl_CommentContainerInnerViewController
 - (void)viewDidLayoutSubviews {
     %orig;
     [DYYYCommentBlurCoordinator layoutController:self];
@@ -10794,7 +10794,7 @@ static void findTargetViewInView(UIView *view) {
 // 首次从 Feed 打开评论区走它而不经过 InnerViewController，
 // 旧 hook 全部旁路（用户实测毛玻璃不透 + 日志无第二次 [DYYY][blur]）。
 // 面板级 hook 保证任意打开路径都会触发毛玻璃布局与全屏协调。
-%hook DYYY_T_AWECOMMENT_PANEL_CONTAINER_SWIFT_IMPL_COMMENT_PANEL_VIEW_CONTROLLER
+%hook AWECommentPanelContainerSwiftImpl_CommentPanelViewController
 - (void)viewDidLayoutSubviews {
     %orig;
     [DYYYCommentBlurCoordinator layoutController:self];
@@ -10837,13 +10837,13 @@ static void findTargetViewInView(UIView *view) {
     Class fullscreenCommentClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController",
                                                         "_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
     if (fullscreenCommentClass && [fullscreenCommentClass isSubclassOfClass:[UIViewController class]]) {
-        %init(DYYYFullscreenCommentGroup, DYYY_T_AWECOMMENT_PANEL_CONTAINER_SWIFT_IMPL_COMMENT_CONTAINER_INNER_VIEW_CONTROLLER = fullscreenCommentClass);
+        %init(DYYYFullscreenCommentGroup, AWECommentPanelContainerSwiftImpl_CommentContainerInnerViewController = fullscreenCommentClass);
     }
     // 41.0：外层面板类（首次打开评论区的实际入口）
     Class commentPanelClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentPanelViewController",
                                                     "_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
     if (commentPanelClass && [commentPanelClass isSubclassOfClass:[UIViewController class]]) {
-        %init(DYYYFullscreenCommentPanelGroup, DYYY_T_AWECOMMENT_PANEL_CONTAINER_SWIFT_IMPL_COMMENT_PANEL_VIEW_CONTROLLER = commentPanelClass);
+        %init(DYYYFullscreenCommentPanelGroup, AWECommentPanelContainerSwiftImpl_CommentPanelViewController = commentPanelClass);
     }
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
         @"DYYYDisableFeedNowPlayingInfo" : @YES
@@ -10854,7 +10854,7 @@ static void findTargetViewInView(UIView *view) {
     Class interactionBaseLabelClass = DYYYResolveSwiftClass("AWECommentSwiftBizUI.CommentInteractionBaseLabel",
                                                             "_TtC20AWECommentSwiftBizUI27CommentInteractionBaseLabel");
     if (interactionBaseLabelClass) {
-        %init(DYYYCommentExactTimeGroup, DYYY_T_AWECOMMENT_SWIFT_BIZ_UI_COMMENT_INTERACTION_BASE_LABEL = interactionBaseLabelClass);
+        %init(DYYYCommentExactTimeGroup, AWECommentSwiftBizUI_CommentInteractionBaseLabel = interactionBaseLabelClass);
     }
     
     Class imMenuComponentClass = objc_getClass("AWEIMCustomMenuComponent");
@@ -10880,7 +10880,7 @@ static void findTargetViewInView(UIView *view) {
         static dispatch_once_t onceToken;
         dispatch_once(&onceToken, ^{
           Class wSwiftImpl = objc_getClass("AWECommentInputViewSwiftImpl.CommentInputContainerView");
-          %init(DYYY_T_COMMENT_INPUT_CONTAINER_VIEW = wSwiftImpl);
+          %init(CommentInputContainerView = wSwiftImpl);
         });
         BOOL isAutoPlayEnabled = DYYYGetBool(@"DYYYEnableAutoPlay");
         if (isAutoPlayEnabled) {
@@ -10916,30 +10916,30 @@ static void findTargetViewInView(UIView *view) {
 
         Class imageContentClass = objc_getClass("BDMultiContentContainer.ImageContentView");
         if (imageContentClass) {
-            %init(BDMultiContentImageViewGroup, DYYY_T_BDMULTI_CONTENT_CONTAINER_IMAGE_CONTENT_VIEW = imageContentClass);
+            %init(BDMultiContentImageViewGroup, BDMultiContentContainer_ImageContentView = imageContentClass);
         }
 
         // 40.9: CommentHeaderGeneralView/GoodsView 迁移到 AWECommentCommerceSwiftImpl 模块（mangled 名），旧模块点号名保留作回退
         Class commentHeaderGeneralClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGeneralView",
                                                                 "_TtC27AWECommentCommerceSwiftImpl24CommentHeaderGeneralView");
         if (commentHeaderGeneralClass) {
-            %init(CommentHeaderGeneralGroup, DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_GENERAL_VIEW = commentHeaderGeneralClass);
+            %init(CommentHeaderGeneralGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderGeneralView = commentHeaderGeneralClass);
         }
 
         Class commentHeaderGoodsClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGoodsView",
                                                               "_TtC27AWECommentCommerceSwiftImpl22CommentHeaderGoodsView");
         if (commentHeaderGoodsClass) {
-            %init(CommentHeaderGoodsGroup, DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_GOODS_VIEW = commentHeaderGoodsClass);
+            %init(CommentHeaderGoodsGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderGoodsView = commentHeaderGoodsClass);
         }
         Class commentHeaderTemplateClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderTemplateAnchorView",
                                                                  "_TtC30AWECommentPanelHeaderSwiftImpl31CommentHeaderTemplateAnchorView");
         if (commentHeaderTemplateClass) {
-            %init(CommentHeaderTemplateGroup, DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_TEMPLATE_ANCHOR_VIEW = commentHeaderTemplateClass);
+            %init(CommentHeaderTemplateGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderTemplateAnchorView = commentHeaderTemplateClass);
         }
 
         Class tipsVCClass = objc_getClass("AWECommentPanelListSwiftImpl.CommentBottomTipsContainerViewController");
         if (tipsVCClass) {
-            %init(CommentBottomTipsVCGroup, DYYY_T_AWECOMMENT_PANEL_LIST_SWIFT_IMPL_COMMENT_BOTTOM_TIPS_CONTAINER_VIEW_CONTROLLER = tipsVCClass);
+            %init(CommentBottomTipsVCGroup, AWECommentPanelListSwiftImpl_CommentBottomTipsContainerViewController = tipsVCClass);
         }
 
         NSNotificationCenter *center = [NSNotificationCenter defaultCenter];

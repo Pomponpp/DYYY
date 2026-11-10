@@ -1,37 +1,40 @@
 //
 //  DYYYTargets.h
-//  抖音 hook 目标的【唯一身份入口】。
+//  抖音 hook 目标类的【清单与常量表】。
 //
-//  为什么需要它：
-//  抖音改版最常见的破坏是「类改名」。301 个 %hook 如果都写死类名，
-//  改名时要在 10 个文件里逐个搜改，必然漏。
-//  这里把全部目标类集中成宏——抖音改名时【只改这一个文件】，
-//  所有 %hook 自动跟随。
+//  ⚠️ 重要：本文件的宏不能用于 %hook / %init
 //
-//  原理：Logos 的 %hook 接收的是预处理器展开后的 token。
-//       %hook DYYY_T_FEED_TABLE  →  cpp 展开  →  %hook AWEFeedTableView
-//       与直接写类名完全等价，零运行时开销、零行为差异。
+//  原因（#80 实测教训）：
+//    Logos 的处理顺序是：
+//      .xm → logos.pl 解析 %hook 语法 → cpp 宏展开 → clang
+//    logos.pl 在宏展开【之前】就把 %hook 后的标识符当类名处理，
+//    生成 objc_getClass("DYYY_T_XXX") —— 宏在字符串里不会展开，
+//    运行时查到 nil，全部 hook 静默失效（实测 hook 生效数 0/739）。
 //
-//  用法：
-//      #import "DYYYTargets.h"
-//      %hook DYYY_T_FEED_TABLE
-//      - (void)setFrame:(CGRect)frame { ... }
-//      %end
+//  所以：%hook 必须写真实类名。
 //
-//  适配新版抖音的流程：
-//      1. 导出诊断包 → compat/audit.txt 报「缺失哪些类」
-//      2. compat/class-list.txt 是新版全部类名
-//      3. 我对比后给出「旧名 → 疑似新名」
-//      4. 改本文件的对应宏定义，重新编译
+//  那这份文件还有什么用？
+//  1. 适配新版抖音时当【字典】查：全部 306 个目标类集中一处，
+//     配合同目录的 DYYYClassRegistry.m 审计表（含被 hook 的方法名）。
+//  2. 未来若要做改名保护，只能走 %group + %init 动态绑定：
+//       %group XxxGroup
+//       %hook AWEPlaceholderName        ← 占位名，logos.pl 认
+//       %end
+//       %end
+//       // %ctor: %init(XxxGroup, AWEPlaceholderName = DYYYTargetClass(@"..."));
+//     那时本文件的宏可作为「类名字符串」来源（配合 DYYYTargetClass 帮助函数）。
+//  3. CI 脚本可读本文件做版本兼容扫描（对比砸壳二进制的类名）。
 //
-//  ⚠️ 约束：
-//  · 宏名不可重复（脚本已校验）
-//  · 只能用于 %hook，不要用于 %init（%init 走运行时 Class，见 %ctor）
-//  · 新增 hook 目标时必须在这里补一条
+//  维护：新增 hook 目标时在这里补一条（保持清单完整）。
 //
 
 #ifndef DYYY_TARGETS_H
 #define DYYY_TARGETS_H
+
+// ---- 统计：共 306 个 hook 目标 ----
+// ---- 用途：类名清单 / 适配对照表 / CI 扫描源。不用于 %hook。----
+
+
 
 // ---- 统计：共 306 个 hook 目标 ----
 

@@ -37,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook DYYY_T_AWEHPCHANNEL_INVISIBLE_WATER_MARK_MODEL
+%hook AWEHPChannelInvisibleWaterMarkModel
 
 - (BOOL)isEnter {
     return NO;
@@ -49,7 +49,7 @@
 
 %end
 
-%hook DYYY_T_AWEFEED_CHANNEL_MANAGER
+%hook AWEFeedChannelManager
 
 - (void)reloadChannelWithChannelModels:(id)arg1 currentChannelIDList:(id)arg2 reloadType:(id)arg3 selectedChannelID:(id)arg4 {
     NSArray *channelModels = arg1;
@@ -119,7 +119,7 @@
 
 %end
 
-%hook DYYY_T_AWEFEED_TOP_BAR_CONTAINER
+%hook AWEFeedTopBarContainer
 - (void)didMoveToSuperview {
     %orig;
     applyTopBarTransparency(self);
@@ -140,7 +140,7 @@
 }
 %end
 
-%hook DYYY_T_AWEFEED_PROGRESS_SLIDER
+%hook AWEFeedProgressSlider
 
 - (void)layoutSubviews {
     %orig;
@@ -360,7 +360,7 @@
 
 %end
 
-%hook DYYY_T_AWEFEED_TAB_JUMP_GUIDE_VIEW
+%hook AWEFeedTabJumpGuideView
 
 - (void)layoutSubviews {
     %orig;
@@ -369,7 +369,7 @@
 
 %end
 
-%hook DYYY_T_AWEFEED_LIVE_MARK_VIEW
+%hook AWEFeedLiveMarkView
 - (void)setHidden:(BOOL)hidden {
     if (DYYYGetBool(@"DYYYHideAvatarLive") || DYYYGetBool(@"DYYYHideAvatarButton")) {
         hidden = YES;
@@ -379,7 +379,7 @@
 }
 %end
 
-%hook DYYY_T_AWESEARCH_ANCHOR_LIST_MODEL
+%hook AWESearchAnchorListModel
 
 - (BOOL)hideWords {
     return DYYYGetBool(@"DYYYHideCommentViews");
@@ -387,7 +387,7 @@
 
 %end
 
-%hook DYYY_T_AWEFEED_UNFOLLOW_FAMILIAR_FOLLOW_AND_DISLIKE_VIEW
+%hook AWEFeedUnfollowFamiliarFollowAndDislikeView
 - (void)showUnfollowFamiliarView {
     if (DYYYGetBool(@"DYYYHideFamiliar")) {
         self.hidden = YES;
@@ -397,7 +397,7 @@
 }
 %end
 
-%hook DYYY_T_AWEFEED_LIVE_TAB_TOP_SELECTION_VIEW
+%hook AWEFeedLiveTabTopSelectionView
 - (void)setHideTimer:(id)timer {
     if (DYYYGetBool(@"DYYYDisableAutoHideLive")) {
         timer = nil;
@@ -406,7 +406,7 @@
 }
 %end
 
-%hook DYYY_T_AWEHOT_SPOT_BLUR_VIEW
+%hook AWEHotSpotBlurView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideGradient")) {
         self.hidden = YES;
@@ -416,7 +416,7 @@
 }
 %end
 
-%hook DYYY_T_AWEHOT_SEARCH_INNER_BOTTOM_VIEW
+%hook AWEHotSearchInnerBottomView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideHotSearch")) {
         [self removeFromSuperview];
@@ -426,7 +426,7 @@
 }
 %end
 
-%hook DYYY_T_AWEFEED_ROOT_VIEW_CONTROLLER
+%hook AWEFeedRootViewController
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {
         return YES;
@@ -441,7 +441,7 @@
 }
 %end
 
-%hook DYYY_T_AWESEARCH_ENTRANCE_VIEW
+%hook AWESearchEntranceView
 
 - (void)layoutSubviews {
 
@@ -473,7 +473,7 @@
 
 %end
 
-%hook DYYY_T_AWEFEED_LIVE_TAB_REVISIT_CONTROL_VIEW
+%hook AWEFeedLiveTabRevisitControlView
 
 - (void)layoutSubviews {
     %orig;
@@ -485,7 +485,7 @@
 }
 %end
 
-%hook DYYY_T_AWEFEED_MULTI_TAB_SELECTED_CONTAINER_VIEW
+%hook AWEFeedMultiTabSelectedContainerView
 
 - (void)layoutSubviews {
     %orig;
@@ -496,7 +496,7 @@
 
 %end
 
-%hook DYYY_T_AWEHOT_SPOT_LIST_MODEL
+%hook AWEHotSpotListModel
 
 - (BOOL)disableDisplay {
 	BOOL DYYYHideHotspot = DYYYGetBool(@"DYYYHideHotspot");
@@ -580,7 +580,7 @@
 
 %end
 
-%hook DYYY_T_AWEFEED_COMMENT_CONFIG_MODEL
+%hook AWEFeedCommentConfigModel
 - (void)setCommentInputConfigText:(NSString *)text {
     NSString *customText = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYCommentContent"];
     if (customText && customText.length > 0) {
@@ -590,7 +590,7 @@
 }
 %end
 
-%hook DYYY_T_AWEFEED_VIEW_CELL
+%hook AWEFeedViewCell
 - (void)layoutSubviews {
     if (hideButton && hideButton.isElementsHidden) {
         [hideButton hideUIElements];

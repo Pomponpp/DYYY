@@ -37,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook DYYY_T_AWEPROFILE_MENTION_LABEL
+%hook AWEProfileMentionLabel
 
 - (void)layoutSubviews {
     %orig;
@@ -75,7 +75,7 @@
 
 %end
 
-%hook DYYY_T_AWEPROFILE_AVATAR_FUNCTION_MANAGER
+%hook AWEProfileAvatarFunctionManager
 - (BOOL)shouldShowSaveAvatarItem {
     BOOL shouldEnable = DYYYGetBool(@"DYYYEnableSaveAvatar");
     if (shouldEnable) {
@@ -118,7 +118,7 @@
 }
 %end
 
-%hook DYYY_T_AWEPROFILE_NAVIGATION_BUTTON
+%hook AWEProfileNavigationButton
 - (void)setupUI {
 
     if (DYYYGetBool(@"DYYYHideButton")) {
@@ -128,7 +128,7 @@
 }
 %end
 
-%hook DYYY_T_AWEPROFILE_MIX_ITEM_COLLECTION_VIEW_CELL
+%hook AWEProfileMixItemCollectionViewCell
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHidePostView")) {
@@ -140,7 +140,7 @@
 }
 %end
 
-%hook DYYY_T_AWEPROFILE_TASK_CARD_STYLE_LIST_ITEM_CELL
+%hook AWEProfileTaskCardStyleListItemCell
 - (BOOL)shouldShowPublishGuide {
     if (DYYYGetBool(@"DYYYHidePostView")) {
         return NO;
@@ -149,7 +149,7 @@
 }
 %end
 
-%hook DYYY_T_AWEPROFILE_PUBLISH_GUIDE_COLLECTION_VIEW_CELL
+%hook AWEProfilePublishGuideCollectionViewCell
 - (void)didMoveToSuperview {
     %orig;
     if (DYYYGetBool(@"DYYYHidePostView")) {
@@ -160,7 +160,7 @@
 }
 %end
 
-%hook DYYY_T_AWEPROFILE_RICH_EMPTY_VIEW
+%hook AWEProfileRichEmptyView
 
 - (void)setTitle:(id)title {
     if (DYYYGetBool(@"DYYYHidePostView")) {

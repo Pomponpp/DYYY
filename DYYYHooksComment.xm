@@ -37,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook DYYY_T_AWECOMMENT_MEDIA_DOWNLOAD_CONFIG_LIVE_PHOTO
+%hook AWECommentMediaDownloadConfigLivePhoto
 
 BOOL commentLivePhotoNotWaterMark = DYYYGetBool(@"DYYYCommentLivePhotoNotWaterMark");
 
@@ -55,7 +55,7 @@ BOOL commentLivePhotoNotWaterMark = DYYYGetBool(@"DYYYCommentLivePhotoNotWaterMa
 
 %end
 
-%hook DYYY_T_AWECOMMENT_IMAGE_MODEL
+%hook AWECommentImageModel
 - (id)downloadUrl {
     if (DYYYGetBool(@"DYYYCommentNotWaterMark")) {
         return self.originUrl;
@@ -64,7 +64,7 @@ BOOL commentLivePhotoNotWaterMark = DYYYGetBool(@"DYYYCommentLivePhotoNotWaterMa
 }
 %end
 
-%hook DYYY_T_AWECOMMENT_GUIDE_LUNA_ANCHOR_VIEW
+%hook AWECommentGuideLunaAnchorView
 - (void)layoutSubviews {
     %orig;
 
@@ -106,7 +106,7 @@ BOOL commentLivePhotoNotWaterMark = DYYYGetBool(@"DYYYCommentLivePhotoNotWaterMa
 
 %end
 
-%hook DYYY_T_AWECOMMENT_CONTAINER_VIEW_CONTROLLER
+%hook AWECommentContainerViewController
 
 - (void)viewWillAppear:(BOOL)animated {
     %orig(animated);
