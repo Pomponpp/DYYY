@@ -6,6 +6,7 @@
 //  搬出时按原顺序整块复制，内容未改。
 //
 
+#import "DYYYShared.h"
 #import <QuartzCore/QuartzCore.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>

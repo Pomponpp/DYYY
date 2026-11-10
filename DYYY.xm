@@ -16,6 +16,7 @@
 #import <syslog.h>
 
 #import "AwemeHeaders.h"
+#import "DYYYShared.h"
 #import "DYYYCommentPlaybackCoordinator.h"
 #import "DYYYHideMessageAndMinePageHooks.h"
 #import "DYYYExactInteractionCountHooks.h"
