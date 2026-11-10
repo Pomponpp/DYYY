@@ -197,13 +197,17 @@ static NSString *DKDebugPageIdentity(void) {
     return out;
 }
 
-static void DKStartExport(DKDebugExportContext *context, DKDebugExportMode mode) {    UIViewController *presenter = context.presenter ?: DKDebugController;
+static void DKStartExport(DKDebugExportContext *context, DKDebugExportMode mode) {
+    UIViewController *presenter = context.presenter ?: DKDebugController;
     if (!presenter) return;
     if (DKDebugExportBusy) {
         DKPresentError(presenter, @"已有调试采集或导出正在进行");
         return;
     }
     DKDebugExportBusy = YES;
+
+    // 快照锚点：流水里打一行，让 view-tree / 截图 / 日志三者时间点可对齐。
+    [DKDYYYBridge appendRuntimeLogLine:@"⭐ 快照（本次导出的页面结构与截图对应这一刻）"];
 
     // 探针读 UIKit，必须在主线程生成后塞进上下文；后台任务只做序列化与压缩。
     // 探针文本含：状态指纹 + 当前页面标识 + 运行流水全文。

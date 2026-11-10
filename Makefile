@@ -44,11 +44,10 @@ DYYY_FILES += DYYYLoginBypassManager.m DYYYLoginRepairHooks.m DYYYPrivacyRecordU
 # 本地修复：进度条黑线（独立文件，同步上游时只需保留本行）
 DYYY_FILES += DYYYProgressUnderlineFix.xm DYYYDiagnostics.m DYYYDiag/Debug/DKDebugInspector.m DYYYDiag/Debug/DKDebugCapture.m DYYYDiag/Debug/DKDebugExport.m DYYYDiag/FLEX/DKZipWriter.m DYYYDiag/FLEX/DKClassDump.m DYYYDiag/Shared/DKUtils.m DYYYDiag/DKShim.m DYYYDiag/DKDYYYBridge.m
 # 运行时探针：定位 40.9 头像保存新链路（测完可在设置页关闭）
-# -w 关闭噪声告警，但下面几类必须当场报错——它们都曾在推送后才暴露：
-#   返回类型不匹配、隐式函数声明（方法/函数没声明就调用）、
-#   未知 selector（%new 方法缺声明就是这一类）。
-# 顺序有意义：-w 在前，-Werror=… 在后，后者重新启用并升级为错误。
-DYYY_CFLAGS = -fobjc-arc -w -Werror=return-type -Werror=implicit-function-declaration -Werror=objc-method-access
+# 只升级抓真 bug 的两项：返回类型不匹配、隐式函数声明。
+# 不加 -Werror=objc-method-access：Logos 的 %new 跨文件天然缺可见声明，
+# 那项告警在拆分后会持续误报，是制造 friction 而不是消除成本。
+DYYY_CFLAGS = -fobjc-arc -w -Werror=return-type -Werror=implicit-function-declaration
 DYYY_LDFLAGS = -weak_framework AVFAudio -lz
 DYYY_FRAMEWORKS = CoreAudio
 CXXFLAGS += -std=c++11

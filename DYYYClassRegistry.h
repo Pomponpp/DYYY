@@ -22,6 +22,18 @@ typedef NS_ENUM(NSInteger, DYYYClassAuditStatus) {
 // 可读自检报告（中文，逐条列出关键类状态与对应功能），结果缓存。
 + (NSString *)auditReportText;
 
+// Hook 生效数自检：扫运行时 _logos_method$ 前缀方法数，与期望值比对。
+// 类在但方法签名变了时，hook 会静默失效——这是唯一能发现它的手段。
++ (void)setExpectedHookCount:(NSUInteger)count;
++ (NSUInteger)countInstalledLogosMethods;
++ (NSString *)hookHealthText;
+
+// 运行时类清单（抖音前缀过滤）：适配新版时与旧清单对比得出「缺失 → 疑似新名」。
++ (NSString *)runtimeClassListText;
+
+// 目标类方法清单：抖音改了方法名（类名不变）时，靠它对比出少了哪个 selector。
++ (NSString *)targetMethodsText;
+
 // 供 Hook 代码使用的安全取类：先点号名，再 mangled 名。
 + (Class _Nullable)resolveSwiftClassDotName:(const char *)dotName
                                 mangledName:(const char *)mangledName;

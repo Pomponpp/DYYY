@@ -7,6 +7,7 @@
 //
 
 #import "DYYYShared.h"
+#import "DYYYTargets.h"
 #import <QuartzCore/QuartzCore.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
@@ -36,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook AWEIMPhotoPickerFunctionModel
+%hook DYYY_T_AWEIMPHOTO_PICKER_FUNCTION_MODEL
 
 - (void)setUseShadowIcon:(BOOL)arg1 {
     BOOL enabled = DYYYGetBool(@"DYYYAutoSelectOriginalPhoto");
@@ -57,7 +58,7 @@
 
 %end
 
-%hook AWEIMEmoticonPreviewV2
+%hook DYYY_T_AWEIMEMOTICON_PREVIEW_V2
 
 // 添加保存按钮
 - (void)layoutSubviews {
@@ -137,7 +138,7 @@
 
 %end
 
-%hook AWEIMMessageTabOptPushBannerView
+%hook DYYY_T_AWEIMMESSAGE_TAB_OPT_PUSH_BANNER_VIEW
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if (DYYYGetBool(@"DYYYHidePushBanner")) {
@@ -148,7 +149,7 @@
 
 %end
 
-%hook AWEIMMessageTabSideBarView
+%hook DYYY_T_AWEIMMESSAGE_TAB_SIDE_BAR_VIEW
 - (void)layoutSubviews {
     %orig;
 
@@ -174,7 +175,7 @@
 }
 %end
 
-%hook AWEIMFeedVideoQuickReplayInputViewController
+%hook DYYY_T_AWEIMFEED_VIDEO_QUICK_REPLAY_INPUT_VIEW_CONTROLLER
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     CGFloat height = %orig;
@@ -197,7 +198,7 @@
 
 %end
 
-%hook AWEMusicCoverButton
+%hook DYYY_T_AWEMUSIC_COVER_BUTTON
 
 - (void)layoutSubviews {
     %orig;
@@ -215,7 +216,7 @@
 
 %end
 
-%hook AWEStoryProgressSlideView
+%hook DYYY_T_AWESTORY_PROGRESS_SLIDE_VIEW
 
 - (void)layoutSubviews {
     %orig;
@@ -245,7 +246,7 @@
 
 %end
 
-%hook AWEIMCellLiveStatusContainerView
+%hook DYYY_T_AWEIMCELL_LIVE_STATUS_CONTAINER_VIEW
 
 - (void)p_initUI {
     if (![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYHideGroupLiveIndicator"])
@@ -253,7 +254,7 @@
 }
 %end
 
-%hook AWEIMFansGroupTopDynamicDomainTemplateView
+%hook DYYY_T_AWEIMFANS_GROUP_TOP_DYNAMIC_DOMAIN_TEMPLATE_VIEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideGroupShop")) {
         self.hidden = YES;
@@ -263,7 +264,7 @@
 }
 %end
 
-%hook AWEIMInputActionBarInteractor
+%hook DYYY_T_AWEIMINPUT_ACTION_BAR_INTERACTOR
 
 - (void)p_setupUI {
     if (DYYYGetBool(@"DYYYHideGroupInputActionBar")) {
@@ -274,7 +275,7 @@
 }
 %end
 
-%hook AWEVideoTypeTagView
+%hook DYYY_T_AWEVIDEO_TYPE_TAG_VIEW
 
 - (void)setupUI {
     if (![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYHideLiveGIF"])
@@ -282,7 +283,7 @@
 }
 %end
 
-%hook AWEMusicExtraModel
+%hook DYYY_T_AWEMUSIC_EXTRA_MODEL
 
 - (id)commentTopBarInfo {
 	BOOL DYYYHideQuqishuiting = DYYYGetBool(@"DYYYHideQuqishuiting");
@@ -303,7 +304,7 @@
 
 %end
 
-%hook AWEIMSkylightListView
+%hook DYYY_T_AWEIMSKYLIGHT_LIST_VIEW
 - (void)setFrame:(CGRect)frame {
     if (DYYYGetBool(@"DYYYHideAvatarList")) {
         CGFloat scale = [UIScreen mainScreen].scale ?: 2.0;
@@ -314,7 +315,7 @@
 }
 %end
 
-%hook AWEIMFeedBottomQuickEmojiInputBar
+%hook DYYY_T_AWEIMFEED_BOTTOM_QUICK_EMOJI_INPUT_BAR
 
 - (void)layoutSubviews {
     %orig;

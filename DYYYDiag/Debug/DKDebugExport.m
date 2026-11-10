@@ -368,6 +368,18 @@ DKDebugExportResult *DKDebugCreateExport(DKDebugExportContext *context,
         if (runtime.length) {
             DKWriteString(sink, @"probe/runtime.log", runtime, NO);
         }
+
+        // 适配三件套：类自检 / 运行时类清单 / 目标类方法清单。
+        // 抖音升级时靠这三份定位「哪个类没了、新名字可能是谁、方法改了没」。
+        if (progress) progress(@"写入适配诊断...");
+        @try {
+            DKWriteString(sink, @"compat/audit.txt", [DKDYYYBridge compatAuditText], NO);
+            DKWriteString(sink, @"compat/class-list.txt", [DKDYYYBridge compatClassListText], NO);
+            DKWriteString(sink, @"compat/target-methods.txt", [DKDYYYBridge compatTargetMethodsText], NO);
+        } @catch (NSException *exception) {
+            DKRecordError(sink, @"compat", @"compat-collect",
+                          DKMakeExportError(31, exception.reason ?: @"适配诊断采集异常", nil), NO);
+        }
     }
 
     NSDictionary *manifest = @{

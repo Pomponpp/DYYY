@@ -15,6 +15,11 @@ static BOOL DYYYDiagExportBusy = NO;
     return [DYYYDiagnostics runtimeLogPath];
 }
 
++ (void)appendRuntimeLogLine:(NSString *)line {
+    if (!line.length) return;
+    [DYYYDiagnostics appendRuntimeLogLine:line];
+}
+
 + (NSString *)exportFingerprint {
     return [NSString stringWithFormat:
         @"全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d 设备=%@ 系统=%@ 抖音=%@",
@@ -83,6 +88,27 @@ static BOOL DYYYDiagExportBusy = NO;
     if ([fm fileExistsAtPath:src]) [fm createFileAtPath:src contents:[NSData data] attributes:nil];
     [DYYYDiagnostics appendRuntimeLogLine:@"—— 日志已清空，以下为新会话 ——"];
     [DYYYToast showSuccessToastWithMessage:@"运行日志已清空"];
+}
+
+#pragma mark - 适配诊断（三份采集）
+
+// 1) 类自检 + hook 生效数
++ (NSString *)compatAuditText {
+    NSMutableString *out = [NSMutableString string];
+    [out appendString:[DYYYClassRegistry auditReportText]];
+    [out appendString:@"\n---- hook 健康度 ----\n"];
+    [out appendString:[DYYYClassRegistry hookHealthText]];
+    return out;
+}
+
+// 2) 运行时全部抖音类名（适配新版时与旧清单对比）
++ (NSString *)compatClassListText {
+    return [DYYYClassRegistry runtimeClassListText];
+}
+
+// 3) 审计表内全部类的方法清单（方法改名时对比）
++ (NSString *)compatTargetMethodsText {
+    return [DYYYClassRegistry targetMethodsText];
 }
 
 @end

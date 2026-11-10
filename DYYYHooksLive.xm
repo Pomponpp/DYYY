@@ -7,6 +7,7 @@
 //
 
 #import "DYYYShared.h"
+#import "DYYYTargets.h"
 #import <QuartzCore/QuartzCore.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
@@ -36,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook IESLiveUserSeqlistFragment
+%hook DYYY_T_IESLIVE_USER_SEQLIST_FRAGMENT
 
 - (void)refreshVerticalUserCount:(id)arg1 horizontalUserCount:(id)arg2 trueValue:(NSInteger)trueValue {
     if ( trueValue > 0 && DYYYGetBool(@"DYYYEnableLiveRealCount") ) {
@@ -49,7 +50,7 @@
 
 %end
 
-%hook AWELiveGuideElement
+%hook DYYY_T_AWELIVE_GUIDE_ELEMENT
 
 - (BOOL)enableAutoEnterRoom {
     if (DYYYGetBool(@"DYYYDisableAutoEnterLive")) {
@@ -67,7 +68,7 @@
 
 %end
 
-%hook AWEInnerNotificationWindow
+%hook DYYY_T_AWEINNER_NOTIFICATION_WINDOW
 
 - (void)layoutSubviews {
     %orig;
@@ -170,7 +171,7 @@
 
 %end
 
-%hook HTSLiveStreamPcdnManager
+%hook DYYY_T_HTSLIVE_STREAM_PCDN_MANAGER
 
 + (void)start {
     BOOL disablePCDN = DYYYGetBool(@"DYYYDisableLivePCDN");
@@ -192,7 +193,7 @@
 
 %end
 
-%hook IESLiveLaunchTaskPcdn
+%hook DYYY_T_IESLIVE_LAUNCH_TASK_PCDN
 
 - (void)excute {
     BOOL disablePCDN = DYYYGetBool(@"DYYYDisableLivePCDN");
@@ -205,7 +206,7 @@
 
 %end
 
-%hook IESLiveDynamicRankListEntranceView
+%hook DYYY_T_IESLIVE_DYNAMIC_RANK_LIST_ENTRANCE_VIEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideLiveDetail")) {
@@ -215,7 +216,7 @@
 }
 %end
 
-%hook IESLiveMatrixEntranceView
+%hook DYYY_T_IESLIVE_MATRIX_ENTRANCE_VIEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideLiveDetail")) {
@@ -225,7 +226,7 @@
 }
 %end
 
-%hook IESLiveShortTouchActionView
+%hook DYYY_T_IESLIVE_SHORT_TOUCH_ACTION_VIEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideTouchView")) {
@@ -235,7 +236,7 @@
 }
 %end
 
-%hook IESLiveLotteryAnimationViewNew
+%hook DYYY_T_IESLIVE_LOTTERY_ANIMATION_VIEW_NEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideTouchView")) {
@@ -245,7 +246,7 @@
 }
 %end
 
-%hook IESLiveConfigurableShortTouchEntranceView
+%hook DYYY_T_IESLIVE_CONFIGURABLE_SHORT_TOUCH_ENTRANCE_VIEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideTouchView")) {
@@ -255,7 +256,7 @@
 }
 %end
 
-%hook IESLiveRedEnvelopeAniLynxView
+%hook DYYY_T_IESLIVE_RED_ENVELOPE_ANI_LYNX_VIEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideTouchView")) {
@@ -265,7 +266,7 @@
 }
 %end
 
-%hook IESLiveKTVSongIndicatorView
+%hook DYYY_T_IESLIVE_KTVSONG_INDICATOR_VIEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideKTVSongIndicator")) {
@@ -275,7 +276,7 @@
 }
 %end
 
-%hook AWELiveSkylightViewModel
+%hook DYYY_T_AWELIVE_SKYLIGHT_VIEW_MODEL
 
 - (id)dataSource {
 	BOOL DYYYHideConcernCapsuleView = DYYYGetBool(@"DYYYHideConcernCapsuleView");
@@ -296,7 +297,7 @@
 
 %end
 
-%hook AWELiveAutoEnterStyleAView
+%hook DYYY_T_AWELIVE_AUTO_ENTER_STYLE_AVIEW
 
 - (void)layoutSubviews {
     %orig;
@@ -309,7 +310,7 @@
 
 %end
 
-%hook AWELiveFeedStatusLabel
+%hook DYYY_T_AWELIVE_FEED_STATUS_LABEL
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideEnterLive")) {
         UIView *parentView = self.superview;
@@ -330,7 +331,7 @@
 }
 %end
 
-%hook AWELiveStatusIndicatorView
+%hook DYYY_T_AWELIVE_STATUS_INDICATOR_VIEW
 
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideGroupLiveIndicator")) {
@@ -341,7 +342,7 @@
 }
 %end
 
-%hook AWELiveFeedLabelTagView
+%hook DYYY_T_AWELIVE_FEED_LABEL_TAG_VIEW
 - (void)layoutSubviews {
 
     if (DYYYGetBool(@"DYYYHideLiveCapsuleView")) {
@@ -359,7 +360,7 @@
 
 %end
 
-%hook IESLiveFeedDrawerEntranceView
+%hook DYYY_T_IESLIVE_FEED_DRAWER_ENTRANCE_VIEW
 - (void)layoutSubviews {
     %orig;
 
@@ -370,7 +371,7 @@
 
 %end
 
-%hook IESLiveButton
+%hook DYYY_T_IESLIVE_BUTTON
 
 - (void)layoutSubviews {
     %orig;
@@ -409,7 +410,7 @@
 
 %end
 
-%hook IESLiveLayoutPlaceholderView
+%hook DYYY_T_IESLIVE_LAYOUT_PLACEHOLDER_VIEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideLiveRoomClose")) {
@@ -419,7 +420,7 @@
 }
 %end
 
-%hook AWELiveFlowAlertView
+%hook DYYY_T_AWELIVE_FLOW_ALERT_VIEW
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideCellularAlert")) {
@@ -429,7 +430,7 @@
 }
 %end
 
-%hook IESLiveBottomRightCardView
+%hook DYYY_T_IESLIVE_BOTTOM_RIGHT_CARD_VIEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveGoodsMsg")) {
         self.hidden = YES;
@@ -439,7 +440,7 @@
 }
 %end
 
-%hook IESLiveGameCPExplainCardContainerImpl
+%hook DYYY_T_IESLIVE_GAME_CPEXPLAIN_CARD_CONTAINER_IMPL
 - (void)layoutSubviews {
     %orig;
     if (DYYYGetBool(@"DYYYHideLiveGoodsMsg")) {
@@ -449,7 +450,7 @@
 }
 %end
 
-%hook IESLiveActivityBannnerView
+%hook DYYY_T_IESLIVE_ACTIVITY_BANNNER_VIEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveGoodsMsg")) {
         [self removeFromSuperview];
@@ -459,7 +460,7 @@
 }
 %end
 
-%hook HTSLiveDiggView
+%hook DYYY_T_HTSLIVE_DIGG_VIEW
 - (void)setIconImageView:(UIImageView *)arg1 {
     if (DYYYGetBool(@"DYYYHideLiveLikeAnimation")) {
         %orig(nil);
@@ -469,7 +470,7 @@
 }
 %end
 
-%hook IESLiveStickerView
+%hook DYYY_T_IESLIVE_STICKER_VIEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideStickerView")) {
         [self removeFromSuperview];
@@ -479,7 +480,7 @@
 }
 %end
 
-%hook IESLiveGroupLiveComponentView
+%hook DYYY_T_IESLIVE_GROUP_LIVE_COMPONENT_VIEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideGroupComponent")) {
         [self removeFromSuperview];
@@ -489,7 +490,7 @@
 }
 %end
 
-%hook IESLivePreAnnouncementPanelViewNew
+%hook DYYY_T_IESLIVE_PRE_ANNOUNCEMENT_PANEL_VIEW_NEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideStickerView")) {
         self.hidden = YES;
@@ -499,7 +500,7 @@
 }
 %end
 
-%hook IESLiveDynamicUserEnterView
+%hook DYYY_T_IESLIVE_DYNAMIC_USER_ENTER_VIEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLivePopup")) {
         self.hidden = YES;
@@ -509,7 +510,7 @@
 }
 %end
 
-%hook IESLiveDanmakuVariousView
+%hook DYYY_T_IESLIVE_DANMAKU_VARIOUS_VIEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveDanmaku")) {
         self.hidden = YES;
@@ -520,7 +521,7 @@
 
 %end
 
-%hook IESLiveDanmakuSupremeView
+%hook DYYY_T_IESLIVE_DANMAKU_SUPREME_VIEW
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLiveDanmaku")) {
         self.hidden = YES;
@@ -530,7 +531,7 @@
 }
 %end
 
-%hook IESLiveHotMessageView
+%hook DYYY_T_IESLIVE_HOT_MESSAGE_VIEW
 - (void)layoutSubviews {
 
     if (DYYYGetBool(@"DYYYHideLiveHotMessage")) {

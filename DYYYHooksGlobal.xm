@@ -7,6 +7,7 @@
 //
 
 #import "DYYYShared.h"
+#import "DYYYTargets.h"
 #import <QuartzCore/QuartzCore.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
@@ -36,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook YYLabel
+%hook DYYY_T_YYLABEL
 
 - (void)setBackgroundColor:(UIColor *)color {
     %orig([DYYYCommentBlurCoordinator backgroundColorForTextView:self proposed:color]);
@@ -101,7 +102,7 @@
 
 %end
 
-%hook AWEBaseListViewController
+%hook DYYY_T_AWEBASE_LIST_VIEW_CONTROLLER
 - (void)viewDidLayoutSubviews {
     // 对齐已验证实现：布局前后各同步一次表高（不碰 inset、不做 beginUpdates）
     if (DYYYGetBool(@"DYYYEnableFullScreen")) {
@@ -119,7 +120,7 @@
 }
 %end
 
-%hook UIButton
+%hook DYYY_T_UIBUTTON
 
 - (void)layoutSubviews {
     %orig;
@@ -149,7 +150,7 @@
 
 %end
 
-%hook AWEBaseListSectionBackgroundView
+%hook DYYY_T_AWEBASE_LIST_SECTION_BACKGROUND_VIEW
 
 - (void)setBackgroundColor:(UIColor *)color {
     %orig([DYYYCommentBlurCoordinator backgroundColorForTextView:self proposed:color]);
@@ -166,7 +167,7 @@
 
 %end
 
-%hook UIViewController
+%hook DYYY_T_UIVIEW_CONTROLLER
 - (void)viewWillAppear:(BOOL)animated {
     %orig;
     if (hideButton.isElementsHidden) [hideButton hideUIElements];

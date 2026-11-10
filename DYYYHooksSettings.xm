@@ -7,6 +7,7 @@
 //
 
 #import "DYYYShared.h"
+#import "DYYYTargets.h"
 #import <QuartzCore/QuartzCore.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
@@ -36,7 +37,7 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiag/Debug/DKDebugInspector.h"
 
-%hook AWELeftSideBarAddChildTransitionObject
+%hook DYYY_T_AWELEFT_SIDE_BAR_ADD_CHILD_TRANSITION_OBJECT
 
 - (void)handleShowSliderPanGesture:(id)gr {
     if (DYYYGetBool(@"DYYYDisableSidebarGesture")) {
@@ -47,7 +48,7 @@
 
 %end
 
-%hook AWELeftSideBarEntranceView
+%hook DYYY_T_AWELEFT_SIDE_BAR_ENTRANCE_VIEW
 
 - (void)setRedDot:(id)redDot {
     %orig(nil);
