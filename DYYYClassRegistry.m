@@ -1,6 +1,10 @@
 #import "AwemeHeaders.h"
 #import "DYYYClassRegistry.h"
 #import <objc/runtime.h>
+#import <dlfcn.h>
+#import <mach-o/dyld.h>
+#import <mach-o/loader.h>
+#import <mach-o/nlist.h>
 
 // 关键类清单：优先收录 40.9 曾失效的改名/迁移类，以及全屏、评论、直播链路核心类。
 // 每项 = { 运行时类名, 40.9 继任类名（无则 NULL）, 失效时受影响的功能（中文，供可读报告） }
@@ -228,7 +232,7 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
     DYYY_AUDIT("AWEBDSimPlayerBizConfig", "核心 · enableHDRBrightnessOpt/enableHDRFullModelAdaptation"),
     DYYY_AUDIT("AWECodeGenStoryRingInfoModel", "核心 · storyRingsModelArray/setStoryRingsModelArray"),
     DYYY_AUDIT("AWECommentPanelContainerSwiftImpl_CommentContainerInnerViewController", "核心 · viewDidLayoutSubviews/viewDidDisappear"),
-    DYYY_AUDIT("AWECommentPanelContainerSwiftImpl_CommentPanelViewController", "核心 · viewDidLayoutSubviews/viewDidDisappear"),
+    DYYY_AUDIT("AWECommentPanelContainerSwiftImpl.CommentPanelViewController", "核心 · viewDidLayoutSubviews/viewDidDisappear"),
     DYYY_AUDIT("AWECommentPanelHeaderSwiftImpl_CommentHeaderGeneralView", "核心 · layoutSubviews"),
     DYYY_AUDIT("AWECommentPanelHeaderSwiftImpl_CommentHeaderGoodsView", "核心 · layoutSubviews"),
     DYYY_AUDIT("AWECommentPanelHeaderSwiftImpl_CommentHeaderTemplateAnchorView", "核心 · layoutSubviews"),
@@ -335,7 +339,7 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
     DYYY_AUDIT("CALayer", "核心 · setHidden/setContents"),
     DYYY_AUDIT("CAMetalLayer", "核心 · setWantsExtendedDynamicRangeContent/wantsExtendedDynamicRangeContent"),
     DYYY_AUDIT("CAShapeLayer", "核心 · setFillColor/setStrokeColor"),
-    DYYY_AUDIT("CommentInputContainerView", "核心 · layoutSubviews"),
+    DYYY_AUDIT("AWECommentInputViewSwiftImpl.CommentInputContainerView", "核心 · layoutSubviews（%init 绑定，占位名 CommentInputContainerView）"),
     DYYY_AUDIT("DUXPopover", "核心 · layoutSubviews"),
     DYYY_AUDIT("HDRMTButton", "核心 · configHDRContent"),
     DYYY_AUDIT("HDRMTImageView", "核心 · setMetalLayer/setUpEnv"),
@@ -375,15 +379,20 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
 // 点号名 / mangled 名双查（Swift 类在运行时是 mangled 形式）。
 // 内部使用，不对外暴露。
 + (Class)resolveClassByName:(NSString *)name;
++ (NSString *)dotNameFromMangled:(NSString *)mangled;
 @end
 
 @implementation DYYYClassRegistry
 
 + (DYYYClassAuditStatus)auditClass:(NSString *)className
                    outResolvedName:(NSString * _Nullable * _Nullable)outResolvedName {
-    Class cls = className.length > 0 ? objc_getClass(className.UTF8String) : NULL;
+    if (className.length == 0) {
+        if (outResolvedName) *outResolvedName = nil;
+        return DYYYClassAuditStatusMissing;
+    }
+    Class cls = [self resolveClassByName:className];
     if (outResolvedName) {
-        *outResolvedName = cls ? className : nil;
+        *outResolvedName = cls ? NSStringFromClass(cls) : nil;
     }
     return cls ? DYYYClassAuditStatusOK : DYYYClassAuditStatusMissing;
 }
@@ -402,15 +411,56 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
 
 #pragma mark - Hook 生效数自检
 
-// Logos 把每个 hook 方法重命名为：
-//   _logos_method$_ungrouped$AWEFeedTableView$setFrame$
-// 类在、但方法签名变了，hook 会编译通过而运行时不生效。
-// 扫一遍运行时全部方法名，统计以 _logos_method$ 开头的数量，
-// 与编译期写入的期望值比对——这是最真实的健康度指标。
+// 取本 tweak（dylib）的镜像地址范围。
+// 用 dladdr 查一个本模块内函数的归属镜像，得到 dli_fbase；
+// 再用该镜像 Mach-O header 的 __TEXT 段大小确定上界。
+static BOOL DYYYOwnImageRange(uintptr_t *outBase, uintptr_t *outEnd) {
+    Dl_info info;
+    if (!dladdr((const void *)&DYYYOwnImageRange, &info) || !info.dli_fbase) return NO;
+
+    uintptr_t base = (uintptr_t)info.dli_fbase;
+    const struct mach_header_64 *header = (const struct mach_header_64 *)base;
+    if (header->magic != MH_MAGIC_64) return NO;
+
+    // 遍历 load commands 找 __TEXT 段，取其 vmaddr+vmsize 作为范围
+    uintptr_t cursor = base + sizeof(struct mach_header_64);
+    uintptr_t textStart = base;
+    uintptr_t textSize = 0;
+    for (uint32_t i = 0; i < header->ncmds; i++) {
+        const struct load_command *cmd = (const struct load_command *)cursor;
+        if (cmd->cmd == LC_SEGMENT_64) {
+            const struct segment_command_64 *seg = (const struct segment_command_64 *)cmd;
+            if (strcmp(seg->segname, "__TEXT") == 0) {
+                textStart = base + seg->vmaddr;
+                textSize = seg->vmsize;
+                break;
+            }
+        }
+        cursor += cmd->cmdsize;
+    }
+    if (textSize == 0) return NO;
+    if (outBase) *outBase = textStart;
+    if (outEnd) *outEnd = textStart + textSize;
+    return YES;
+}
+
+// 统计「有多少个方法实现落在我们的 dylib 里」。
+//
+// 为什么不用方法名前缀判断：
+//   Logos 在不同 generator（internal / internal-legacy / ModernMode）下
+//   生成的方法名格式不同，#80 我按 "_logos_method$" 前缀统计得到 0
+//   ——功能却完全正常，说明前缀猜错了。名字不可靠。
+//
+// 用实现地址判断是可靠的：Logos 的 hook 实现编译进我们的 dylib，
+// 其 IMP 必然落在本镜像 __TEXT 段范围内。
 + (NSUInteger)countInstalledLogosMethods {
+    uintptr_t base = 0, end = 0;
+    if (!DYYYOwnImageRange(&base, &end)) return 0;
+
     unsigned int classCount = 0;
     Class *classes = objc_copyClassList(&classCount);
     if (!classes) return 0;
+
     NSUInteger total = 0;
     for (unsigned int i = 0; i < classCount; i++) {
         Class cls = classes[i];
@@ -418,8 +468,9 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
         Method *methods = class_copyMethodList(cls, &methodCount);
         if (!methods) continue;
         for (unsigned int j = 0; j < methodCount; j++) {
-            const char *selName = sel_getName(method_getName(methods[j]));
-            if (selName && strncmp(selName, "_logos_method$", 14) == 0) total++;
+            IMP imp = method_getImplementation(methods[j]);
+            uintptr_t addr = (uintptr_t)imp;
+            if (addr >= base && addr < end) total++;
         }
         free(methods);
     }
@@ -517,12 +568,103 @@ static NSUInteger gDYYYExpectedHookCount = 0;
     return out;
 }
 
-// 点号名 / mangled 名双查（Swift 类在运行时是 mangled 形式）
+// 类名解析：兼容四种写法
+//   1) 普通 ObjC 类名            AWEFeedTableView
+//   2) 点号形式 Swift 类          AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController
+//   3) 下划线形式 Swift 类（审计表早期写法）
+//      AWECommentPanelContainerSwiftImpl_CommentContainerInnerViewController
+//   4) mangled 形式（Swift 符号名）
+//      _TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController
+// 运行时 Swift 类注册的是【点号形式】，所以 3、4 都要能反推回 2。
 + (Class)resolveClassByName:(NSString *)name {
+    if (!name.length) return Nil;
+
+    // 1) 原名直接查（覆盖普通类 + 点号形式）
     Class cls = NSClassFromString(name);
     if (cls) return cls;
-    NSString *mangled = [name stringByReplacingOccurrencesOfString:@"." withString:@"_"];
-    return NSClassFromString(mangled);
+
+    // 2) 点号 → 下划线（防御性）
+    if ([name containsString:@"."]) {
+        cls = NSClassFromString([name stringByReplacingOccurrencesOfString:@"." withString:@"_"]);
+        if (cls) return cls;
+    }
+
+    // 3) mangled → 点号（_TtC<模块长><模块><类名长><类名>）
+    if ([name hasPrefix:@"_TtC"] || [name hasPrefix:@"_TtV"]) {
+        NSString *dotted = [self dotNameFromMangled:name];
+        if (dotted) {
+            cls = NSClassFromString(dotted);
+            if (cls) return cls;
+        }
+    }
+
+    // 4) 下划线 → 点号（逐段尝试切分）
+    if ([name containsString:@"_"]) {
+        NSArray<NSString *> *parts = [name componentsSeparatedByString:@"_"];
+        if (parts.count > 1) {
+            NSMutableString *head = [parts.firstObject mutableCopy];
+            for (NSUInteger i = 1; i < parts.count; i++) {
+                // 候选 A：此处用点号，后面全用点号
+                NSMutableString *dotForm = [head mutableCopy];
+                [dotForm appendFormat:@".%@", parts[i]];
+                for (NSUInteger k = i + 1; k < parts.count; k++) {
+                    [dotForm appendFormat:@".%@", parts[k]];
+                }
+                Class found = NSClassFromString(dotForm);
+                if (found) return found;
+
+                // 候选 B：此处用点号，后面全用下划线
+                NSMutableString *mixedForm = [head mutableCopy];
+                [mixedForm appendFormat:@".%@", parts[i]];
+                for (NSUInteger k = i + 1; k < parts.count; k++) {
+                    [mixedForm appendFormat:@"_%@", parts[k]];
+                }
+                found = NSClassFromString(mixedForm);
+                if (found) return found;
+
+                // 本段不切分，继续用下划线往后找
+                [head appendFormat:@"_%@", parts[i]];
+            }
+        }
+    }
+
+    return Nil;
+}
+
+// 把 Swift mangled 类名还原成「模块.类名」形式。
+// 格式：_TtC<模块名长度><模块名><类名长度><类名>
+//   _TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController
+//   →   AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController
++ (NSString *)dotNameFromMangled:(NSString *)mangled {
+    if (mangled.length < 6) return nil;
+
+    // 跳过 _TtC / _TtV
+    NSUInteger idx = 4;
+    NSString *rest = [mangled substringFromIndex:idx];
+
+    // 模块名长度
+    NSRange digits = [rest rangeOfCharacterFromSet:
+        [NSCharacterSet decimalDigitCharacterSet]];
+    if (digits.location != 0) return nil;
+    NSUInteger p = 0;
+    while (p < rest.length && [[NSCharacterSet decimalDigitCharacterSet]
+            characterIsMember:[rest characterAtIndex:p]]) p++;
+    if (p == 0 || p >= rest.length) return nil;
+    NSInteger moduleLen = [[rest substringToIndex:p] integerValue];
+    if (moduleLen <= 0 || (NSUInteger)moduleLen > rest.length - p) return nil;
+    NSString *module = [rest substringWithRange:NSMakeRange(p, moduleLen)];
+
+    // 类名长度
+    NSString *tail = [rest substringFromIndex:p + moduleLen];
+    NSUInteger q = 0;
+    while (q < tail.length && [[NSCharacterSet decimalDigitCharacterSet]
+            characterIsMember:[tail characterAtIndex:q]]) q++;
+    if (q == 0 || q >= tail.length) return nil;
+    NSInteger classLen = [[tail substringToIndex:q] integerValue];
+    if (classLen <= 0 || (NSUInteger)classLen > tail.length - q) return nil;
+    NSString *cls = [tail substringWithRange:NSMakeRange(q, classLen)];
+
+    return [NSString stringWithFormat:@"%@.%@", module, cls];
 }
 
 + (NSInteger)runStartupAudit {
