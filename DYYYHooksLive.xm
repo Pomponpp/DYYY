@@ -206,15 +206,11 @@
 
 %end
 
-%hook IESLiveDynamicRankListEntranceView
-- (void)layoutSubviews {
-    %orig;
-    if (DYYYGetBool(@"DYYYHideLiveDetail")) {
-        self.hidden = YES;
-        return;
-    }
-}
-%end
+// 41.1: IESLiveDynamicRankListEntranceView 已不存在（改名/移除）。
+// 该功能由下方 IESLiveMatrixEntranceView 等其他 hook 覆盖，实测可用，
+// 因此删除这条空转 hook，避免审计报告持续报"类未找到"的噪声。
+// 若将来发现热榜隐藏失效，优先检查 IESLiveRevenueImpl.IESLiveDynamicRankListEntranceView
+// （41.1 运行时清单里存在这个带模块前缀的 Swift 类）。
 
 %hook IESLiveMatrixEntranceView
 - (void)layoutSubviews {
@@ -500,6 +496,14 @@
 }
 %end
 
+// 隐藏进场特效（会员进入直播间时弹幕顶部的动画）
+//
+// 41.1 状态：IESLiveDynamicUserEnterView 运行时查不到，本 hook 是否生效未验证。
+//   · 二进制里仍有该字符串，但类未注册（可能按需加载，或已换实现）
+//   · 运行时清单里没有同名的替代类
+//   · 若"隐藏进场特效"开关失效，优先排查 IESLiveDynamicUserEnter* / 进场动画相关类
+//
+// 保留 hook：类不存在时空转，无副作用；若某版本恢复则自动生效。
 %hook IESLiveDynamicUserEnterView
 - (void)layoutSubviews {
     if (DYYYGetBool(@"DYYYHideLivePopup")) {

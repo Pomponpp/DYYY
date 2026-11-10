@@ -10735,6 +10735,16 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
+// 招财猫活动横幅（限时活动，通常在春节前后出现）
+//
+// 状态说明：
+//   · 41.1 运行时查不到 AWELuckyCatBannerView，但二进制里仍有该字符串
+//     → 说明当前版本该类未被注册（活动未开启），不代表功能永久移除
+//   · 41.1 存在新方案：AWEIncentiveSwiftImpl.AITXBridgeUgLuckycatShowLottieAsBannerMethod
+//     → 招财猫机制还在，只是换了 Swift 实现
+//
+// 保留旧 hook：活动回归时可自动生效（类不存在时空转，无副作用）。
+// 若活动回归但本 hook 未生效，说明已切换到 AITXBridge 方案，需针对新版再加 hook。
 %hook AWELuckyCatBannerView
 - (id)initWithFrame:(CGRect)frame {
     return nil;

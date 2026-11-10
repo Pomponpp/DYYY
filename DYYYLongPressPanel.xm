@@ -1476,8 +1476,26 @@
 %end
 
 // 隐藏评论分享功能
+//
+// 类名演变：
+//   41.0  AWEIMCommentShareUserHorizontal*（旧）
+//   41.0  AWEIMCommentShareTableViewCell（迁移后）
+//   41.1  AWECommentShareContainerCell（再次重构，41.1 实测旧类已不存在）
+//
+// 保留两个 hook：新类为主，旧类留着兼容回退版本（旧类不存在时空转，无害）。
+%hook AWECommentShareContainerCell
 
-// 41.1: AWEIMCommentShareUserHorizontal* 迁移为 AWEIMCommentShareTableViewCell
+- (void)layoutSubviews {
+    %orig;
+
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideCommentShareToFriends"]) {
+        self.hidden = YES;
+    }
+}
+
+%end
+
+// 兼容旧版：41.1 不存在，空转无副作用
 %hook AWEIMCommentShareTableViewCell
 
 - (void)layoutSubviews {
