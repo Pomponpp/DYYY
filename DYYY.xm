@@ -10837,13 +10837,13 @@ static void findTargetViewInView(UIView *view) {
     Class fullscreenCommentClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController",
                                                         "_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
     if (fullscreenCommentClass && [fullscreenCommentClass isSubclassOfClass:[UIViewController class]]) {
-        %init(DYYYFullscreenCommentGroup, AWECommentPanelContainerSwiftImpl_CommentContainerInnerViewController = fullscreenCommentClass);
+        %init(DYYYFullscreenCommentGroup, DYYY_T_AWECOMMENT_PANEL_CONTAINER_SWIFT_IMPL_COMMENT_CONTAINER_INNER_VIEW_CONTROLLER = fullscreenCommentClass);
     }
     // 41.0：外层面板类（首次打开评论区的实际入口）
     Class commentPanelClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentPanelViewController",
                                                     "_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
     if (commentPanelClass && [commentPanelClass isSubclassOfClass:[UIViewController class]]) {
-        %init(DYYYFullscreenCommentPanelGroup, AWECommentPanelContainerSwiftImpl_CommentPanelViewController = commentPanelClass);
+        %init(DYYYFullscreenCommentPanelGroup, DYYY_T_AWECOMMENT_PANEL_CONTAINER_SWIFT_IMPL_COMMENT_PANEL_VIEW_CONTROLLER = commentPanelClass);
     }
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
         @"DYYYDisableFeedNowPlayingInfo" : @YES
@@ -10854,7 +10854,7 @@ static void findTargetViewInView(UIView *view) {
     Class interactionBaseLabelClass = DYYYResolveSwiftClass("AWECommentSwiftBizUI.CommentInteractionBaseLabel",
                                                             "_TtC20AWECommentSwiftBizUI27CommentInteractionBaseLabel");
     if (interactionBaseLabelClass) {
-        %init(DYYYCommentExactTimeGroup, AWECommentSwiftBizUI_CommentInteractionBaseLabel = interactionBaseLabelClass);
+        %init(DYYYCommentExactTimeGroup, DYYY_T_AWECOMMENT_SWIFT_BIZ_UI_COMMENT_INTERACTION_BASE_LABEL = interactionBaseLabelClass);
     }
     
     Class imMenuComponentClass = objc_getClass("AWEIMCustomMenuComponent");
@@ -10916,30 +10916,30 @@ static void findTargetViewInView(UIView *view) {
 
         Class imageContentClass = objc_getClass("BDMultiContentContainer.ImageContentView");
         if (imageContentClass) {
-            %init(BDMultiContentImageViewGroup, BDMultiContentContainer_ImageContentView = imageContentClass);
+            %init(BDMultiContentImageViewGroup, DYYY_T_BDMULTI_CONTENT_CONTAINER_IMAGE_CONTENT_VIEW = imageContentClass);
         }
 
         // 40.9: CommentHeaderGeneralView/GoodsView 迁移到 AWECommentCommerceSwiftImpl 模块（mangled 名），旧模块点号名保留作回退
         Class commentHeaderGeneralClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGeneralView",
                                                                 "_TtC27AWECommentCommerceSwiftImpl24CommentHeaderGeneralView");
         if (commentHeaderGeneralClass) {
-            %init(CommentHeaderGeneralGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderGeneralView = commentHeaderGeneralClass);
+            %init(CommentHeaderGeneralGroup, DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_GENERAL_VIEW = commentHeaderGeneralClass);
         }
 
         Class commentHeaderGoodsClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGoodsView",
                                                               "_TtC27AWECommentCommerceSwiftImpl22CommentHeaderGoodsView");
         if (commentHeaderGoodsClass) {
-            %init(CommentHeaderGoodsGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderGoodsView = commentHeaderGoodsClass);
+            %init(CommentHeaderGoodsGroup, DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_GOODS_VIEW = commentHeaderGoodsClass);
         }
         Class commentHeaderTemplateClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderTemplateAnchorView",
                                                                  "_TtC30AWECommentPanelHeaderSwiftImpl31CommentHeaderTemplateAnchorView");
         if (commentHeaderTemplateClass) {
-            %init(CommentHeaderTemplateGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderTemplateAnchorView = commentHeaderTemplateClass);
+            %init(CommentHeaderTemplateGroup, DYYY_T_AWECOMMENT_PANEL_HEADER_SWIFT_IMPL_COMMENT_HEADER_TEMPLATE_ANCHOR_VIEW = commentHeaderTemplateClass);
         }
 
         Class tipsVCClass = objc_getClass("AWECommentPanelListSwiftImpl.CommentBottomTipsContainerViewController");
         if (tipsVCClass) {
-            %init(CommentBottomTipsVCGroup, AWECommentPanelListSwiftImpl_CommentBottomTipsContainerViewController = tipsVCClass);
+            %init(CommentBottomTipsVCGroup, DYYY_T_AWECOMMENT_PANEL_LIST_SWIFT_IMPL_COMMENT_BOTTOM_TIPS_CONTAINER_VIEW_CONTROLLER = tipsVCClass);
         }
 
         NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
