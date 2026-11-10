@@ -802,6 +802,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 @interface AWEIMCommentShareTableViewCell : UITableViewCell
 @end
+// 41.1：评论分享面板的容器 cell（替代 41.0 的 AWEIMCommentShareTableViewCell）。
+// 继承按 UITableViewCell 声明，本处只用到 layoutSubviews 与 hidden。
+@interface AWECommentShareContainerCell : UITableViewCell
+@end
 @interface AWEProfilePublishGuideCollectionViewCell : UIView
 @end
 
