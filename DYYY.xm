@@ -10880,7 +10880,7 @@ static void findTargetViewInView(UIView *view) {
         static dispatch_once_t onceToken;
         dispatch_once(&onceToken, ^{
           Class wSwiftImpl = objc_getClass("AWECommentInputViewSwiftImpl.CommentInputContainerView");
-          %init(CommentInputContainerView = wSwiftImpl);
+          %init(DYYY_T_COMMENT_INPUT_CONTAINER_VIEW = wSwiftImpl);
         });
         BOOL isAutoPlayEnabled = DYYYGetBool(@"DYYYEnableAutoPlay");
         if (isAutoPlayEnabled) {
