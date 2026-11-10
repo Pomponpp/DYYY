@@ -75,7 +75,7 @@
     if (!state.discoveredLists) {
         state.discoveredLists = YES;
         NSMutableArray<UIView *> *pending = [view.subviews mutableCopy];
-        // 41.0 视图树实锤：评论列表区的不透明底色来自
+        // 41.1 视图树实锤：评论列表区的不透明底色来自
         // AWEBaseListSectionBackgroundView（rgba(0.086,0.086,0.086,1.0)），
         // 旧 BFS 只清 UIScrollView/UILabel，漏掉这个 ListKit 分区背景，
         // 表现为毛玻璃层之上永远盖着一块黑。
@@ -124,7 +124,7 @@
     if (!state.panel || objc_getAssociatedObject(state.panel, @selector(updatePanel:)) != state || ![view isDescendantOfView:state.panel]) {
         state = nil;
         objc_setAssociatedObject(view, @selector(layoutListView:), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        // 40.9 评论面板嵌套层级比以前深（cell/collectionView/container 多层包裹），
+        // 41.1 评论面板嵌套层级比以前深（cell/collectionView/container 多层包裹），
         // 16 层会够不到带状态的祖先，导致清理逻辑整条跳过、原生不透明底色残留，
         // 表现为「一会黑块一会毛玻璃」。这里加深到 64 层。
         UIView *ancestor = view.superview;
@@ -213,11 +213,11 @@
 }
 + (void)layoutController:(UIViewController *)controller {
     if (![NSThread isMainThread]) return;
-    // 40.9：Swift 类点号名已不可查，必须回退 mangled 名，否则整条毛玻璃清理逻辑直接跳过
+    // 41.1：Swift 类点号名已不可查，必须回退 mangled 名，否则整条毛玻璃清理逻辑直接跳过
     // （表现为评论列表部分 cell 保留不透明背景、透出视频画面）。
     Class innerClass = NSClassFromString(@"AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController");
     if (!innerClass) innerClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
-    // 41.0：外层面板类。首次从 Feed 打开评论区走 Panel 而不经过 Inner，
+    // 41.1：外层面板类。首次从 Feed 打开评论区走 Panel 而不经过 Inner，
     // 必须同样执行布局。二进制里还有多个不同长度后缀的 CommentViewController
     // 变体（31/33/35/36/40/42/47），只认两个精确类名会再次漏掉真实持有者。
     static Class panelClass = nil;
@@ -227,7 +227,7 @@
       if (!panelClass) panelClass = NSClassFromString(@"_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
     });
     // 兜底判定：类名里含 CommentPanelContainerSwiftImpl 或 Comment 且是面板级 VC，
-    // 一律视为评论面板处理（41.0 版本类名后缀不确定，不能依赖精确匹配）。
+    // 一律视为评论面板处理（41.1 版本类名后缀不确定，不能依赖精确匹配）。
     NSString *vcName = [NSString stringWithUTF8String:class_getName([controller class])];
     BOOL looksLikePanel = [vcName containsString:@"CommentPanelContainerSwiftImpl"] ||
                           [vcName containsString:@"CommentContainerInner"] ||

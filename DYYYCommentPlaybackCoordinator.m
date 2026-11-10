@@ -74,7 +74,7 @@
     }
 }
 
-// 冻结根修（41.0 实测）：恢复原本只挂在评论容器 viewDidDisappear，但 41.0
+// 冻结根修（41.1 实测）：恢复原本只挂在评论容器 viewDidDisappear，但 41.1
 // 半屏评论是往窗口里加 subview，关闭时不走 disappear → 恢复永不执行，
 // 播放器停在 rate=0：画面定格、弹幕照常、必须手动点暂停再播放才恢复。
 // 兜底：暂停成功后轮询评论面板是否已脱离窗口，脱离即恢复播放。
@@ -86,7 +86,7 @@
     __weak id paused = coordinator.pausedViewModel;
     [coordinator.watchdog startWithInterval:0.5 leeway:0.1 queue:dispatch_get_main_queue() repeats:YES handler:^{
       DYYYCommentPlaybackCoordinator *inner = [self shared];
-      // 脱离窗口、被隐藏、或整层透明都视为评论已关闭（41.0 关闭方式不确定）。
+      // 脱离窗口、被隐藏、或整层透明都视为评论已关闭（41.1 关闭方式不确定）。
       UIView *panelView = panel.viewIfLoaded;
       BOOL panelGone = !panel || !panelView.window || panelView.hidden || panelView.alpha < 0.01;
       if (!panelGone) return;

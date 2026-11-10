@@ -4398,25 +4398,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     NSMutableArray<AWESettingItemModel *> *diagnosticItems = [NSMutableArray array];
 
 
-
-    // 一键诊断包：日志 + 视图树 + 环境状态 + 截图，四样时间戳对齐
-
-    [diagnosticItems addObject:[DYYYSettingsHelper createSettingItem:@{
-                             @"identifier" : @"DYYYFullscreenDiag",
-                             @"title" : @"诊断日志",
-                             @"detail" : @"记录全屏、底栏、毛玻璃、音频的判定过程到运行日志",
-                             @"cellType" : @6,
-                             @"imageName" : @"ic_bug_outlined_20"
-                         }]];
-
-
-
-
-    // 诊断悬浮入口开关（不进备份）：开启后常驻扳手，随时导出诊断包
+    // 诊断模式（合并了原「诊断日志」+「诊断悬浮入口」）
+    // 开：扳手出现 + 全屏/底栏/毛玻璃/音频判定日志全开
+    // 关：扳手消失 + 日志静默（热路径零开销）
+    // 日志开关旧 key（DYYYFullscreenDiag）仍被读取，兼容老备份
     AWESettingItemModel *diagEntryItem = [[%c(AWESettingItemModel) alloc] init];
     diagEntryItem.identifier = @"DYYYDiagEntryEnabled";
-    diagEntryItem.title = @"诊断悬浮入口";
-    diagEntryItem.detail = @"开启后屏幕显示扳手按钮，随时一键导出诊断包取证";
+    diagEntryItem.title = @"诊断模式";
+    diagEntryItem.detail = @"开启后屏幕出现扳手，同时记录全屏/底栏/毛玻璃/音频判定日志；关闭则完全静默";
     diagEntryItem.type = 1;
     diagEntryItem.cellType = 6;
     diagEntryItem.isEnable = YES;
@@ -4428,6 +4417,8 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       BOOL newValue = !strongItem.isSwitchOn;      // 标准翻转：基于当前 UI 值
       strongItem.isSwitchOn = newValue;
       [DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier];
+      // 日志开关跟随诊断模式：老 key 同步写入，避免两处状态不一致
+      [DYYYSettingsHelper setUserDefaults:@(newValue) forKey:@"DYYYFullscreenDiag"];
       DKDebugInspectorRefreshOverlay();                            // 用写入后的新值刷新浮层
     };
     [diagnosticItems addObject:diagEntryItem];

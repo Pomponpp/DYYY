@@ -84,7 +84,7 @@
     return %orig;
 }
 
-// 40.9：仅放行菜单项不够，下载本身还被 allowsAvatarDownload 拦截（表现为菜单可见但点了没反应）。
+// 41.1：仅放行菜单项不够，下载本身还被 allowsAvatarDownload 拦截（表现为菜单可见但点了没反应）。
 - (BOOL)allowsAvatarDownload {
     if (DYYYGetBool(@"DYYYEnableSaveAvatar")) {
         return YES;
@@ -92,7 +92,7 @@
     return %orig;
 }
 
-// 40.9：主页大头像预览页的下载按钮由 allowsRoleHeadDownload 控制，
+// 41.1：主页大头像预览页的下载按钮由 allowsRoleHeadDownload 控制，
 // 该属性位于预览数据模型上，故在管理器一侧一并放行。
 - (BOOL)allowsRoleHeadDownload {
     if (DYYYGetBool(@"DYYYEnableSaveAvatar")) {
@@ -108,7 +108,7 @@
     return %orig;
 }
 
-// 40.9 实测（探针日志）：头像预览页功能项显示由该方法控制，
+// 41.1 实测（探针日志）：头像预览页功能项显示由该方法控制，
 // AWEProfileAvatarFunctionModel title=保存头像 对应 type == 1。
 - (BOOL)p_shouldShowFunctionWithType:(long long)type {
     if (type == 1 && DYYYGetBool(@"DYYYEnableSaveAvatar")) {

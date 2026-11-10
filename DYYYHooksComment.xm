@@ -153,7 +153,7 @@ BOOL commentLivePhotoNotWaterMark = DYYYGetBool(@"DYYYCommentLivePhotoNotWaterMa
     if (!DYYYGetBool(@"DYYYEnableCommentBlur"))
         return;
 
-    // 40.9 优化：全树遍历结果按控制器缓存，仅在缓存视图脱离视图树时重扫；
+    // 41.1 优化：全树遍历结果按控制器缓存，仅在缓存视图脱离视图树时重扫；
     // 面板打开后结构稳定，逐帧全树 BFS 是主要浪费。
     static char kDYYYCommentBlurScanKey;
     NSDictionary *scanCache = objc_getAssociatedObject(self, &kDYYYCommentBlurScanKey);

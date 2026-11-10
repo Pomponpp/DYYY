@@ -16,7 +16,7 @@ FOUNDATION_EXPORT void DYYYNSLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2)
 #endif
 
 // 获取指定类型设置
-// 40.9 优化：热路径（layoutSubviews/setFrame 等）高频读取 NSUserDefaults，
+// 41.1 优化：热路径（layoutSubviews/setFrame 等）高频读取 NSUserDefaults，
 // 统一改走 DYYYConfigCache：值缓存在内存，设置页变更经 NSUserDefaultsDidChangeNotification 失效。
 // 未命中缓存的键自动回退直读，行为与旧宏完全一致。
 @interface DYYYConfigCache : NSObject
@@ -775,7 +775,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, assign, getter=isHidden) BOOL hidden;
 @end
 
-// 抖音 40.9 适配：旧类改名/迁移后的继任类
+// 抖音 41.1 适配：旧类改名/迁移后的继任类
 @interface AWEFamiliarSkylightBubbleView : UIView
 @end
 @interface AWEProfileAvatarFunctionManager : NSObject
@@ -786,7 +786,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (BOOL)p_shouldShowFunctionWithType:(long long)type;
 @end
 
-// 40.9 头像预览页（保存按钮所在页面）
+// 41.1 头像预览页（保存按钮所在页面）
 @interface AWEProfileAvatarViewController : UIViewController
 - (BOOL)p_shouldShowFunctionWithType:(long long)type;
 - (id)p_collectionViewCellWithType:(long long)type;
@@ -1374,7 +1374,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (double)contentOffsetYForCellAtIndex:(long long)index;
 - (void)adjustTableViewHeightForTargetIndex:(long long)index;
 @end
-// 41.0 视图树实锤：评论列表区不透明底色来源（rgba(0.086,0.086,0.086,1.0)），
+// 41.1 视图树实锤：评论列表区不透明底色来源（rgba(0.086,0.086,0.086,1.0)），
 // 盖在原生毛玻璃层之上，是"评论区黑色"的真凶。
 @interface AWEBaseListSectionBackgroundView : UIView
 @end

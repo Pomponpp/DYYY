@@ -6,8 +6,8 @@
 #import <mach-o/loader.h>
 #import <mach-o/nlist.h>
 
-// 关键类清单：优先收录 40.9 曾失效的改名/迁移类，以及全屏、评论、直播链路核心类。
-// 每项 = { 运行时类名, 40.9 继任类名（无则 NULL）, 失效时受影响的功能（中文，供可读报告） }
+// 关键类清单：优先收录 41.1 曾失效的改名/迁移类，以及全屏、评论、直播链路核心类。
+// 每项 = { 运行时类名, 41.1 继任类名（无则 NULL）, 失效时受影响的功能（中文，供可读报告） }
 typedef struct {
     const char *primary;
     const char *successor; // 可为 NULL
@@ -57,7 +57,7 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
     DYYY_AUDIT("_TtC28AWECommentInputViewSwiftImpl31CommentInputViewMiddleContainer", "评论输入毛玻璃"),
     DYYY_AUDIT("_TtC28AWECommentMediaFeedSwfitImpl34CommentMediaFeedCellViewController", "多图下载索引"),
 
-    // ---- 40.9 改名继任类 ----
+    // ---- 41.1 改名继任类 ----
     DYYY_AUDIT("AWEFullPageFeedContainerViewController", "图文页状态栏隐藏"),
     DYYY_AUDIT("AWEProfileAvatarFunctionManager", "保存他人头像"),
     DYYY_AUDIT("AWEFamiliarSkylightBubbleView", "消息页头像气泡隐藏"),

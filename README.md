@@ -4,12 +4,12 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-iOS%2014.0%2B-black?style=flat&labelColor=black" />
-  <img src="https://img.shields.io/badge/App-%E6%8A%96%E9%9F%B3%2041.0.0-black?style=flat&labelColor=black" />
+  <img src="https://img.shields.io/badge/App-%E6%8A%96%E9%9F%B3%2041.1.0-black?style=flat&labelColor=black" />
 </p>
 
 # DYYY
 
-适用于调整抖音 UI 的 Tweak，仅测试当前最新版 **抖音 41.0.0**（其他版本无测试，不保证功能可行性）。  
+适用于调整抖音 UI 的 Tweak，仅测试当前最新版 **抖音 41.1.0**（其他版本无测试，不保证功能可行性）。  
 **仅供学习交流，禁止用于商业用途。**
 
 本地 UI 修订在抖音 40.7.0 上的局部回归结果、构建命令及限制见 [布局回归记录](tests/README.md)。

@@ -144,7 +144,7 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     CGRect adjusted = [self adjustDetailTableFrame:table frame:table.frame target:target];
     if (CGRectIsNull(adjusted)) return;
     table.frame = adjusted;
-    if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
         NSLog(@"[DYYY][table] prepare 撑高 %.1f → %.1f", CGRectGetHeight(table.frame), target);
     }
 }
@@ -193,7 +193,7 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     }
     if (!objc_getAssociatedObject(table, @selector(prepareDetailTableNew:))) {
         objc_setAssociatedObject(table, @selector(prepareDetailTableNew:), @(current), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
             NSLog(@"[DYYY][table] 记原高=%.1f 目标=%.1f", current, target);
         }
     }
@@ -210,7 +210,7 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
             CGRect f = cell.frame;
             f.size.height = target;
             cell.frame = f;
-            if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+            if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
                 NSLog(@"[DYYY][table] 对齐残留 cell %.1f → %.1f", h, target);
             }
         }
@@ -900,7 +900,7 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
         state.fullscreenHostFrame = target;
         // 诊断：完整记录每次撑满判定（纯打印，不改行为），用于定位滑动时
         // 多页同时撑满/新旧页状态打架的问题。开关：设置→诊断工具→全屏诊断日志。
-        if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
             UIView *diagCell = [self cellForPlayer:host owner:controller];
             UIView *diagPager = [self pagingViewForCell:diagCell];
             CGRect cellRect = diagCell ? [diagCell convertRect:diagCell.bounds toView:diagCell.window] : CGRectZero;

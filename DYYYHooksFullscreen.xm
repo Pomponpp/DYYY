@@ -378,7 +378,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
         %orig;
         return;
     }
-    if (DYYYGetBool(@"DYYYFullscreenDiag")) {
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
         NSLog(@"[DYYY][table] setFrame 顶高 %.1f → %.1f", CGRectGetHeight(frame), CGRectGetHeight(adjusted));
     }
     %orig(adjusted);

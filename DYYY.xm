@@ -1099,7 +1099,7 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
     return models;
 }
 
-// 40.9 移除：AWEVideoModel 的 bitrateRawData setter 已不存在（属性只读化），
+// 41.1 移除：AWEVideoModel 的 bitrateRawData setter 已不存在（属性只读化），
 // getter hook 保留，HDR 码率过滤走读取路径。
 
 - (NSArray *)bitrateRawData {
@@ -1143,8 +1143,8 @@ static char kDYYYHDRStrippedVideoModelKey;
 static char kDYYYHDROnlyAwemeModelKey;
 static char kDYYYHDROnlyVideoModelKey;
 
-// 抖音 40.9：Swift 类运行时注册名为 mangled（_TtC…），Module.Class 点号名不再可查。
-// 先按点号名取（兼容旧版本），失败再按 mangled 名取（兼容 40.9+）。统一实现见 DYYYClassRegistry。
+// 抖音 41.1：Swift 类运行时注册名为 mangled（_TtC…），Module.Class 点号名不再可查。
+// 先按点号名取（兼容旧版本），失败再按 mangled 名取（兼容 41.1+）。统一实现见 DYYYClassRegistry。
 static Class DYYYResolveSwiftClass(const char *dotName, const char *mangledName) {
     return [DYYYClassRegistry resolveSwiftClassDotName:dotName mangledName:mangledName];
 }
@@ -2082,7 +2082,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-// 40.9 移除：AWEECOMIMAppSettingsService.enableVideoPreviewSupportHDR 方法已删除，
+// 41.1 移除：AWEECOMIMAppSettingsService.enableVideoPreviewSupportHDR 方法已删除，
 // 空 hook 只会产生安装警告日志；商城私信预览的 HDR 由 AVPlayerItem/CALayer 等其余 hook 覆盖。
 
 %hook IESLiveAudienceHDRController
@@ -3349,7 +3349,7 @@ static BOOL dyyyShouldUseLastStickerURL = NO;
             UIViewController *topVC = [DYYYUtils topView];
             
             // 获取 Ivar 定义的类和目标控制器类
-            // 40.9: CommentMediaFeedCellViewController 点号名不可查，mangled 名回退
+            // 41.1: CommentMediaFeedCellViewController 点号名不可查，mangled 名回退
             Class ivarClass = DYYYResolveSwiftClass("AWECommentMediaFeedSwfitImpl.CommentMediaFeedCellViewController",
                                                     "_TtC28AWECommentMediaFeedSwfitImpl34CommentMediaFeedCellViewController");
             Class targetClass = NSClassFromString(@"AWECommentMediaFeedSwfitImpl.CommentMediaFeedCommonImageCellViewController");
@@ -5292,7 +5292,7 @@ static NSHashTable *processedParentViews = nil;
 // 隐藏自己无公开作品的视图
 
 
-// 40.9: 空主页发布引导单元格（替代已删除的 AWEProfilePostEmptyPublishGuideCollectionViewCell）
+// 41.1: 空主页发布引导单元格（替代已删除的 AWEProfilePostEmptyPublishGuideCollectionViewCell）
 
 
 // 隐藏关注直播顶端的直播视图
@@ -5309,7 +5309,7 @@ static NSHashTable *processedParentViews = nil;
 // 隐藏右上搜索，但可点击
 
 // ===== 详情页行高统一（停止对抗式写入）=====
-// 40.9 实测（#14 日志）：详情页 cell 高度在一秒内 843↔926 交替 46 次，
+// 41.1 实测（#14 日志）：详情页 cell 高度在一秒内 843↔926 交替 46 次，
 // 用户感知为"上一页与下一页拔河"。根因：DYYY 行高 hook 返回窗口高(926)
 // 与抖音内部布局（窗口高 - 底栏 83 = 843）每帧互斥写入，Auto Layout 与
 // 内部缓存持续把 cell 压回 843，形成拉锯。
@@ -5320,9 +5320,9 @@ static NSHashTable *processedParentViews = nil;
 // 设计原则：不改抖音的布局计算，只管理自己的视图。
 static const CGFloat kDYYYDetailHeightTolerance = 0.5;
 
-// 40.9 拔河根修：原「详情页行高统一」三 hook 已移除——行高交还原生，
+// 41.1 拔河根修：原「详情页行高统一」三 hook 已移除——行高交还原生，
 // 全屏视觉由容器撑满补偿（说明见上方注释块）。
-// 背景：抖音 40.9 删除了头像预览页的长按保存入口（原生实测无反应），
+// 背景：抖音 41.1 删除了头像预览页的长按保存入口（原生实测无反应），
 // 旧 hook（shouldShowSaveAvatarItem / allowsAvatarDownload 等）永远等不到调用。
 // 因此不再复活原生功能，改为 DYYY 自行实现：
 //   在头像预览页加大拇指长按手势 → 取头像原图 URL → 下载 → 存相册。
@@ -6857,7 +6857,7 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
     DYYYApplyAvatarFollowPromptSettingsWithRetry(self);
 }
 
-// 40.9 移除：AWEPlayInteractionViewController.setIsCommentVCShowing: 已不存在（Swift 属性合成名变更）。
+// 41.1 移除：AWEPlayInteractionViewController.setIsCommentVCShowing: 已不存在（Swift 属性合成名变更）。
 // 该 hook 仅做评论开关后的头像提示重试，同文件 performCommentAction 路径已覆盖，行为不丢失。
 
 - (void)onPlayer:(id)arg0 didDoubleClick:(id)arg1 {
@@ -7425,7 +7425,7 @@ static Class tabBarButtonClass = nil;
 
 // 毛玻璃只处理实际评论面板的材质，列表尺寸和边距由原生布局维护。
 
-// 毛玻璃黑色真凶拦截（41.0 视图树实锤）：评论列表区的不透明分区背景
+// 毛玻璃黑色真凶拦截（41.1 视图树实锤）：评论列表区的不透明分区背景
 // AWEBaseListSectionBackgroundView（rgba(0.086,0.086,0.086,1.0)）盖在原生
 // 毛玻璃层之上。一次性 BFS 清理会被 ListKit 复用/重绘写回（"偶发不透"的
 // 机制），改为在写入点拦截：挂在评论面板状态下的视图，底色写入直接改
@@ -7590,7 +7590,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 %hook UIView
 
 - (void)setHidden:(BOOL)hidden {
-    // 40.9 优化：两个头像功能开关都关闭时直接透传，省掉两次关联对象查询。
+    // 41.1 优化：两个头像功能开关都关闭时直接透传，省掉两次关联对象查询。
     // 标记视图在开关关闭时本就返回 NO，提前返回与旧行为一致。
     if (!DYYYAvatarFollowOptionsEnabled() && !DYYYGetBool(@"DYYYHideAvatarButton")) {
         %orig(hidden);
@@ -7890,8 +7890,8 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
         }
     }
 
-    // 40.9 清理：原 "chat 来源 + 版本号 <= 39.2.0 走全高" 分支已删除。
-    // 目标版本固定 40.9，版本条件恒为假，整段为死代码（且注释自述依赖 abtest 不可靠）。
+    // 41.1 清理：原 "chat 来源 + 版本号 <= 39.2.0 走全高" 分支已删除。
+    // 目标版本固定 41.1，版本条件恒为假，整段为死代码（且注释自述依赖 abtest 不可靠）。
 
     if (useFullHeight) {
         frame.size.height = superviewHeight;
@@ -8607,7 +8607,7 @@ static Class TagViewClass = nil;
 %hook AWEStoryProgressContainerView
 - (void)setCenter:(CGPoint)center {
     UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
-    // 40.9: PureModePageCellViewController 点号名不可查，用 mangled 名回退
+    // 41.1: PureModePageCellViewController 点号名不可查，用 mangled 名回退
     Class pureModeCellClass = DYYYResolveSwiftClass("AWEFeedPlayControlImpl.PureModePageCellViewController",
                                                     "_TtC22AWEFeedPlayControlImpl30PureModePageCellViewController");
     if ([vc isKindOfClass:pureModeCellClass] && DYYYGetBool(@"DYYYEnableFullScreen")) {
@@ -8945,7 +8945,7 @@ static void findTargetViewInView(UIView *view) {
         return;
     }
 
-    // 40.9 优化：正则 static 化（原实现每次 setText 现场编译），首字符非数字快速排除。
+    // 41.1 优化：正则 static 化（原实现每次 setText 现场编译），首字符非数字快速排除。
     unichar first = [text characterAtIndex:0];
     if (first < '0' || first > '9') {
         %orig(text);
@@ -9151,7 +9151,7 @@ static void findTargetViewInView(UIView *view) {
     if (window) {
         UILongPressGestureRecognizer *doubleFingerLongPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleDoubleFingerLongPressGesture:)];
         doubleFingerLongPressGesture.numberOfTouchesRequired = 2;
-        // 40.9：头像预览页等全屏覆盖层会自带手势识别器并吞掉触摸，
+        // 41.1：头像预览页等全屏覆盖层会自带手势识别器并吞掉触摸，
         // 这里不拦截其它手势，且允许同时识别，保证任意页面双指长按都能唤起设置。
         doubleFingerLongPressGesture.cancelsTouchesInView = NO;
         doubleFingerLongPressGesture.delaysTouchesEnded = NO;
@@ -10790,7 +10790,7 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 %group DYYYFullscreenCommentPanelGroup
-// 41.0：评论区外层面板是 CommentPanelViewController（38 字符类），
+// 41.1：评论区外层面板是 CommentPanelViewController（38 字符类），
 // 首次从 Feed 打开评论区走它而不经过 InnerViewController，
 // 旧 hook 全部旁路（用户实测毛玻璃不透 + 日志无第二次 [DYYY][blur]）。
 // 面板级 hook 保证任意打开路径都会触发毛玻璃布局与全屏协调。
@@ -10814,7 +10814,7 @@ static void findTargetViewInView(UIView *view) {
     // 诊断浮层：启动早期一次性安装（hidden 待命），不抢焦点、不参与转场
     DKDebugInspectorInstall();
     [DYYYDiagnostics installUncaughtExceptionHandler];
-    // 40.9 优化：启动自检关键 hook 类存在性，改版失效时日志直接给出缺失类清单。
+    // 41.1 优化：启动自检关键 hook 类存在性，改版失效时日志直接给出缺失类清单。
     // 注意：%ctor 执行时抖音自己的 ObjC 类可能尚未全部注册（dyld 尚未完成其初始化），
     // 立即检查会产生"类未找到"误报。延后到启动完成后执行，保证结果可信。
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
@@ -10839,7 +10839,7 @@ static void findTargetViewInView(UIView *view) {
     if (fullscreenCommentClass && [fullscreenCommentClass isSubclassOfClass:[UIViewController class]]) {
         %init(DYYYFullscreenCommentGroup, AWECommentPanelContainerSwiftImpl_CommentContainerInnerViewController = fullscreenCommentClass);
     }
-    // 41.0：外层面板类（首次打开评论区的实际入口）
+    // 41.1：外层面板类（首次打开评论区的实际入口）
     Class commentPanelClass = DYYYResolveSwiftClass("AWECommentPanelContainerSwiftImpl.CommentPanelViewController",
                                                     "_TtC33AWECommentPanelContainerSwiftImpl38CommentPanelViewController");
     if (commentPanelClass && [commentPanelClass isSubclassOfClass:[UIViewController class]]) {
@@ -10914,12 +10914,16 @@ static void findTargetViewInView(UIView *view) {
             %init(DYYYLongPressControlCallback);
         }
 
-        Class imageContentClass = objc_getClass("BDMultiContentContainer.ImageContentView");
+        // 41.1：BDMultiContentContainer 模块重排，ImageContentView 只剩 mangled 形式
+        // （_TtC23BDMultiContentContainer16ImageContentView），点号名已不可查。
+        // 用 DYYYResolveSwiftClass 先点号后 mangled，两版通吃。
+        Class imageContentClass = DYYYResolveSwiftClass("BDMultiContentContainer.ImageContentView",
+                                                        "_TtC23BDMultiContentContainer16ImageContentView");
         if (imageContentClass) {
             %init(BDMultiContentImageViewGroup, BDMultiContentContainer_ImageContentView = imageContentClass);
         }
 
-        // 40.9: CommentHeaderGeneralView/GoodsView 迁移到 AWECommentCommerceSwiftImpl 模块（mangled 名），旧模块点号名保留作回退
+        // 41.1: CommentHeaderGeneralView/GoodsView 迁移到 AWECommentCommerceSwiftImpl 模块（mangled 名），旧模块点号名保留作回退
         Class commentHeaderGeneralClass = DYYYResolveSwiftClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGeneralView",
                                                                 "_TtC27AWECommentCommerceSwiftImpl24CommentHeaderGeneralView");
         if (commentHeaderGeneralClass) {

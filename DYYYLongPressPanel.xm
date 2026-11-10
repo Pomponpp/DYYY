@@ -1477,7 +1477,7 @@
 
 // 隐藏评论分享功能
 
-// 40.9: AWEIMCommentShareUserHorizontal* 迁移为 AWEIMCommentShareTableViewCell
+// 41.1: AWEIMCommentShareUserHorizontal* 迁移为 AWEIMCommentShareTableViewCell
 %hook AWEIMCommentShareTableViewCell
 
 - (void)layoutSubviews {

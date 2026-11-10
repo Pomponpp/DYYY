@@ -64,7 +64,7 @@
 
     NSString *plainText = [attributedText string];
 
-    // 40.9 优化：正则 static 化 + 首字符快速排除（原每次赋值现场编译正则）。
+    // 41.1 优化：正则 static 化 + 首字符快速排除（原每次赋值现场编译正则）。
     unichar firstChar = [plainText characterAtIndex:0];
     if (firstChar < '0' || firstChar > '9') {
         %orig(attributedText);
