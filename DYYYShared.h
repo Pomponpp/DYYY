@@ -13,7 +13,6 @@
 
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
-#import <MediaPlayer/MediaPlayer.h>
 #import "AwemeHeaders.h"
 
 @interface AWEFeedProgressSlider (DYYYProgressLabel)
