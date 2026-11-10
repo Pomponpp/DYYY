@@ -22,6 +22,9 @@ typedef NS_ENUM(NSInteger, DYYYClassAuditStatus) {
 // 可读自检报告（中文，逐条列出关键类状态与对应功能），结果缓存。
 + (NSString *)auditReportText;
 
+// 精简版兼容性摘要（命中数 + 问题类名列表），用于设置页弹窗。
++ (NSString *)compatSummaryText;
+
 // Hook 生效数自检：扫运行时 _logos_method$ 前缀方法数，与期望值比对。
 // 类在但方法签名变了时，hook 会静默失效——这是唯一能发现它的手段。
 + (void)setExpectedHookCount:(NSUInteger)count;

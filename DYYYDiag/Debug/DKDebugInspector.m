@@ -1,9 +1,14 @@
 //
 //  DKDebugInspector.m
-//  DYYY 诊断子系统（整段采用已验证实现，音频专项移除）
+//  DYYY 诊断子系统 —— 浮窗入口
 //
-//  全局扳手入口：独立高层级 window 承载调试按钮，点选页面元素后复用
+//  全局扳手：独立高层级 window 承载调试按钮，点选页面元素后复用
 //  DKDebugCapture / DKDebugExport 生成导出包。
+//
+//  来源：本目录（DYYYDiag/）的采集骨架与 FLEX 类 dump 参考 DYKiller，
+//  DYYY 接入了自有运行流水、状态指纹、compat 三件套（audit /
+//  class-list / target-methods），并把浮窗与日志统一为「诊断模式」。
+//  详见 CREDITS.md。
 //
 
 #import "DKDebugInspector.h"

@@ -232,9 +232,9 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
     DYYY_AUDIT("AWEBDSimPlayerBizConfig", "核心 · enableHDRBrightnessOpt/enableHDRFullModelAdaptation"),
     DYYY_AUDIT("AWECodeGenStoryRingInfoModel", "核心 · storyRingsModelArray/setStoryRingsModelArray"),
     DYYY_AUDIT("AWECommentPanelContainerSwiftImpl_CommentContainerInnerViewController", "核心 · viewDidLayoutSubviews/viewDidDisappear"),
-    DYYY_AUDIT("AWECommentPanelContainerSwiftImpl.CommentPanelViewController", "核心 · viewDidLayoutSubviews/viewDidDisappear"),
-    DYYY_AUDIT("AWECommentPanelHeaderSwiftImpl_CommentHeaderGeneralView", "核心 · layoutSubviews"),
-    DYYY_AUDIT("AWECommentPanelHeaderSwiftImpl_CommentHeaderGoodsView", "核心 · layoutSubviews"),
+    DYYY_AUDIT("AWECommentPanelContainerSwiftImpl.CommentPanelViewController", "核心 · viewDidLayoutSubviews/viewDidDisappear（%init 动态绑定，占位名不参与审计）"),
+    DYYY_AUDIT("_TtC27AWECommentCommerceSwiftImpl24CommentHeaderGeneralView", "核心 · layoutSubviews（%init 绑定，旧占位名 CommentHeaderGeneralView）"),
+    DYYY_AUDIT("_TtC27AWECommentCommerceSwiftImpl22CommentHeaderGoodsView", "核心 · layoutSubviews（%init 绑定，旧占位名 CommentHeaderGoodsView）"),
     DYYY_AUDIT("AWECommentPanelHeaderSwiftImpl_CommentHeaderTemplateAnchorView", "核心 · layoutSubviews"),
     DYYY_AUDIT("AWECommentPanelListSwiftImpl_CommentBottomTipsContainerViewController", "核心 · viewWillAppear"),
     DYYY_AUDIT("AWECommentSwiftBizUI_CommentInteractionBaseLabel", "核心 · setText/setFrame"),
@@ -457,13 +457,18 @@ static BOOL DYYYOwnImageRange(uintptr_t *outBase, uintptr_t *outEnd) {
     uintptr_t base = 0, end = 0;
     if (!DYYYOwnImageRange(&base, &end)) return 0;
 
-    unsigned int classCount = 0;
-    Class *classes = objc_copyClassList(&classCount);
-    if (!classes) return 0;
-
+    // 只统计【审计表里的目标类】，不遍历全部类。
+    // 原因：#83 实测按全类扫得到 1671，而期望是 739 ——
+    // 多出的是我们自己的 DYYYManager / DYYYUtils / Coordinator 等方法，
+    // 它们的 IMP 同样落在 dylib __TEXT 段内，被一起算进来了。
+    // 收窄到目标类后，统计的是「这些类上有多少方法的实现被换成了我们的」。
     NSUInteger total = 0;
-    for (unsigned int i = 0; i < classCount; i++) {
-        Class cls = classes[i];
+    NSUInteger entryCount = [self auditEntryCount];
+    for (NSUInteger i = 0; i < entryCount; i++) {
+        const DYYYAuditEntry *entry = &kDYYYAuditTable[i];
+        NSString *name = [NSString stringWithUTF8String:entry->primary];
+        Class cls = [self resolveClassByName:name];
+        if (!cls) continue;
         unsigned int methodCount = 0;
         Method *methods = class_copyMethodList(cls, &methodCount);
         if (!methods) continue;
@@ -474,7 +479,6 @@ static BOOL DYYYOwnImageRange(uintptr_t *outBase, uintptr_t *outEnd) {
         }
         free(methods);
     }
-    free(classes);
     return total;
 }
 
@@ -697,41 +701,105 @@ static NSUInteger gDYYYExpectedHookCount = 0;
 + (NSString *)auditReportText {
     // 每次调用都重新探测：类可能在启动后才完成注册，缓存会固化误报。
     NSMutableString *report = [NSMutableString string];
-      NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"未知";
-      NSString *tweakVersion = @"2.2-9";
-      NSDateFormatter *timeFormatter = [[NSDateFormatter alloc] init];
-      timeFormatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
-      [report appendFormat:@"DYYY 自检报告\n抖音版本: %@\n插件版本: %@\n检测时间: %@\n\n",
-                          appVersion, tweakVersion, [timeFormatter stringFromDate:[NSDate date]]];
+    NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"未知";
+    NSString *tweakVersion = @"2.2-9";
+    NSDateFormatter *timeFormatter = [[NSDateFormatter alloc] init];
+    timeFormatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
 
-      NSMutableArray<NSString *> *missingFeatures = [NSMutableArray array];
-      NSUInteger okCount = 0;
-      NSUInteger total = [self auditEntryCount];
-      for (NSUInteger index = 0; index < total; index++) {
-          const DYYYAuditEntry *entry = &kDYYYAuditTable[index];
-          NSString *name = [NSString stringWithUTF8String:entry->primary];
-          if ([self auditClass:name outResolvedName:nil] == DYYYClassAuditStatusOK) {
-              okCount++;
-          } else if (entry->feature) {
-              NSString *featureName = [NSString stringWithUTF8String:entry->feature];
-              NSString *line = [NSString stringWithFormat:@"· %@（类 %@ 未找到）", featureName, name];
-              if (![missingFeatures containsObject:line]) {
-                  [missingFeatures addObject:line];
-              }
-          }
-      }
+    [report appendString:@"═══ 兼容性报告 ═══\n"];
+    [report appendFormat:@"抖音版本  %@\n插件版本  %@\n检测时间  %@\n\n",
+                        appVersion, tweakVersion, [timeFormatter stringFromDate:[NSDate date]]];
 
-      [report appendFormat:@"关键类命中: %lu/%lu\n", (unsigned long)okCount, (unsigned long)total];
-      if (missingFeatures.count == 0) {
-          [report appendString:@"\n✅ 全部关键类在线，未发现因抖音改版失效的功能。\n"];
-      } else {
-          [report appendString:@"\n⚠️ 以下功能可能失效：\n"];
-          for (NSString *line in missingFeatures) {
-              [report appendFormat:@"%@\n", line];
-          }
-          [report appendString:@"\n如功能异常与上表无关，请把本页下方运行日志一并发给作者。\n"];
-      }
+    NSMutableArray<NSString *> *missingFeatures = [NSMutableArray array];
+    NSMutableArray<NSString *> *missingClasses = [NSMutableArray array];
+    NSUInteger okCount = 0;
+    NSUInteger total = [self auditEntryCount];
+
+    for (NSUInteger index = 0; index < total; index++) {
+        const DYYYAuditEntry *entry = &kDYYYAuditTable[index];
+        NSString *name = [NSString stringWithUTF8String:entry->primary];
+        if ([self auditClass:name outResolvedName:nil] == DYYYClassAuditStatusOK) {
+            okCount++;
+            continue;
+        }
+        if (![missingClasses containsObject:name]) [missingClasses addObject:name];
+        if (entry->feature) {
+            NSString *featureName = [NSString stringWithUTF8String:entry->feature];
+            NSString *line = [NSString stringWithFormat:@"%@\n    → %@", name, featureName];
+            if (![missingFeatures containsObject:line]) [missingFeatures addObject:line];
+        }
+    }
+
+    // 命中率
+    double rate = total > 0 ? (double)okCount / (double)total * 100.0 : 0.0;
+    [report appendFormat:@"目标类命中  %lu / %lu  (%.1f%%)\n", (unsigned long)okCount, (unsigned long)total, rate];
+
+    // hook 健康度（紧跟命中率，是同一维度的两个视角）
+    [report appendString:[self hookHealthText]];
+    [report appendString:@"\n"];
+
+    if (missingFeatures.count == 0) {
+        [report appendString:@"✅ 全部目标类在线，未发现因抖音改版失效的功能。\n"];
+        [report appendString:@"\n如遇功能异常且与上表无关，请把运行日志一并反馈。\n"];
+        return report;
+    }
+
+    [report appendFormat:@"⚠️  %lu 项未命中（对应功能可能失效）：\n\n", (unsigned long)missingFeatures.count];
+    for (NSString *line in missingFeatures) {
+        [report appendFormat:@"· %@\n", line];
+    }
+
+    [report appendString:@"\n── 说明 ──\n"];
+    [report appendString:@"· 未命中 = 当前抖音版本查不到该类名。\n"];
+    [report appendString:@"· Swift 类已做点号/下划线/mangled 三种形式互查，\n"];
+    [report appendString:@"  仍查不到说明该类在本版确实不存在或被改名。\n"];
+    [report appendString:@"· 部分条目为历史废弃类（如活动横幅、旧版分享位），\n"];
+    [report appendString:@"  抖音已移除，不影响核心功能。\n"];
+    [report appendString:@"· hook 生效数只统计目标类，不等同于全部 hook 数\n"];
+    [report appendString:@"  （部分 hook 走 %init 动态绑定，不在类方法列表里）。\n"];
+    [report appendString:@"· 抖音改版后请把本页 + 诊断包（compat/ 目录）一并反馈。\n"];
+
     return report;
 }
+
+// 精简版：只给命中数和问题类名，用于设置页弹窗
++ (NSString *)compatSummaryText {
+    NSUInteger total = [self auditEntryCount];
+    NSUInteger okCount = 0;
+    NSMutableArray<NSString *> *missing = [NSMutableArray array];
+
+    for (NSUInteger index = 0; index < total; index++) {
+        const DYYYAuditEntry *entry = &kDYYYAuditTable[index];
+        NSString *name = [NSString stringWithUTF8String:entry->primary];
+        if ([self auditClass:name outResolvedName:nil] == DYYYClassAuditStatusOK) {
+            okCount++;
+        } else if (![missing containsObject:name]) {
+            [missing addObject:name];
+        }
+    }
+
+    NSMutableString *out = [NSMutableString string];
+    NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"未知";
+    [out appendFormat:@"抖音 %@  |  目标类 %lu 项\n", appVersion, (unsigned long)total];
+
+    if (missing.count == 0) {
+        [out appendFormat:@"命中 %lu 项  ✅ 全部在线\n\n", (unsigned long)okCount];
+    } else {
+        [out appendFormat:@"命中 %lu 项  ⚠️ %lu 项未命中：\n\n", (unsigned long)okCount, (unsigned long)missing.count];
+        NSUInteger limit = MIN(missing.count, (NSUInteger)12);
+        for (NSUInteger i = 0; i < limit; i++) {
+            [out appendFormat:@"· %@\n", missing[i]];
+        }
+        if (missing.count > limit) {
+            [out appendFormat:@"… 还有 %lu 项\n", (unsigned long)(missing.count - limit)];
+        }
+        [out appendString:@"\n部分为历史废弃类，不影响当前功能。\n"];
+    }
+
+    [out appendString:@"\n"];
+    [out appendString:[self hookHealthText]];
+    return out;
+}
+
 
 @end

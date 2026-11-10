@@ -225,6 +225,16 @@ GITHUB_ACTIONS=true make package
 
 详见 `LICENSE`。
 
+## 来源说明
+
+本项目的全屏几何机制与诊断子系统参考了 [DYKiller](https://github.com/) 的已验证实现，在此致谢。
+
+**移植的是什么**：全屏的四条机制（表高唯一写入通道 / 入口同源 / 行高只回答 / 容器钉满），以及诊断侧的视图树采集与类 dump。这些是与抖音私有布局博弈试错出来的结果，重写等于重新踩坑。
+
+**DYYY 做了什么**：把四条机制扩展到作品页、他人主页并收窄作用域；接入自有运行流水与状态指纹；新增 compat 三件套（audit / class-list / target-methods）用于抖音改版后的差异定位。
+
+完整说明见 [CREDITS.md](CREDITS.md)。
+
 ## Star 趋势
 
 <p align="center">

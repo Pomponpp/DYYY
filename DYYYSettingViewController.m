@@ -393,7 +393,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"清屏隐藏倍速按钮" key:@"DYYYHideSpeed" type:DYYYSettingItemTypeSwitch]
         ],
         @[
-            [DYYYSettingItem itemWithTitle:@"环境自检" key:@"DYYYShowAuditReport" type:DYYYSettingItemTypeAction],
+            [DYYYSettingItem itemWithTitle:@"兼容性报告" key:@"DYYYShowAuditReport" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"导出日志" key:@"DYYYExportRuntimeLog" type:DYYYSettingItemTypeAction],
             [DYYYSettingItem itemWithTitle:@"清空日志" key:@"DYYYClearRuntimeLog" type:DYYYSettingItemTypeAction]
         ]

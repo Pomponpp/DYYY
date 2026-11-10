@@ -322,10 +322,35 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
 }
 
 + (void)showAuditReportFromViewController:(UIViewController *)presenter {
-    // 写报告文件 + Toast，零弹窗
-    NSString *report = [DYYYClassRegistry auditReportText] ?: @"(无)";
-    [self safeWriteString:report toPath:[self exportedLogPathWithName:@"DYYY-audit.txt"]];
-    [DYYYToast showSuccessToastWithMessage:@"自检报告已保存\n文件App → DYYY/logs/DYYY-audit.txt"];
+    // 弹窗给摘要（命中数 + 问题类名），同时把完整报告写文件备查。
+    NSString *summary = [DYYYClassRegistry compatSummaryText] ?: @"(无)";
+    NSString *full = [DYYYClassRegistry auditReportText] ?: @"(无)";
+
+    // 完整报告落盘，弹窗里告知路径
+    [self safeWriteString:full toPath:[self exportedLogPathWithName:@"DYYY-compat.txt"]];
+
+    if (!presenter) return;
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"兼容性报告"
+                                                                  message:summary
+                                                           preferredStyle:UIAlertControllerStyleAlert];
+
+    // 复制完整清单到剪贴板（比导文件快，日常排查够用）
+    [alert addAction:[UIAlertAction actionWithTitle:@"复制完整清单"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(__unused UIAlertAction *a) {
+                                              [UIPasteboard generalPasteboard].string = full;
+                                              [DYYYToast showSuccessToastWithMessage:@"已复制到剪贴板"];
+                                            }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"重新检测"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(__unused UIAlertAction *a) {
+                                              // auditReportText 每次都重新探测，重新调用即可
+                                              dispatch_async(dispatch_get_main_queue(), ^{
+                                                [self showAuditReportFromViewController:presenter];
+                                              });
+                                            }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleCancel handler:nil]];
+    [presenter presentViewController:alert animated:YES completion:nil];
 }
 
 @end

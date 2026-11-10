@@ -1,3 +1,21 @@
+//
+//  DYYYFullscreenCoordinator.m
+//  全屏几何协调：表高 / 行高 / 落点 / 播放器容器。
+//
+//  四条机制的实现方式参考 DYKiller 的已验证实现：
+//    · 表高唯一写入通道（setFrame: 拦截，不做多点写入）
+//    · 建行/落点/翻页七入口同源（先撑高再放行原生）
+//    · 行高只"回答"不"改写"
+//    · 播放器容器钉满 + HUD 钉回原高
+//  这四条是抖音多个版本上试错得出的唯一解，重写等于重新踩坑。
+//
+//  DYYY 在此基础上做的改动：
+//    · 扩展到作品页 / 他人主页，并按页面类型收窄作用域
+//    · 接入自有诊断（运行流水、状态指纹）
+//    · 底栏透明与 Profile 页面栈判定
+//  详见 CREDITS.md。
+//
+
 #import "DYYYFullscreenCoordinator.h"
 #import "DYYYFullscreenGeometry.h"
 #import "DYYYUtils.h"
