@@ -163,7 +163,7 @@ static NSString *DYYYCustomIconFileNameForButtonName(NSString *nameString) {
     return nil;
 }
 
-static UIImage *DYYYLoadCustomImage(NSString *fileName, CGSize targetSize) {
+UIImage *DYYYLoadCustomImage(NSString *fileName, CGSize targetSize) {
     if (fileName.length == 0) {
         return nil;
     }

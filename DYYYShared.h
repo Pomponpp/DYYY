@@ -36,10 +36,7 @@
 - (void)dyyy_updateScheduleLabelsLegacyWithCurrentTime:(CGFloat)currentTime totalDuration:(CGFloat)totalDuration model:(id)model;
 @end
 
-@interface AWENowPlayingInfoCenter : NSObject
-@end
-
-@interface MPNowPlayingInfoCenter : NSObject
-@end
+// 自定义图标加载（主文件实现）
+UIImage *DYYYLoadCustomImage(NSString *fileName, CGSize targetSize);
 
 #endif
