@@ -140,6 +140,29 @@
 }
 %end
 
+// 「显示进度时长」强制 alpha 的作用域限制：
+//   只在首页 Feed（AWEFeedRootViewController / AWEFeedTableViewController）生效。
+//   群聊视频（AWEAwemeIMDetailTableViewController）、直播、搜索等场景下，
+//   抖音自己管理进度条显隐状态机；无条件强制 alpha=1.0 会破坏它，
+//   表现为拖动进度条时出现异常进度条（41.1 实测）。
+static BOOL DYYYIsInHomeFeedContext(UIView *view) {
+    UIResponder *responder = view;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            NSString *cls = NSStringFromClass([responder class]);
+            if ([cls containsString:@"AWEFeedRootViewController"] ||
+                [cls containsString:@"AWEFeedTableViewController"]) {
+                return YES;
+            }
+            if ([cls containsString:@"AWENormalModeTabBarController"]) {
+                return NO;
+            }
+        }
+        responder = responder.nextResponder;
+    }
+    return NO;
+}
+
 %hook AWEFeedProgressSlider
 
 - (void)layoutSubviews {
@@ -148,7 +171,7 @@
 }
 
 - (void)setAlpha:(CGFloat)alpha {
-    if (DYYYGetBool(@"DYYYShowScheduleDisplay")) {
+    if (DYYYGetBool(@"DYYYShowScheduleDisplay") && DYYYIsInHomeFeedContext(self)) {
         if (DYYYGetBool(@"DYYYHideVideoProgress")) {
             %orig(0);
         } else {

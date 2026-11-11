@@ -1534,6 +1534,13 @@
                             ([className isEqualToString:@"AWECommentIMSwiftImpl.CommentLongPressPanelForwardElement"] &&
                              [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideCommentLongPressDaily"]) ||
 
+                            // 「隐藏评论分享」实际对应长按菜单里的「分享给朋友」，
+                            // 41.1 视图树实锤该类为 PrivateMessageElement（私信）。
+                            // 旧 hook 绑的 AWECommentShareContainerCell / AWEIMCommentShareTableViewCell
+                            // 是 IM 会话里的分享消息 cell，不是这个菜单项。
+                            ([className isEqualToString:@"AWECommentIMSwiftImpl.CommentLongPressPanelPrivateMessageElement"] &&
+                             [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideCommentShareToFriends"]) ||
+
                             ([className isEqualToString:@"AWECommentLongPressPanelSwiftImpl.CommentLongPressPanelCopyElement"] &&
                              [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideCommentLongPressCopy"]) ||
 
