@@ -212,34 +212,17 @@
 
 %end
 
-%hook AWEPlayInteractionDescriptionScrollView
-
-- (void)layoutSubviews {
-    %orig;
-
-    self.transform = CGAffineTransformIdentity;
-
-    NSString *descriptionOffsetValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDescriptionVerticalOffset"];
-    CGFloat verticalOffset = 0;
-    if (descriptionOffsetValue.length > 0) {
-        verticalOffset = [descriptionOffsetValue floatValue];
-    }
-
-    UIView *parentView = self.superview;
-    UIView *grandParentView = nil;
-
-    if (parentView) {
-        grandParentView = parentView.superview;
-    }
-
-    if (grandParentView && verticalOffset != 0) {
-        CGAffineTransform translationTransform = CGAffineTransformMakeTranslation(0, verticalOffset);
-        grandParentView.transform = translationTransform;
-    }
-}
-
-%end
-
+// 文案下移（DYYYDescriptionVerticalOffset）
+//
+// 类名演变：
+//   41.0  AWEPlayInteractionDescriptionScrollView（容器本身就是 ScrollView）
+//   41.1  该类已移除，文案改为 Element 体系装配：
+//           AWEPlayInteractionDescriptionLabel
+//             → UIView
+//               → UIScrollView    ← 对这一层做 transform
+//
+// 该 hook 同时承担：文案下移 + 长按复制手势。
+// 合并为一个 %hook 块（Logos 同组重复 %hook 同一个类会报 redefinition）。
 %hook AWEPlayInteractionDescriptionLabel
 
 static char kLongPressGestureKey;
@@ -315,24 +298,21 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 - (void)layoutSubviews {
     %orig;
 
-    self.transform = CGAffineTransformIdentity;
-
+    // 文案下移：41.1 起 Label 往上两层是真正的容器
+    // （Label → UIView → UIScrollView），与旧版 ScrollView 类的相对位置一致。
     NSString *descriptionOffsetValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDescriptionVerticalOffset"];
-    CGFloat verticalOffset = 0;
     if (descriptionOffsetValue.length > 0) {
-        verticalOffset = [descriptionOffsetValue floatValue];
-    }
-
-    UIView *parentView = self.superview;
-    UIView *grandParentView = nil;
-
-    if (parentView) {
-        grandParentView = parentView.superview;
-    }
-
-    if (grandParentView && verticalOffset != 0) {
-        CGAffineTransform translationTransform = CGAffineTransformMakeTranslation(0, verticalOffset);
-        grandParentView.transform = translationTransform;
+        CGFloat verticalOffset = [descriptionOffsetValue floatValue];
+        if (verticalOffset != 0) {
+            UIView *containerView = self.superview.superview;
+            if (containerView) {
+                // 先归零再设值，避免多次 layout 叠加
+                if (!CGAffineTransformIsIdentity(containerView.transform)) {
+                    containerView.transform = CGAffineTransformIdentity;
+                }
+                containerView.transform = CGAffineTransformMakeTranslation(0, verticalOffset);
+            }
+        }
     }
     [DYYYFullscreenCoordinator layoutInformationLabel:self];
 }
