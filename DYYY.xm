@@ -981,28 +981,11 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
         return %orig;
     }
 
-    // 保存质量优选（41.1 字段，KVC 读取）：
-    //   endWatermarkDownloadURL      片尾无水印下载地址
-    //   captionWatermarkDownloadURL  字幕无水印下载地址
-    //   downloadURL                  下载专用流（与播放流不同）
-    // 三者皆为 AWEURLModel；全部为空则回退到下面的码率选择。
-    @try {
-        id candidates[3] = {
-            [self valueForKey:@"endWatermarkDownloadURL"],
-            [self valueForKey:@"captionWatermarkDownloadURL"],
-            [self valueForKey:@"downloadURL"],
-        };
-        for (int i = 0; i < 3; i++) {
-            id candidate = candidates[i];
-            if (![candidate isKindOfClass:%c(AWEURLModel)]) continue;
-            NSArray *urls = [(AWEURLModel *)candidate originURLList];
-            if (![urls isKindOfClass:[NSArray class]] || urls.count == 0) continue;
-            NSLog(@"[DYYY][save] 视频下载流命中 candidate#%d", i);
-            return (AWEURLModel *)candidate;
-        }
-        NSLog(@"[DYYY][save] 视频下载流无候选，回退码率选择");
-    } @catch (__unused NSException *e) {
-    }
+    // 注意：这里【不能】做下载流优选。
+    // playURL 是播放器取流的核心方法，实测每秒被调用数十次。
+    // 若在此返回 downloadURL / endWatermarkDownloadURL 等下载字段，
+    // 会把播放也切换到带水印的低压缩流（41.1 实测：保存下来的视频带水印）。
+    // 下载流优选只放在保存路径（DYYYLongPressPanel / 双击保存）里。
 
     // 获取比特率模型数组
     NSArray *bitrateModels = [self bitrateModels];
@@ -1027,7 +1010,6 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
                 bitrate = [bitrateValue integerValue];
                 validModel = YES;
             }
-            // 分辨率：playAddr 上有宽高；没有则回退到模型自身的 width/height
             id playAddr = [model valueForKey:@"playAddr"];
             NSNumber *w = nil, *h = nil;
             @try {
@@ -1052,18 +1034,10 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
             continue;
         }
 
-        BOOL better = NO;
-        if (area > bestArea) {
-            better = YES;
-        } else if (area == bestArea && bitrate > bestBitrate) {
-            better = YES;
-        }
-        if (better || !bestModel) {
-            if (!bestModel || better) {
-                bestArea = area;
-                bestBitrate = bitrate;
-                bestModel = model;
-            }
+        if (!bestModel || area > bestArea || (area == bestArea && bitrate > bestBitrate)) {
+            bestArea = area;
+            bestBitrate = bitrate;
+            bestModel = model;
         }
     }
 
@@ -7106,19 +7080,14 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
                               }
                           } else {
                               // 保存质量优选（与长按面板一致）：
-                              //   下载专用流 → playURL（最高画质）→ h264URL（兜底）
+                              //   downloadURL → playURL → h264URL
+                              // 不用带 Watermark 字样的字段（那是「带水印」的意思）。
                               NSString *bestVideoURL = nil;
                               @try {
-                                  id endWM = [videoModel valueForKey:@"endWatermarkDownloadURL"];
-                                  id capWM = [videoModel valueForKey:@"captionWatermarkDownloadURL"];
                                   id dlURL = [videoModel valueForKey:@"downloadURL"];
-                                  bestVideoURL = DYYYPreferredURLString(@[
-                                      endWM ?: [NSNull null],
-                                      capWM ?: [NSNull null],
-                                      dlURL ?: [NSNull null]
-                                  ]);
-                                  NSLog(@"[DYYY][save] 双击视频 endWM=%@ capWM=%@ dl=%@ → %@",
-                                        endWM ? @"有" : @"无", capWM ? @"有" : @"无", dlURL ? @"有" : @"无",
+                                  bestVideoURL = DYYYPreferredURLString(@[ dlURL ?: [NSNull null] ]);
+                                  NSLog(@"[DYYY][save] 双击视频 dl=%@ → %@",
+                                        dlURL ? @"有" : @"无",
                                         bestVideoURL ? @"下载流命中" : @"回退");
                               } @catch (__unused NSException *e) {
                               }

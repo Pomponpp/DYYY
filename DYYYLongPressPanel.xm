@@ -146,22 +146,19 @@
           }
 
           // 保存质量优选：
-          //   endWatermarkDownloadURL / captionWatermarkDownloadURL / downloadURL（41.1 字段）
-          //   → playURL（我们 hook 过的最高画质）
+          //   downloadURL（下载专用流，41.1 实测有值）
+          //   → playURL（最高画质，走 DYYY.xm 的 hook）
           //   → h264URL（兜底，旧逻辑）
+          //
+          // 注意：不要用 endWatermarkDownloadURL / captionWatermarkDownloadURL。
+          // 这两个名字里的 Watermark 是「带水印」的意思，实测保存下来确实带水印。
           // 旧实现直接取 h264URL，是最差的一条流，且过期后会保存失败。
           NSString *bestVideoURL = nil;
           @try {
-              id endWM = [videoModel valueForKey:@"endWatermarkDownloadURL"];
-              id capWM = [videoModel valueForKey:@"captionWatermarkDownloadURL"];
               id dlURL = [videoModel valueForKey:@"downloadURL"];
-              bestVideoURL = DYYYPreferredURLString(@[
-                  endWM ?: [NSNull null],
-                  capWM ?: [NSNull null],
-                  dlURL ?: [NSNull null]
-              ]);
-              NSLog(@"[DYYY][save] 长按视频 endWM=%@ capWM=%@ dl=%@ → %@",
-                    endWM ? @"有" : @"无", capWM ? @"有" : @"无", dlURL ? @"有" : @"无",
+              bestVideoURL = DYYYPreferredURLString(@[ dlURL ?: [NSNull null] ]);
+              NSLog(@"[DYYY][save] 长按视频 dl=%@ → %@",
+                    dlURL ? @"有" : @"无",
                     bestVideoURL ? @"下载流命中" : @"回退");
           } @catch (__unused NSException *e) {
           }
@@ -947,19 +944,14 @@
           }
 
           // 保存质量优选（与主面板一致）：
-          //   下载专用流 → playURL（最高画质）→ h264URL（兜底）
+          //   downloadURL → playURL → h264URL
+          // 不用带 Watermark 字样的字段（那是「带水印」的意思）。
           NSString *bestVideoURL = nil;
           @try {
-              id endWM = [videoModel valueForKey:@"endWatermarkDownloadURL"];
-              id capWM = [videoModel valueForKey:@"captionWatermarkDownloadURL"];
               id dlURL = [videoModel valueForKey:@"downloadURL"];
-              bestVideoURL = DYYYPreferredURLString(@[
-                  endWM ?: [NSNull null],
-                  capWM ?: [NSNull null],
-                  dlURL ?: [NSNull null]
-              ]);
-              NSLog(@"[DYYY][save] 备用面板视频 endWM=%@ capWM=%@ dl=%@ → %@",
-                    endWM ? @"有" : @"无", capWM ? @"有" : @"无", dlURL ? @"有" : @"无",
+              bestVideoURL = DYYYPreferredURLString(@[ dlURL ?: [NSNull null] ]);
+              NSLog(@"[DYYY][save] 备用面板视频 dl=%@ → %@",
+                    dlURL ? @"有" : @"无",
                     bestVideoURL ? @"下载流命中" : @"回退");
           } @catch (__unused NSException *e) {
           }
