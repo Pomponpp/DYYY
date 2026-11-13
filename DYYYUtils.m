@@ -2813,16 +2813,55 @@ NSArray<NSDictionary *> *DYYYWatermarkFreeVideoCandidates(id videoModel) {
             NSNumber *codec = [model valueForKey:@"isH265"];
             NSString *gear = [model valueForKey:@"gearName"];
 
+            // 宽高可能全为 0（41.1 实测：bitrateModels 里常见）。
+            // gearName 形如 "720_1_2" / "adapt_lowest_720_2"，从中解析短边做排序兜底。
+            NSInteger wv = [w isKindOfClass:[NSNumber class]] ? [w integerValue] : 0;
+            NSInteger hv = [h isKindOfClass:[NSNumber class]] ? [h integerValue] : 0;
+            if ((wv <= 0 || hv <= 0) && [gear isKindOfClass:[NSString class]]) {
+                for (NSString *part in [gear componentsSeparatedByString:@"_"]) {
+                    NSInteger v = [part integerValue];
+                    if (v >= 360 && v <= 4320 && [part length] <= 4) {
+                        // 只用短边估个方块面积，够排序用
+                        wv = v;
+                        hv = v;
+                        break;
+                    }
+                }
+            }
+
             NSMutableDictionary *entry = [NSMutableDictionary dictionary];
             entry[@"url"] = url;
-            entry[@"w"] = [w isKindOfClass:[NSNumber class]] ? w : @0;
-            entry[@"h"] = [h isKindOfClass:[NSNumber class]] ? h : @0;
+            entry[@"w"] = @(wv);
+            entry[@"h"] = @(hv);
             entry[@"bitrate"] = [bitrate isKindOfClass:[NSNumber class]] ? bitrate : @0;
             entry[@"codec"] = [codec isKindOfClass:[NSNumber class]] ? codec : @(-1);
             if ([gear isKindOfClass:[NSString class]]) entry[@"gear"] = gear;
             [out addObject:entry];
         } @catch (__unused NSException *e) {
         }
+    }
+
+    // h264URL 作为最后一档兜底。
+    // 41.1 实测：部分视频的 bitrateModels 只有一条 bytevc2，而 bytevc2 写不进相册，
+    // 若不让 h264URL 进候选，就会出现「一个都存不了」。
+    @try {
+        id h264 = [videoModel valueForKey:@"h264URL"];
+        NSString *h264URLStr = h264 ? DYYYPreferredURLString(@[ h264 ]) : nil;
+        if (h264URLStr.length > 0) {
+            NSNumber *hw = [videoModel valueForKey:@"width"];
+            NSNumber *hh = [videoModel valueForKey:@"height"];
+            NSInteger hwv = [hw isKindOfClass:[NSNumber class]] ? [hw integerValue] : 0;
+            NSInteger hhv = [hh isKindOfClass:[NSNumber class]] ? [hh integerValue] : 0;
+            [out addObject:@{
+                @"url": h264URLStr,
+                @"w": @(hwv),
+                @"h": @(hhv),
+                @"bitrate": @0,
+                @"codec": @0,          // H.264
+                @"gear": @"h264_fallback"
+            }];
+        }
+    } @catch (__unused NSException *e) {
     }
 
     // 排序：分辨率面积 ↓ → bitrate ↓
