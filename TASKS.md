@@ -125,6 +125,10 @@ UITableViewCellContentView  {{0, 0}, {428, 926}}
 
 | 版本 | 内容 | 状态 |
 |---|---|---|
+| **v98** | h264 兜底项改排最后，让 bytevc2 先被尝试 | ✅ |
+| **v97** | bytevc2 转码入库（passthrough → HEVC → H.264 分级） | ✅ 代码生效，但源不可解 |
+| **v96** | 候选列表补 h264 兜底 + gearName 解析分辨率 | ✅ |
+| **v95** | 视频保存改为候选列表 + 失败降级，移除规格 Toast | ⚠️ h264 未进候选导致全失败 |
 | **v87** | 群聊进度条作用域限制 + 隐藏评论分享接 Element 过滤 | ⚠️ 两项均未生效（见 P1/P2） |
 | **v86** | 文案下移：hook 点从 ScrollView 改到 DescriptionLabel | ✅ **用户已确认修复** |
 | **v85** | 41.1 缺失类处理（试修/保留/标注 4 项） | 部分有效 |
@@ -139,6 +143,45 @@ UITableViewCellContentView  {{0, 0}, {428, 926}}
 hook 生效数  692 / 739
 未命中       7 项（含 1 个占位名、1 个已废弃活动类）
 ```
+
+### 视频保存质量 —— 已定案（v98）
+
+**结论：无水印 = playAddr/h264，画质上限 720p，本地无解。**
+
+关键事实（v94–v98 真机日志确认）：
+
+| 字段 | 语义 | 水印 | 画质 |
+|---|---|---|---|
+| `playAddr`（bitrateModels 内） | 播放流 | **无** | 高画质档为 bvc2，常见 540p/720p |
+| `h264URL` | H.264 兼容流 | **无** | 720p 封顶 |
+| `downloadURL` | 下载流 | **有** | 可达 1080p |
+| `endWatermarkDownloadURL` | 片尾水印版 | **有** | — |
+| `captionWatermarkDownloadURL` | 字幕水印版 | **有** | — |
+
+**`codec=bvc2` 是字节私有编码，不是标准 HEVC**：
+
+```
+[transcode] 源: 576x1024 codec=bvc2 0.48MB
+[transcode] passthrough 失败: 操作已停止
+[transcode] hevc 失败: 操作已停止
+[transcode] h264 失败: 操作已停止
+```
+
+AVFoundation 在解码阶段直接放弃 → 转码路径对 bvc2 无效，
+FFmpeg 官方也不支持该系统自定义编码。**1080p 无水印在本地不可能拿到。**
+
+**保存路径现状**：
+
+```
+DYYYWatermarkFreeVideoCandidates 产出候选列表：
+  · bitrateModels 各档 playAddr（含 bvc2）
+  · 末尾追加 h264URL（gear = h264_fallback，排序永远最后）
+排序：h264_fallback 最后 → 分辨率面积 ↓ → 码率 ↓
+下载：codec == 2 走转码分级，其余直接入库；失败自动降级下一档
+```
+
+**注意**：`h264_fallback` 的宽高取自 `videoModel.width/height`（名义值，
+常标 1080x1920，实际文件多为 720p），**不能参与面积排序**，否则会挤掉高画质档。
 
 ---
 
