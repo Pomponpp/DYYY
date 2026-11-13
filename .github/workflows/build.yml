@@ -59,7 +59,7 @@ jobs:
   build:
     needs: changes
     if: needs.changes.outputs.should_build == 'true'
-    runs-on: macos-latest
+    runs-on: macos-13    # Intel runner，arm64 容量紧张时作为备份
     # DYYY.xm 是 21000+ 行主文件，改它就要整体重编。
     # 默认 15 分钟墙不够，被截断后 steps 记录不完整，报 cancelled。
     timeout-minutes: 35
