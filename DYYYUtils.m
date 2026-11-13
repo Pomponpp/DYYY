@@ -2697,3 +2697,72 @@ id DYYYJSONSafeObject(id obj) {
     }
     return [obj description];
 }
+
+#pragma mark - 保存质量优选
+
+// 把单个候选展开成 URL 字符串数组（不判断可用性）
+static NSArray<NSString *> *DYYYURLStringsFromCandidate(id candidate) {
+    if (!candidate || candidate == [NSNull null]) {
+        return @[];
+    }
+    if ([candidate isKindOfClass:[NSString class]]) {
+        NSString *s = (NSString *)candidate;
+        return s.length > 0 ? @[ s ] : @[];
+    }
+    if ([candidate isKindOfClass:[NSArray class]]) {
+        NSMutableArray<NSString *> *out = [NSMutableArray array];
+        for (id item in (NSArray *)candidate) {
+            if ([item isKindOfClass:[NSString class]] && [(NSString *)item length] > 0) {
+                [out addObject:(NSString *)item];
+            }
+        }
+        return out;
+    }
+    // AWEURLModel 等：取 originURLList
+    if ([candidate respondsToSelector:@selector(originURLList)]) {
+        @try {
+            id list = [candidate originURLList];
+            if ([list isKindOfClass:[NSArray class]]) {
+                NSMutableArray<NSString *> *out = [NSMutableArray array];
+                for (id item in (NSArray *)list) {
+                    if ([item isKindOfClass:[NSString class]] && [(NSString *)item length] > 0) {
+                        [out addObject:(NSString *)item];
+                    }
+                }
+                return out;
+            }
+        } @catch (__unused NSException *e) {
+        }
+    }
+    return @[];
+}
+
+NSString *DYYYPreferredURLString(NSArray *candidates) {
+    for (id candidate in candidates) {
+        for (NSString *url in DYYYURLStringsFromCandidate(candidate)) {
+            return url;
+        }
+    }
+    return nil;
+}
+
+// 图片格式是否可用（.image 封装 / 水印模板 / webp 转码版一律跳过）
+static BOOL DYYYImageURLUsable(NSString *url) {
+    if (url.length == 0) return NO;
+    NSString *lower = url.lowercaseString;
+    if ([lower hasSuffix:@".image"]) return NO;
+    if ([lower containsString:@"dy-water"]) return NO;
+    if ([lower containsString:@"-download-webp"]) return NO;
+    return YES;
+}
+
+NSString *DYYYPreferredImageURLString(NSArray *candidates) {
+    for (id candidate in candidates) {
+        for (NSString *url in DYYYURLStringsFromCandidate(candidate)) {
+            if (DYYYImageURLUsable(url)) {
+                return url;
+            }
+        }
+    }
+    return nil;
+}

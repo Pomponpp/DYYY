@@ -981,18 +981,44 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
         return %orig;
     }
 
+    // 保存质量优选（41.1 字段，KVC 读取）：
+    //   endWatermarkDownloadURL      片尾无水印下载地址
+    //   captionWatermarkDownloadURL  字幕无水印下载地址
+    //   downloadURL                  下载专用流（与播放流不同）
+    // 三者皆为 AWEURLModel；全部为空则回退到下面的码率选择。
+    @try {
+        id candidates[3] = {
+            [self valueForKey:@"endWatermarkDownloadURL"],
+            [self valueForKey:@"captionWatermarkDownloadURL"],
+            [self valueForKey:@"downloadURL"],
+        };
+        for (int i = 0; i < 3; i++) {
+            id candidate = candidates[i];
+            if (![candidate isKindOfClass:%c(AWEURLModel)]) continue;
+            NSArray *urls = [(AWEURLModel *)candidate originURLList];
+            if (![urls isKindOfClass:[NSArray class]] || urls.count == 0) continue;
+            NSLog(@"[DYYY][save] 视频下载流命中 candidate#%d", i);
+            return (AWEURLModel *)candidate;
+        }
+        NSLog(@"[DYYY][save] 视频下载流无候选，回退码率选择");
+    } @catch (__unused NSException *e) {
+    }
+
     // 获取比特率模型数组
     NSArray *bitrateModels = [self bitrateModels];
     if (!bitrateModels || bitrateModels.count == 0) {
         return %orig;
     }
 
-    // 查找比特率最高的模型
-    id highestBitrateModel = nil;
-    NSInteger highestBitrate = 0;
+    // 画质优选：先比分辨率面积，再比码率。
+    // 只按码率排序会选中"低分辨率高码率"的流，实际观感反而更差。
+    id bestModel = nil;
+    long long bestArea = 0;
+    NSInteger bestBitrate = 0;
 
     for (id model in bitrateModels) {
         NSInteger bitrate = 0;
+        long long area = 0;
         BOOL validModel = NO;
 
         if ([model isKindOfClass:NSClassFromString(@"AWEVideoBSModel")]) {
@@ -1001,19 +1027,53 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
                 bitrate = [bitrateValue integerValue];
                 validModel = YES;
             }
+            // 分辨率：playAddr 上有宽高；没有则回退到模型自身的 width/height
+            id playAddr = [model valueForKey:@"playAddr"];
+            NSNumber *w = nil, *h = nil;
+            @try {
+                w = [playAddr valueForKey:@"width"];
+                h = [playAddr valueForKey:@"height"];
+                if (!w || !h) {
+                    w = [model valueForKey:@"width"];
+                    h = [model valueForKey:@"height"];
+                }
+            } @catch (__unused NSException *e) {
+            }
+            if ([w isKindOfClass:[NSNumber class]] && [h isKindOfClass:[NSNumber class]]) {
+                area = [w longLongValue] * [h longLongValue];
+            }
         }
 
-        if (validModel && bitrate > highestBitrate) {
-            highestBitrate = bitrate;
-            highestBitrateModel = model;
+        if (!validModel) continue;
+
+        // bytevc2（is_h265 == 2）相册无法解码，跳过
+        id codecValue = [model valueForKey:@"isH265"];
+        if ([codecValue isKindOfClass:[NSNumber class]] && [codecValue integerValue] == 2) {
+            continue;
+        }
+
+        BOOL better = NO;
+        if (area > bestArea) {
+            better = YES;
+        } else if (area == bestArea && bitrate > bestBitrate) {
+            better = YES;
+        }
+        if (better || !bestModel) {
+            if (!bestModel || better) {
+                bestArea = area;
+                bestBitrate = bitrate;
+                bestModel = model;
+            }
         }
     }
 
-    // 如果找到了最高比特率模型，获取其播放地址
-    if (highestBitrateModel) {
-        id playAddr = [highestBitrateModel valueForKey:@"playAddr"];
-        if (playAddr && [playAddr isKindOfClass:%c(AWEURLModel)]) {
-            return playAddr;
+    if (bestModel) {
+        @try {
+            id playAddr = [bestModel valueForKey:@"playAddr"];
+            if (playAddr && [playAddr isKindOfClass:%c(AWEURLModel)]) {
+                return playAddr;
+            }
+        } @catch (__unused NSException *e) {
         }
     }
 
@@ -5343,10 +5403,17 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
         if (!imageURL && [avatarVC respondsToSelector:NSSelectorFromString(@"user")]) {
             id userModel = [(AWEProfileAvatarViewController *)avatarVC user];
             if ([userModel isKindOfClass:NSClassFromString(@"AWEUserModel")]) {
-                AWEURLModel *urlModel = [(AWEUserModel *)userModel avatarMedium];
-                NSString *best = urlModel.originURLList.firstObject;
+                // 保存质量优选：大图优先（avatarThumb / avatarMedium 都是缩略尺寸）
+                AWEUserModel *user = (AWEUserModel *)userModel;
+                NSString *best = DYYYPreferredImageURLString(@[
+                    user.avatarLarger ?: (id)[NSNull null],
+                    [user valueForKey:@"avatar300"] ?: (id)[NSNull null],
+                    user.avatarMedium ?: (id)[NSNull null]
+                ]);
                 if (best.length > 0) imageURL = [NSURL URLWithString:best];
-                NSLog(@"[DYYY][avatar-save] user 回退路径 URL=%@", best ?: @"(空)");
+                NSLog(@"[DYYY][avatar-save] user 回退路径 larger=%@ → %@",
+                      user.avatarLarger ? @"有" : @"无",
+                      best ? @"命中" : @"(空)");
             }
         }
     } @catch (NSException *exception) {
@@ -6423,11 +6490,22 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
                 signature = [author valueForKey:@"signature"] ?: @"";
             }
 
-            if ([author respondsToSelector:@selector(avatarThumb)]) {
-                AWEURLModel *avatarThumb = [author valueForKey:@"avatarThumb"];
-                if (avatarThumb && avatarThumb.originURLList.count > 0) {
-                    avatarURL = avatarThumb.originURLList.firstObject;
-                }
+            // 保存质量优选：大头像优先
+            id authorLarger = nil;
+            id author300 = nil;
+            @try {
+                authorLarger = [author valueForKey:@"avatarLarger"];
+                author300 = [author valueForKey:@"avatar300"];
+            } @catch (__unused NSException *e) {
+            }
+            NSString *pickedAvatar = DYYYPreferredImageURLString(@[
+                authorLarger ?: [NSNull null],
+                author300 ?: [NSNull null],
+                [author respondsToSelector:@selector(avatarThumb)] ? ([author valueForKey:@"avatarThumb"] ?: [NSNull null]) : [NSNull null],
+                [author respondsToSelector:@selector(avatarMedium)] ? ([author valueForKey:@"avatarMedium"] ?: [NSNull null]) : [NSNull null]
+            ]);
+            if (pickedAvatar.length > 0) {
+                avatarURL = pickedAvatar;
             }
         }
 
@@ -6927,16 +7005,33 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
                                   currentImageModel = awemeModel.albumImages.firstObject;
                               }
 
-                              // 查找非.image后缀的URL
-                              NSURL *downloadURL = nil;
-                              for (NSString *urlString in currentImageModel.urlList) {
-                                  NSURL *url = [NSURL URLWithString:urlString];
-                                  NSString *pathExtension = [url.path.lowercaseString pathExtension];
-                                  if (![pathExtension isEqualToString:@"image"]) {
-                                      downloadURL = url;
-                                      break;
-                                  }
+                              // 保存质量优选：
+                              //   watermarkFreeUrlList  无水印（抖音服务端提供）
+                              //   downloadURLList       下载专用
+                              //   urlList               普通列表（旧逻辑）
+                              // 全部为空或不可用时回退 nil，由下面提示处理。
+                              NSArray *freeList = nil;
+                              NSArray *dlList = nil;
+                              @try {
+                                  freeList = [currentImageModel valueForKey:@"watermarkFreeUrlList"];
+                                  dlList = [currentImageModel valueForKey:@"downloadURLList"];
+                              } @catch (__unused NSException *e) {
                               }
+                              if (![freeList isKindOfClass:[NSArray class]]) freeList = nil;
+                              if (![dlList isKindOfClass:[NSArray class]]) dlList = nil;
+
+                              NSString *pickedImageURL = DYYYPreferredImageURLString(@[
+                                  freeList ?: @[],
+                                  dlList ?: @[],
+                                  currentImageModel.urlList ?: @[]
+                              ]);
+                              NSURL *downloadURL = pickedImageURL.length > 0 ? [NSURL URLWithString:pickedImageURL] : nil;
+
+                              NSLog(@"[DYYY][save] 作品图片 free=%lu dl=%lu url=%lu → %@",
+                                    (unsigned long)freeList.count,
+                                    (unsigned long)dlList.count,
+                                    (unsigned long)currentImageModel.urlList.count,
+                                    pickedImageURL ? @"命中" : @"回退");
 
                               if (currentImageModel.clipVideo != nil) {
                                   NSURL *videoURL = [currentImageModel.clipVideo.playURL getDYYYSrcURLDownload];
@@ -6963,9 +7058,26 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
                               // 新版实况照片
                               // 使用封面URL作为图片URL
                               NSURL *imageURL = nil;
-                              if (videoModel.coverURL && videoModel.coverURL.originURLList.count > 0) {
-                                  imageURL = [NSURL URLWithString:videoModel.coverURL.originURLList.firstObject];
+                              // 保存质量优选：原图 > 终极通用 > 默认 coverURL
+                              id originCoverModel = nil;
+                              id ultimateCoverModel = nil;
+                              @try {
+                                  originCoverModel = [videoModel valueForKey:@"originCover"];
+                                  ultimateCoverModel = [videoModel valueForKey:@"universalCoverUltimate"];
+                              } @catch (__unused NSException *e) {
                               }
+                              NSString *pickedCover = DYYYPreferredImageURLString(@[
+                                  originCoverModel ?: [NSNull null],
+                                  ultimateCoverModel ?: [NSNull null],
+                                  videoModel.coverURL ?: [NSNull null]
+                              ]);
+                              if (pickedCover.length > 0) {
+                                  imageURL = [NSURL URLWithString:pickedCover];
+                              }
+                              NSLog(@"[DYYY][save] 实况封面 origin=%@ ultimate=%@ → %@",
+                                    originCoverModel ? @"有" : @"无",
+                                    ultimateCoverModel ? @"有" : @"无",
+                                    pickedCover ? @"命中" : @"回退");
 
                               // 视频URL从视频模型获取
                               NSURL *videoURL = nil;

@@ -349,6 +349,36 @@ void applyTopBarTransparency(UIView *_Nullable topBar);
  */
 id DYYYJSONSafeObject(id _Nullable obj);
 
+/**
+ * 从候选列表中按顺序取第一个非空 URL 字符串。
+ *
+ * 用于「保存质量优选」：抖音的媒体模型往往同时提供多个地址字段
+ * （无水印版 / 下载专用 / 播放流 / 缩略图），按优先级排列候选取第一个可用值，
+ * 全部为空时返回 nil，由调用方回退到原有逻辑。
+ *
+ * 每个候选可以是：
+ *   · NSString                       —— 直接作为 URL
+ *   · NSArray<NSString *>            —— 取第一个非空元素
+ *   · 带 originURLList 方法的对象     —— AWEURLModel 等，取其列表首个非空元素
+ *
+ * @param candidates 候选数组，元素可为 nil（自动跳过）
+ * @return 第一个可用 URL 字符串，或 nil
+ */
+NSString *_Nullable DYYYPreferredURLString(NSArray *_Nullable candidates);
+
+/**
+ * 图片专用优选：在 DYYYPreferredURLString 基础上过滤已知不可用格式。
+ *
+ * 过滤规则（来自 DYKiller 的踩坑记录）：
+ *   · .image 后缀         —— vvic 原图封装格式，相册与常规解析器不识别
+ *   · dy-water 域名       —— 服务端水印模板
+ *   · -download-webp 后缀 —— webp 转码下载版，质量与原图不一致
+ *
+ * @param candidates 候选数组，语义同 DYYYPreferredURLString
+ * @return 第一个通过过滤的 URL 字符串，或 nil（调用方需回退）
+ */
+NSString *_Nullable DYYYPreferredImageURLString(NSArray *_Nullable candidates);
+
 #ifdef __cplusplus
 }
 #endif

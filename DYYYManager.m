@@ -1093,30 +1093,26 @@
     
     for (id imageModel in imagesToSave) {
         @try {
-            // 获取图片 URL - originUrl 和 mediumUrl 都是 AWEURLModel 类型
+            // 获取图片 URL
+            // 保存质量优选（41.1 字段，KVC 读取以防 header 未声明）：
+            //   downloadUrl   评论图片的下载专用地址（AWECommentImageModel 有）
+            //   originUrl     原始图（旧逻辑）
+            //   mediumUrl     中等图（旧回退）
             NSString *imageUrlStr = nil;
-            
-            // 首先尝试 originUrl
-            AWEURLModel *originUrlModel = [imageModel valueForKey:@"originUrl"];
-            if (originUrlModel) {
-                NSArray *urlList = [originUrlModel originURLList];
-                if (urlList && urlList.count > 0) {
-                    imageUrlStr = urlList.firstObject;
-                }
+            id downloadUrlModel = nil;
+            @try {
+                downloadUrlModel = [imageModel valueForKey:@"downloadUrl"];
+            } @catch (__unused NSException *e) {
             }
-            
-            // 如果 originUrl 没有获取到，尝试 mediumUrl
-            if (!imageUrlStr) {
-                AWEURLModel *mediumUrlModel = [imageModel valueForKey:@"mediumUrl"];
-                if (mediumUrlModel) {
-                    NSArray *urlList = [mediumUrlModel originURLList];
-                    if (urlList && urlList.count > 0) {
-                        imageUrlStr = urlList.firstObject;
-                    }
-                }
-            }
-            
-            NSLog(@"[DYYY] 评论图片URL: %@", imageUrlStr);
+            imageUrlStr = DYYYPreferredImageURLString(@[
+                downloadUrlModel ?: [NSNull null],
+                [imageModel valueForKey:@"originUrl"] ?: [NSNull null],
+                [imageModel valueForKey:@"mediumUrl"] ?: [NSNull null]
+            ]);
+
+            NSLog(@"[DYYY][save] 评论图片 download=%@ → %@",
+                  downloadUrlModel ? @"有" : @"无",
+                  imageUrlStr ? @"命中" : @"回退");
             
             if (!imageUrlStr || imageUrlStr.length == 0) {
                 NSLog(@"[DYYY] 无法获取图片URL，imageModel: %@", imageModel);
