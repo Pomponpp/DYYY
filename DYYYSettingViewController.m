@@ -499,7 +499,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
     UIAlertController *alertController =
         [UIAlertController alertControllerWithTitle:@"用户协议"
                                             message:@"本插件为开源项目\n仅供学习交流用途\n如有侵权请联系, GitHub 仓库：huami1314/DYYY\n请遵守当地法律法规, "
-                                                    @"本项目仅供学习交流使用\n请遵守项目许可证及相关约定\n\n请输入\"我已阅读并同意继续使用\"以继续使用
+                                                    @"本项目仅供学习交流使用\n请遵守项目许可证及相关约定\n\n请输入\"我已阅读并同意继续使用\"以继续使用"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alertController addTextFieldWithConfigurationHandler:^(UITextField *_Nonnull textField) {
