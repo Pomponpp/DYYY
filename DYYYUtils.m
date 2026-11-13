@@ -2864,8 +2864,17 @@ NSArray<NSDictionary *> *DYYYWatermarkFreeVideoCandidates(id videoModel) {
     } @catch (__unused NSException *e) {
     }
 
-    // 排序：分辨率面积 ↓ → bitrate ↓
+    // 排序：h264 兜底项永远排最后 → 分辨率面积 ↓ → bitrate ↓
+    //
+    // 注意 h264_fallback 的宽高取自 videoModel.width/height（名义值，常标 1080x1920），
+    // 但实际文件往往只有 720p。若让它参与面积排序，会挤到最前面，
+    // 导致真正的高画质档位（bytevc2）永远轮不到。
     [out sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+        BOOL aFallback = [a[@"gear"] isEqualToString:@"h264_fallback"];
+        BOOL bFallback = [b[@"gear"] isEqualToString:@"h264_fallback"];
+        if (aFallback != bFallback) {
+            return aFallback ? NSOrderedDescending : NSOrderedAscending;
+        }
         long long areaA = [a[@"w"] longLongValue] * [a[@"h"] longLongValue];
         long long areaB = [b[@"w"] longLongValue] * [b[@"h"] longLongValue];
         if (areaA != areaB) return areaA > areaB ? NSOrderedAscending : NSOrderedDescending;
