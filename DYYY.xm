@@ -5404,15 +5404,25 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
             id userModel = [(AWEProfileAvatarViewController *)avatarVC user];
             if ([userModel isKindOfClass:NSClassFromString(@"AWEUserModel")]) {
                 // 保存质量优选：大图优先（avatarThumb / avatarMedium 都是缩略尺寸）
-                AWEUserModel *user = (AWEUserModel *)userModel;
+                // avatarLarger / avatar300 未在 header 声明，走 KVC
+                id largerModel = nil;
+                id avatar300Model = nil;
+                id mediumModel = nil;
+                @try {
+                    largerModel = [userModel valueForKey:@"avatarLarger"];
+                    avatar300Model = [userModel valueForKey:@"avatar300"];
+                    mediumModel = [userModel valueForKey:@"avatarMedium"];
+                } @catch (__unused NSException *e) {
+                }
                 NSString *best = DYYYPreferredImageURLString(@[
-                    user.avatarLarger ?: (id)[NSNull null],
-                    [user valueForKey:@"avatar300"] ?: (id)[NSNull null],
-                    user.avatarMedium ?: (id)[NSNull null]
+                    largerModel ?: (id)[NSNull null],
+                    avatar300Model ?: (id)[NSNull null],
+                    mediumModel ?: (id)[NSNull null]
                 ]);
                 if (best.length > 0) imageURL = [NSURL URLWithString:best];
-                NSLog(@"[DYYY][avatar-save] user 回退路径 larger=%@ → %@",
-                      user.avatarLarger ? @"有" : @"无",
+                NSLog(@"[DYYY][avatar-save] user 回退路径 larger=%@ 300=%@ → %@",
+                      largerModel ? @"有" : @"无",
+                      avatar300Model ? @"有" : @"无",
                       best ? @"命中" : @"(空)");
             }
         }
