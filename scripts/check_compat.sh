@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 抖音版本兼容性预检：把仓库全部 %hook 目标类在砸壳 AwemeCore 二进制里过一遍，
+# 抖音版本兼容性预检：把仓库全部 %hook 目标类在 AwemeCore 二进制里过一遍，
 # 输出缺失清单。换新抖音版本先跑这个，再决定改哪里。
 # 用法: ./scripts/check_compat.sh <AwemeCore路径>
-#   AwemeCore 从砸壳 IPA 里解出：unzip -j 抖音.ipa "Payload/*.app/Frameworks/AwemeCore.framework/AwemeCore"
+#   AwemeCore 从应用包里解出：unzip -j 抖音.ipa "Payload/*.app/Frameworks/AwemeCore.framework/AwemeCore"
 set -euo pipefail
 
 BIN="${1:?用法: $0 <AwemeCore 二进制路径>}"

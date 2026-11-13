@@ -23,7 +23,7 @@
 //       %end
 //       // %ctor: %init(XxxGroup, AWEPlaceholderName = DYYYTargetClass(@"..."));
 //     那时本文件的宏可作为「类名字符串」来源（配合 DYYYTargetClass 帮助函数）。
-//  3. CI 脚本可读本文件做版本兼容扫描（对比砸壳二进制的类名）。
+//  3. CI 脚本可读本文件做版本兼容扫描（对比运行时二进制的类名）。
 //
 //  维护：新增 hook 目标时在这里补一条（保持清单完整）。
 //

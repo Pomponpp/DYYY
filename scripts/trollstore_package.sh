@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# TrollStore 打包脚本：把编译出的 DYYY.dylib 注入砸壳 IPA，重签名后直接巨魔安装。
+# TrollStore 打包脚本：把编译出的 DYYY.dylib 注入应用包，重签名后直接安装。
 # 用法:
-#   ./scripts/trollstore_package.sh <砸壳.ipa> <dylib路径> [输出.ipa]
+#   ./scripts/trollstore_package.sh <应用.ipa> <dylib路径> [输出.ipa]
 # 依赖（macOS）: optool (brew install optool 或源码编译)、ldid (brew install ldid)
 # 依赖（Linux/CI）: optool、ldid 可执行文件在 PATH
 set -euo pipefail
 
-SRC_IPA="${1:?用法: $0 <砸壳.ipa> <dylib> [输出.ipa]}"
+SRC_IPA="${1:?用法: $0 <应用.ipa> <dylib> [输出.ipa]}"
 DYLIB="${2:?缺少 dylib 路径}"
 OUT_IPA="${3:-$(basename "${SRC_IPA%.ipa")}_DYYY.ipa}"
 WORK="$(mktemp -d)"

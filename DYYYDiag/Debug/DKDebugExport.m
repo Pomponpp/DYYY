@@ -19,7 +19,7 @@
 
 NSString *const DKDebugExportWorkingDirectoryKey = @"DKDebugExportWorkingDirectory";
 
-static NSString *const DKExportErrorDomain = @"com.dykiller.debug-export";
+static NSString *const DKExportErrorDomain = @"com.dyyy.debug-export";
 
 // 单个导出包的文件数上限。页面导出约 200 个、音频导出约 15 个，
 // 这道闸门只用来防止将来某处再写出失控的循环。
@@ -383,7 +383,7 @@ DKDebugExportResult *DKDebugCreateExport(DKDebugExportContext *context,
     }
 
     NSDictionary *manifest = @{
-        @"schemaVersion": mode == DKDebugExportModeAudio ? @"dykiller.audio-probe.v2" : @"dykiller.debug.v2",
+        @"schemaVersion": mode == DKDebugExportModeAudio ? @"dyyy.audio-probe.v2" : @"dyyy.debug.v2",
         @"mode": DKModeName(mode),
         @"dyyyVersion": DK_VERSION,
         @"device": context.metadata ?: @{},
