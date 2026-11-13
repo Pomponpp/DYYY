@@ -145,14 +145,46 @@
               audioURL = [NSURL URLWithString:musicModel.playURL.originURLList.firstObject];
           }
 
-                  if (videoModel.h264URL && videoModel.h264URL.originURLList.count > 0) {
-                      NSURL *url = [NSURL URLWithString:videoModel.h264URL.originURLList.firstObject];
-                      [DYYYManager downloadMedia:url
-                                       mediaType:MediaTypeVideo
-                                           audio:audioURL
-                                      completion:^(BOOL success){
-                                      }];
-                  }
+          // 保存质量优选：
+          //   endWatermarkDownloadURL / captionWatermarkDownloadURL / downloadURL（41.1 字段）
+          //   → playURL（我们 hook 过的最高画质）
+          //   → h264URL（兜底，旧逻辑）
+          // 旧实现直接取 h264URL，是最差的一条流，且过期后会保存失败。
+          NSString *bestVideoURL = nil;
+          @try {
+              id endWM = [videoModel valueForKey:@"endWatermarkDownloadURL"];
+              id capWM = [videoModel valueForKey:@"captionWatermarkDownloadURL"];
+              id dlURL = [videoModel valueForKey:@"downloadURL"];
+              bestVideoURL = DYYYPreferredURLString(@[
+                  endWM ?: [NSNull null],
+                  capWM ?: [NSNull null],
+                  dlURL ?: [NSNull null]
+              ]);
+              NSLog(@"[DYYY][save] 长按视频 endWM=%@ capWM=%@ dl=%@ → %@",
+                    endWM ? @"有" : @"无", capWM ? @"有" : @"无", dlURL ? @"有" : @"无",
+                    bestVideoURL ? @"下载流命中" : @"回退");
+          } @catch (__unused NSException *e) {
+          }
+          if (!bestVideoURL.length) {
+              bestVideoURL = DYYYPreferredURLString(@[ videoModel.playURL ?: [NSNull null] ]);
+              if (bestVideoURL.length) NSLog(@"[DYYY][save] 长按视频 → playURL 命中");
+          }
+          if (!bestVideoURL.length) {
+              bestVideoURL = DYYYPreferredURLString(@[ videoModel.h264URL ?: [NSNull null] ]);
+              if (bestVideoURL.length) NSLog(@"[DYYY][save] 长按视频 → h264URL 兜底");
+          }
+
+          if (bestVideoURL.length > 0) {
+              NSURL *url = [NSURL URLWithString:bestVideoURL];
+              [DYYYManager downloadMedia:url
+                               mediaType:MediaTypeVideo
+                                   audio:audioURL
+                              completion:^(BOOL success){
+                              }];
+          } else {
+              NSLog(@"[DYYY][save] 长按视频：所有候选 URL 均为空");
+              [DYYYToast showSuccessToastWithMessage:@"没有取到可用的视频地址"];
+          }
               
           
           AWELongPressPanelManager *panelManager = [%c(AWELongPressPanelManager) shareInstance];
@@ -914,15 +946,43 @@
               audioURL = [NSURL URLWithString:musicModel.playURL.originURLList.firstObject];
           }
 
-                  // 备用方法：直接使用h264URL
-                  if (videoModel.h264URL && videoModel.h264URL.originURLList.count > 0) {
-                      NSURL *url = [NSURL URLWithString:videoModel.h264URL.originURLList.firstObject];
-                      [DYYYManager downloadMedia:url
-                                       mediaType:MediaTypeVideo
-                                           audio:audioURL
-                                      completion:^(BOOL success){
-                                      }];
-                  }
+          // 保存质量优选（与主面板一致）：
+          //   下载专用流 → playURL（最高画质）→ h264URL（兜底）
+          NSString *bestVideoURL = nil;
+          @try {
+              id endWM = [videoModel valueForKey:@"endWatermarkDownloadURL"];
+              id capWM = [videoModel valueForKey:@"captionWatermarkDownloadURL"];
+              id dlURL = [videoModel valueForKey:@"downloadURL"];
+              bestVideoURL = DYYYPreferredURLString(@[
+                  endWM ?: [NSNull null],
+                  capWM ?: [NSNull null],
+                  dlURL ?: [NSNull null]
+              ]);
+              NSLog(@"[DYYY][save] 备用面板视频 endWM=%@ capWM=%@ dl=%@ → %@",
+                    endWM ? @"有" : @"无", capWM ? @"有" : @"无", dlURL ? @"有" : @"无",
+                    bestVideoURL ? @"下载流命中" : @"回退");
+          } @catch (__unused NSException *e) {
+          }
+          if (!bestVideoURL.length) {
+              bestVideoURL = DYYYPreferredURLString(@[ videoModel.playURL ?: [NSNull null] ]);
+              if (bestVideoURL.length) NSLog(@"[DYYY][save] 备用面板视频 → playURL 命中");
+          }
+          if (!bestVideoURL.length) {
+              bestVideoURL = DYYYPreferredURLString(@[ videoModel.h264URL ?: [NSNull null] ]);
+              if (bestVideoURL.length) NSLog(@"[DYYY][save] 备用面板视频 → h264URL 兜底");
+          }
+
+          if (bestVideoURL.length > 0) {
+              NSURL *url = [NSURL URLWithString:bestVideoURL];
+              [DYYYManager downloadMedia:url
+                               mediaType:MediaTypeVideo
+                                   audio:audioURL
+                              completion:^(BOOL success){
+                              }];
+          } else {
+              NSLog(@"[DYYY][save] 备用面板视频：所有候选 URL 均为空");
+              [DYYYToast showSuccessToastWithMessage:@"没有取到可用的视频地址"];
+          }
               
           
           AWELongPressPanelManager *panelManager = [%c(AWELongPressPanelManager) shareInstance];
