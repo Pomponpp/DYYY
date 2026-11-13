@@ -1,6 +1,6 @@
 //
 //  DKDebugInspector.h
-//  DYKiller
+//  DYYY 诊断子系统
 //
 
 #ifndef DKDebugInspector_h

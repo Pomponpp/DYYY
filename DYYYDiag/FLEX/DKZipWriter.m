@@ -1,6 +1,6 @@
 //
 //  DKZipWriter.m
-//  DYKiller
+//  DYYY 诊断子系统
 //
 //  调试导出使用的最小 ZIP 写入器。
 //  写入存储条目，并使用 zlib 计算 CRC32。
@@ -32,7 +32,7 @@ static NSString *DKZipRelativePath(NSString *path, NSString *rootDir) {
 }
 
 static NSError *DKZipError(NSInteger code, NSString *message) {
-    return [NSError errorWithDomain:@"DYKiller.Zip" code:code
+    return [NSError errorWithDomain:@"DYYY.Zip" code:code
                            userInfo:@{NSLocalizedDescriptionKey: message ?: @"ZIP failed"}];
 }
 
@@ -130,7 +130,7 @@ static NSData *DKZipEndRecords(uint64_t entryCount, uint64_t centralSize, uint64
     [fm removeItemAtPath:zipPath error:nil];
     if (![fm createFileAtPath:zipPath contents:NSData.data attributes:nil]) {
         if (error) {
-            *error = [NSError errorWithDomain:@"DYKiller.Zip"
+            *error = [NSError errorWithDomain:@"DYYY.Zip"
                                          code:-1
                                      userInfo:@{NSLocalizedDescriptionKey: @"ZIP file creation failed"}];
         }
@@ -140,7 +140,7 @@ static NSData *DKZipEndRecords(uint64_t entryCount, uint64_t centralSize, uint64
     NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:zipPath];
     if (!handle) {
         if (error) {
-            *error = [NSError errorWithDomain:@"DYKiller.Zip"
+            *error = [NSError errorWithDomain:@"DYYY.Zip"
                                          code:-2
                                      userInfo:@{NSLocalizedDescriptionKey: @"ZIP file handle creation failed"}];
         }

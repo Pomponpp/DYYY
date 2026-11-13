@@ -1,6 +1,6 @@
 //
 //  DKClassDump.h
-//  DYKiller
+//  DYYY 诊断子系统
 //
 //  把 ObjC 运行时元数据生成类头文件文本。内置安全内省检查。
 //

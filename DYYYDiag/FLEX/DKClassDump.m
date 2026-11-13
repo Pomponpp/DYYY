@@ -1,6 +1,6 @@
 //
 //  DKClassDump.m
-//  DYKiller
+//  DYYY 诊断子系统
 //
 //  基于 ObjC 运行时生成类头文件文本。
 //  DKClassIsSafe 用于限制可内省类集合。
@@ -211,7 +211,7 @@ static NSString *DKHeaderForClass(Class cls, NSString *imageName) {
 
         NSMutableString *h = [NSMutableString string];
         [h appendString:@"//\n"];
-        [h appendString:@"// Dumped by DYKiller DKClassDump\n"];
+        [h appendString:@"// Dumped by 参考实现 DKClassDump\n"];
         [h appendFormat:@"// Bundle: %@\n", NSBundle.mainBundle.bundleIdentifier ?: @"Unknown"];
         [h appendFormat:@"// Image: %@\n", imageName ?: @"Unknown"];
         [h appendString:@"//\n\n"];

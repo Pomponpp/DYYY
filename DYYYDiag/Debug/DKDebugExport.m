@@ -1,6 +1,6 @@
 //
 //  DKDebugExport.m
-//  DYKiller
+//  DYYY 诊断子系统
 //
 //  只处理不可变采集结果的序列化、类元数据导出与 ZIP 打包。
 //

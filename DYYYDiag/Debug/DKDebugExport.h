@@ -1,6 +1,6 @@
 //
 //  DKDebugExport.h
-//  DYKiller
+//  DYYY 诊断子系统
 //
 //  把主线程采集完成的调试上下文序列化并打包。
 //

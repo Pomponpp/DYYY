@@ -12,7 +12,7 @@
 BOOL DKPrefBool(NSString *key) {
     if (DKGlassIsGatedKey(key) && !DKGlassOSAvailable()) return NO;
     // 诊断浮层开关映射到 DYYY 设置键（其余键原样透传）
-    if ([key isEqualToString:@"DYKillerDebugInspectorEnabled"]) {
+    if ([key isEqualToString:@"DYYYDebugInspectorEnabled"]) {
         return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYDiagEntryEnabled"];
     }
     return [[NSUserDefaults standardUserDefaults] boolForKey:key];

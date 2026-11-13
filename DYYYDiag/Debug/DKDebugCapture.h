@@ -1,6 +1,6 @@
 //
 //  DKDebugCapture.h
-//  DYKiller
+//  DYYY 诊断子系统
 //
 //  抓取当前页面的运行时快照（窗口/视图树/VC 树/图层/截图/本页类），产出
 //  一个只含"已算好数据"的 DKDebugExportContext，交给 DKDebugExport 落盘。

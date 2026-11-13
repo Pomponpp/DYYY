@@ -1,6 +1,6 @@
 //
 //  DKDebugCapture.m
-//  DYKiller
+//  DYYY 诊断子系统
 //
 //  只读地遍历 UIKit/CoreAnimation 安全字段 + 收集本页类，产出 DKDebugExportContext。
 //  不递归读任意对象的 ivar 值。

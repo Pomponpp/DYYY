@@ -1,6 +1,6 @@
 //
 //  DKZipWriter.h
-//  DYKiller
+//  DYYY 诊断子系统
 //
 //  调试导出使用的最小 ZIP 写入器。
 //  以不压缩方式写入文件，使用 zlib 计算 CRC32，并支持 ZIP64 条目计数。
