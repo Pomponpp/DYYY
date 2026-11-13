@@ -2769,16 +2769,8 @@ NSString *DYYYPreferredImageURLString(NSArray *candidates) {
 
 #pragma mark - 视频无水印选档
 
-NSString *DYYYBestWatermarkFreeVideoURL(id videoModel,
-                                        NSInteger *outWidth,
-                                        NSInteger *outHeight,
-                                        NSInteger *outBitrate,
-                                        NSString **outGear) {
-    if (outWidth) *outWidth = 0;
-    if (outHeight) *outHeight = 0;
-    if (outBitrate) *outBitrate = 0;
-    if (outGear) *outGear = nil;
-    if (!videoModel) return nil;
+NSArray<NSDictionary *> *DYYYWatermarkFreeVideoCandidates(id videoModel) {
+    if (!videoModel) return @[];
 
     NSArray *models = nil;
     @try {
@@ -2788,114 +2780,90 @@ NSString *DYYYBestWatermarkFreeVideoURL(id videoModel,
     if (![models isKindOfClass:[NSArray class]] || models.count == 0) {
         NSLog(@"[DYYY][save] 选档失败：bitrateModels %@",
               models ? ([NSString stringWithFormat:@"count=%lu", (unsigned long)[(NSArray *)models count]]) : @"取不到");
-        return nil;
+        return @[];
     }
     NSLog(@"[DYYY][save] bitrateModels count=%lu", (unsigned long)[(NSArray *)models count]);
 
-    id bestModel = nil;
-    long long bestArea = -1;
-    NSInteger bestBitrate = -1;
-    NSString *bestGear = nil;
-    NSInteger skipCodec = 0, skipNoAddr = 0, skipNoURL = 0;
-
+    NSMutableArray<NSDictionary *> *out = [NSMutableArray array];
     for (id model in models) {
         @try {
-            // bytevc2（isH265 == 2）相册解不了，直接跳过
-            id codec = [model valueForKey:@"isH265"];
-            if ([codec isKindOfClass:[NSNumber class]] && [codec integerValue] == 2) {
-                skipCodec++;
-                continue;
-            }
-
             id playAddr = [model valueForKey:@"playAddr"];
-            if (!playAddr) {
-                skipNoAddr++;
-                continue;
-            }
+            if (!playAddr) continue;
 
             NSArray *urls = nil;
             if ([playAddr respondsToSelector:@selector(originURLList)]) {
                 urls = [playAddr originURLList];
             }
-            if (![urls isKindOfClass:[NSArray class]] || urls.count == 0) {
-                skipNoURL++;
-                continue;
-            }
+            if (![urls isKindOfClass:[NSArray class]] || urls.count == 0) continue;
+
+            NSString *url = DYYYPreferredURLString(@[ playAddr ]);
+            if (url.length == 0) continue;
 
             // 宽高：模型层优先，其次 playAddr
-            NSNumber *w = nil, *h = nil;
-            w = [model valueForKey:@"width"];
-            h = [model valueForKey:@"height"];
+            NSNumber *w = [model valueForKey:@"width"];
+            NSNumber *h = [model valueForKey:@"height"];
             if (![w isKindOfClass:[NSNumber class]] || ![h isKindOfClass:[NSNumber class]]) {
                 id pw = [playAddr valueForKey:@"width"];
                 id ph = [playAddr valueForKey:@"height"];
                 if ([pw isKindOfClass:[NSNumber class]]) w = pw;
                 if ([ph isKindOfClass:[NSNumber class]]) h = ph;
             }
-            long long area = 0;
-            if ([w isKindOfClass:[NSNumber class]] && [h isKindOfClass:[NSNumber class]]) {
-                area = [w longLongValue] * [h longLongValue];
-            }
 
-            NSInteger bitrate = 0;
-            id br = [model valueForKey:@"bitrate"];
-            if ([br isKindOfClass:[NSNumber class]]) bitrate = [br integerValue];
+            NSNumber *bitrate = [model valueForKey:@"bitrate"];
+            NSNumber *codec = [model valueForKey:@"isH265"];
+            NSString *gear = [model valueForKey:@"gearName"];
 
-            NSString *gear = nil;
-            id g = [model valueForKey:@"gearName"];
-            if ([g isKindOfClass:[NSString class]]) gear = g;
-
-            BOOL better = NO;
-            if (!bestModel) {
-                better = YES;
-            } else if (area > bestArea) {
-                better = YES;
-            } else if (area == bestArea && bitrate > bestBitrate) {
-                better = YES;
-            }
-
-            if (better) {
-                bestModel = model;
-                bestArea = area;
-                bestBitrate = bitrate;
-                bestGear = gear;
-            }
+            NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+            entry[@"url"] = url;
+            entry[@"w"] = [w isKindOfClass:[NSNumber class]] ? w : @0;
+            entry[@"h"] = [h isKindOfClass:[NSNumber class]] ? h : @0;
+            entry[@"bitrate"] = [bitrate isKindOfClass:[NSNumber class]] ? bitrate : @0;
+            entry[@"codec"] = [codec isKindOfClass:[NSNumber class]] ? codec : @(-1);
+            if ([gear isKindOfClass:[NSString class]]) entry[@"gear"] = gear;
+            [out addObject:entry];
         } @catch (__unused NSException *e) {
         }
     }
 
-    if (!bestModel) {
-        NSLog(@"[DYYY][save] 选档失败：全部跳过（codec=%ld noAddr=%ld noURL=%ld）",
-              (long)skipCodec, (long)skipNoAddr, (long)skipNoURL);
-        return nil;
-    }
+    // 排序：分辨率面积 ↓ → bitrate ↓
+    [out sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+        long long areaA = [a[@"w"] longLongValue] * [a[@"h"] longLongValue];
+        long long areaB = [b[@"w"] longLongValue] * [b[@"h"] longLongValue];
+        if (areaA != areaB) return areaA > areaB ? NSOrderedAscending : NSOrderedDescending;
+        NSInteger brA = [a[@"bitrate"] integerValue];
+        NSInteger brB = [b[@"bitrate"] integerValue];
+        if (brA != brB) return brA > brB ? NSOrderedAscending : NSOrderedDescending;
+        return NSOrderedSame;
+    }];
 
-    id bestPlayAddr = nil;
-    @try {
-        bestPlayAddr = [bestModel valueForKey:@"playAddr"];
-    } @catch (__unused NSException *e) {
+    for (NSUInteger i = 0; i < out.count; i++) {
+        NSDictionary *c = out[i];
+        NSLog(@"[DYYY][save] 候选%lu: %ldx%ld br=%ld codec=%@ gear=%@",
+              (unsigned long)(i + 1),
+              (long)[c[@"w"] integerValue], (long)[c[@"h"] integerValue],
+              (long)[c[@"bitrate"] integerValue], c[@"codec"], c[@"gear"] ?: @"-");
     }
-    if (!bestPlayAddr) return nil;
+    return out;
+}
 
-    // 回传选中档位的真实宽高（模型层优先，其次 playAddr）
-    if (outWidth || outHeight) {
-        NSNumber *w = nil, *h = nil;
-        @try {
-            w = [bestModel valueForKey:@"width"];
-            h = [bestModel valueForKey:@"height"];
-            if (![w isKindOfClass:[NSNumber class]] || ![h isKindOfClass:[NSNumber class]]) {
-                id pw = [bestPlayAddr valueForKey:@"width"];
-                id ph = [bestPlayAddr valueForKey:@"height"];
-                if ([pw isKindOfClass:[NSNumber class]]) w = pw;
-                if ([ph isKindOfClass:[NSNumber class]]) h = ph;
-            }
-        } @catch (__unused NSException *e) {
-        }
-        if (outWidth) *outWidth = [w isKindOfClass:[NSNumber class]] ? [w integerValue] : 0;
-        if (outHeight) *outHeight = [h isKindOfClass:[NSNumber class]] ? [h integerValue] : 0;
-    }
-    if (outBitrate) *outBitrate = bestBitrate;
-    if (outGear) *outGear = bestGear;
+// 兼容旧调用：返回候选列表里画质最高的一条
+NSString *DYYYBestWatermarkFreeVideoURL(id videoModel,
+                                        NSInteger *outWidth,
+                                        NSInteger *outHeight,
+                                        NSInteger *outBitrate,
+                                        NSString **outGear) {
+    if (outWidth) *outWidth = 0;
+    if (outHeight) *outHeight = 0;
+    if (outBitrate) *outBitrate = 0;
+    if (outGear) *outGear = nil;
 
-    return DYYYPreferredURLString(@[ bestPlayAddr ]);
+    NSArray<NSDictionary *> *candidates = DYYYWatermarkFreeVideoCandidates(videoModel);
+    if (candidates.count == 0) return nil;
+
+    NSDictionary *best = candidates.firstObject;
+    if (outWidth) *outWidth = [best[@"w"] integerValue];
+    if (outHeight) *outHeight = [best[@"h"] integerValue];
+    if (outBitrate) *outBitrate = [best[@"bitrate"] integerValue];
+    if (outGear) *outGear = best[@"gear"];
+    return best[@"url"];
 }

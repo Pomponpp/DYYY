@@ -406,6 +406,27 @@ NSString *_Nullable DYYYBestWatermarkFreeVideoURL(id _Nullable videoModel,
                                                   NSInteger *_Nullable outBitrate,
                                                   NSString *_Nullable *_Nullable outGear);
 
+/**
+ * 返回「无水印视频」的完整候选列表，按画质从高到低排序。
+ *
+ * 与 DYYYBestWatermarkFreeVideoURL 的区别：本函数【不排除 bytevc2】。
+ * 41.1 实测发现，部分视频的 bitrateModels 只有一条且编码为 bytevc2，
+ * 直接过滤会退回到 h264URL（通常只有 720p）。
+ * 因此改为把 bytevc2 也纳入候选，由调用方按顺序尝试：
+ *   能存进相册 → 用高画质
+ *   存不进     → 自动降级到下一个候选
+ *
+ * 每个元素为 NSDictionary：
+ *   url     NSString   播放地址
+ *   w/h     NSNumber   宽高（可能为 0）
+ *   bitrate NSNumber   码率
+ *   codec   NSNumber   isH265 原值（0=H.264, 1=bytevc1, 2=bytevc2）
+ *   gear    NSString   gearName（可能缺失）
+ *
+ * @return 候选数组，按 分辨率面积 ↓ → bitrate ↓ 排序；无可用项时返回空数组
+ */
+NSArray<NSDictionary *> *DYYYWatermarkFreeVideoCandidates(id _Nullable videoModel);
+
 #ifdef __cplusplus
 }
 #endif

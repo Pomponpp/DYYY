@@ -52,6 +52,21 @@
 + (void)downloadMedia:(NSURL *)url mediaType:(MediaType)mediaType audio:(NSURL *)audioURL completion:(void (^)(BOOL success))completion;
 
 /**
+ * 按候选顺序下载视频，失败自动降级到下一个候选。
+ *
+ * 背景：41.1 部分视频只有一条 bytevc2 编码的码率流，
+ * 该编码能否写入相册并不确定。直接过滤会退回 h264URL（通常只有 720p）。
+ * 因此改为逐个尝试：能存就用高画质候选，存不进再降一档。
+ *
+ * @param candidates DYYYWatermarkFreeVideoCandidates 的返回值
+ * @param audioURL   配乐地址，可为 nil
+ * @param completion 全部候选都失败时为 NO
+ */
++ (void)downloadVideoWithCandidates:(NSArray<NSDictionary *> *)candidates
+                              audio:(NSURL *)audioURL
+                         completion:(void (^_Nullable)(BOOL success))completion;
+
+/**
  * 带进度的媒体下载
  * @param url 媒体URL
  * @param mediaType 媒体类型

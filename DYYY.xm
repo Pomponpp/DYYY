@@ -7079,28 +7079,24 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
                                                       }];
                               }
                           } else {
-                              // 保存质量优选（与长按面板一致）：playAddr 最高档 → h264URL 兜底
-                              NSInteger dblW = 0, dblH = 0, dblBR = 0;
-                              NSString *dblGear = nil;
-                              NSString *bestVideoURL = DYYYBestWatermarkFreeVideoURL(videoModel, &dblW, &dblH, &dblBR, &dblGear);
-                              NSLog(@"[DYYY][save] 双击视频 → %@ %ldx%ld br=%ld gear=%@",
-                                    bestVideoURL ? @"playAddr 命中" : @"无可用档位",
-                                    (long)dblW, (long)dblH, (long)dblBR, dblGear ?: @"-");
-                              if (!bestVideoURL.length) {
-                                  bestVideoURL = DYYYPreferredURLString(@[ videoModel.h264URL ?: [NSNull null] ]);
-                                  if (bestVideoURL.length) NSLog(@"[DYYY][save] 双击视频 → h264URL 兜底");
-                              }
-
-                              if (bestVideoURL.length > 0) {
-                                  NSURL *url = [NSURL URLWithString:bestVideoURL];
-                                  [DYYYManager downloadMedia:url
-                                                   mediaType:MediaTypeVideo
-                                                       audio:audioURL
-                                                  completion:^(BOOL success){
-                                                  }];
+                              // 保存质量优选（与长按面板一致）：playAddr 候选列表，失败自动降级
+                              NSArray<NSDictionary *> *dblCandidates = DYYYWatermarkFreeVideoCandidates(videoModel);
+                              if (dblCandidates.count > 0) {
+                                  [DYYYManager downloadVideoWithCandidates:dblCandidates
+                                                                     audio:audioURL
+                                                                completion:nil];
                               } else {
-                                  NSLog(@"[DYYY][save] 双击视频：所有候选 URL 均为空");
-                                  [DYYYUtils showToast:@"没有取到可用的视频地址"];
+                                  NSString *fallback = DYYYPreferredURLString(@[ videoModel.h264URL ?: [NSNull null] ]);
+                                  NSLog(@"[DYYY][save] 双击视频 → 无候选，h264URL %@", fallback.length ? @"兜底" : @"也为空");
+                                  if (fallback.length > 0) {
+                                      [DYYYManager downloadMedia:[NSURL URLWithString:fallback]
+                                                       mediaType:MediaTypeVideo
+                                                           audio:audioURL
+                                                      completion:^(BOOL success){
+                                                      }];
+                                  } else {
+                                      [DYYYUtils showToast:@"没有取到可用的视频地址"];
+                                  }
                               }
                           }
                         }];

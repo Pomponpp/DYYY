@@ -18,6 +18,14 @@
 + (void)reportVideoSpecAtURL:(NSURL *)url;
 @end
 
+// 候选重试的私有递归入口
+@interface DYYYManager (CandidateRetry)
++ (void)downloadVideoWithCandidates:(NSArray<NSDictionary *> *)candidates
+                              index:(NSUInteger)index
+                              audio:(NSURL *)audioURL
+                         completion:(void (^)(BOOL success))completion;
+@end
+
 
 @interface DYYYManager () <NSURLSessionDownloadDelegate>
 @property(nonatomic, copy) NSString *pendingAlbumDescription;
@@ -252,20 +260,8 @@
 
     double mb = bytes / 1024.0 / 1024.0;
     NSLog(@"[DYYY][save] 实际保存 %dx%d %.2fMB", (int)natural.width, (int)natural.height, mb);
-
-    if (natural.width > 0 || bytes > 0) {
-        // Toast 容器宽度有限，只显示档位标签；完整分辨率看日志
-        int shortSide = (int)MIN(natural.width, natural.height);
-        NSString *tier = nil;
-        if (shortSide >= 1080) tier = @"1080P";
-        else if (shortSide >= 720) tier = @"720P";
-        else if (shortSide >= 540) tier = @"540P";
-        else if (shortSide > 0) tier = [NSString stringWithFormat:@"%dx%d", (int)natural.width, (int)natural.height];
-        else tier = @"视频";
-
-        NSString *msg = [NSString stringWithFormat:@"已保存 %@ · %.1fMB", tier, mb];
-        [DYYYToast showSuccessToastWithMessage:msg];
-    }
+    // 不做 Toast：容器宽度是为「下载中... 50%」设计的，塞不下规格信息。
+    // 分辨率与文件大小只记日志，需要时导诊断包查看。
 }
 
 + (NSString *)albumDescriptionForAwemeModel:(AWEAwemeModel *)model {
@@ -397,6 +393,49 @@
             [manager saveLivePhotoImage:imageFile video:videoFile cancellation:cancellation completion:finish];
         });
     });
+}
+
+// 按候选顺序尝试下载视频，失败自动降级
++ (void)downloadVideoWithCandidates:(NSArray<NSDictionary *> *)candidates
+                              audio:(NSURL *)audioURL
+                         completion:(void (^)(BOOL success))completion {
+    [self downloadVideoWithCandidates:candidates index:0 audio:audioURL completion:completion];
+}
+
++ (void)downloadVideoWithCandidates:(NSArray<NSDictionary *> *)candidates
+                              index:(NSUInteger)index
+                              audio:(NSURL *)audioURL
+                         completion:(void (^)(BOOL success))completion {
+    if (index >= candidates.count) {
+        NSLog(@"[DYYY][save] 全部候选失败（共 %lu 个）", (unsigned long)candidates.count);
+        if (completion) completion(NO);
+        return;
+    }
+
+    NSDictionary *cand = candidates[index];
+    NSString *urlStr = cand[@"url"];
+    if (urlStr.length == 0) {
+        [self downloadVideoWithCandidates:candidates index:index + 1 audio:audioURL completion:completion];
+        return;
+    }
+
+    NSLog(@"[DYYY][save] 尝试候选 %lu/%lu: %ldx%ld codec=%@",
+          (unsigned long)(index + 1), (unsigned long)candidates.count,
+          (long)[cand[@"w"] integerValue], (long)[cand[@"h"] integerValue], cand[@"codec"]);
+
+    NSURL *url = [NSURL URLWithString:urlStr];
+    [self downloadMedia:url
+               mediaType:MediaTypeVideo
+                   audio:audioURL
+              completion:^(BOOL success) {
+                if (success) {
+                    NSLog(@"[DYYY][save] 候选 %lu 保存成功", (unsigned long)(index + 1));
+                    if (completion) completion(YES);
+                } else {
+                    NSLog(@"[DYYY][save] 候选 %lu 失败，降级下一个", (unsigned long)(index + 1));
+                    [self downloadVideoWithCandidates:candidates index:index + 1 audio:audioURL completion:completion];
+                }
+              }];
 }
 
 + (void)downloadMedia:(NSURL *)url mediaType:(MediaType)mediaType audio:(NSURL *)audioURL completion:(void (^)(BOOL success))completion {
