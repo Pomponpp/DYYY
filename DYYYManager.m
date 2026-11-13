@@ -1,6 +1,7 @@
 #import "DYYYManager.h"
 #import <AVFoundation/AVFoundation.h>
 #import <CoreAudioTypes/CoreAudioTypes.h>
+#import <CoreMedia/CoreMedia.h>
 #import <CoreMedia/CMMetadata.h>
 #import <ImageIO/ImageIO.h>
 #import <MobileCoreServices/MobileCoreServices.h>
@@ -24,6 +25,12 @@
                               index:(NSUInteger)index
                               audio:(NSURL *)audioURL
                          completion:(void (^)(BOOL success))completion;
++ (void)runTranscodePlan:(NSArray<NSDictionary *> *)plans
+                   index:(NSUInteger)index
+                  source:(AVAsset *)asset
+                 srcPath:(NSURL *)srcURL
+                outStamp:(NSString *)stamp
+              completion:(void (^)(BOOL success))completion;
 @end
 
 
@@ -424,6 +431,24 @@
           (long)[cand[@"w"] integerValue], (long)[cand[@"h"] integerValue], cand[@"codec"]);
 
     NSURL *url = [NSURL URLWithString:urlStr];
+    NSInteger codec = [cand[@"codec"] integerValue];
+
+    // bytevc2（codec == 2）无法直接入库，走转码路径（passthrough → HEVC → H.264）
+    if (codec == 2) {
+        NSLog(@"[DYYY][save] 候选 %lu 为 bytevc2，转码后入库", (unsigned long)(index + 1));
+        [self saveTranscodedVideoFromURL:url
+                              completion:^(BOOL success) {
+                                if (success) {
+                                    NSLog(@"[DYYY][save] 候选 %lu 转码入库成功", (unsigned long)(index + 1));
+                                    if (completion) completion(YES);
+                                } else {
+                                    NSLog(@"[DYYY][save] 候选 %lu 转码失败，降级下一个", (unsigned long)(index + 1));
+                                    [self downloadVideoWithCandidates:candidates index:index + 1 audio:audioURL completion:completion];
+                                }
+                              }];
+        return;
+    }
+
     [self downloadMedia:url
                mediaType:MediaTypeVideo
                    audio:audioURL
@@ -436,6 +461,175 @@
                     [self downloadVideoWithCandidates:candidates index:index + 1 audio:audioURL completion:completion];
                 }
               }];
+}
+
+// 把 fourcc 转成可读名字，用于日志
+static NSString *DYYYFourCCName(FourCharCode code) {
+    if (code == 0) return @"(空)";
+    char c[5] = { (char)((code >> 24) & 0xFF), (char)((code >> 16) & 0xFF),
+                  (char)((code >> 8) & 0xFF), (char)(code & 0xFF), 0 };
+    BOOL printable = YES;
+    for (int i = 0; i < 4; i++) {
+        if (c[i] < 0x20 || c[i] > 0x7E) { printable = NO; break; }
+    }
+    if (!printable) return [NSString stringWithFormat:@"0x%08X", (unsigned)code];
+    return [NSString stringWithUTF8String:c];
+}
+
+// 下载 bytevc2 后按编码分级转码：passthrough → HEVC → H.264
++ (void)saveTranscodedVideoFromURL:(NSURL *)url
+                        completion:(void (^)(BOOL success))completion {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+      NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+      cfg.timeoutIntervalForRequest = 60;
+      cfg.timeoutIntervalForResource = 600;
+      NSURLSession *session = [NSURLSession sessionWithConfiguration:cfg];
+      NSURLSessionDownloadTask *task =
+          [session downloadTaskWithURL:url
+                     completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+                       if (error || !location) {
+                           NSLog(@"[DYYY][transcode] 下载失败: %@", error.localizedDescription ?: @"未知");
+                           dispatch_async(dispatch_get_main_queue(), ^{
+                             if (completion) completion(NO);
+                           });
+                           return;
+                       }
+
+                       NSString *stamp = [NSString stringWithFormat:@"%ld", (long)[[NSDate date] timeIntervalSince1970]];
+                       NSString *tmp = NSTemporaryDirectory();
+                       NSURL *srcURL = [NSURL fileURLWithPath:[tmp stringByAppendingPathComponent:
+                                                                 [NSString stringWithFormat:@"dyyy_src_%@.mp4", stamp]]];
+                       [[NSFileManager defaultManager] removeItemAtURL:srcURL error:nil];
+                       NSError *moveErr = nil;
+                       [[NSFileManager defaultManager] moveItemAtURL:location toURL:srcURL error:&moveErr];
+                       if (moveErr) {
+                           NSLog(@"[DYYY][transcode] 落盘失败: %@", moveErr.localizedDescription);
+                           dispatch_async(dispatch_get_main_queue(), ^{
+                             if (completion) completion(NO);
+                           });
+                           return;
+                       }
+
+                       AVURLAsset *asset = [AVURLAsset URLAssetWithURL:srcURL options:nil];
+                       AVAssetTrack *track = [[asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+                       if (!track) {
+                           NSLog(@"[DYYY][transcode] 无视频轨，无法处理");
+                           [[NSFileManager defaultManager] removeItemAtURL:srcURL error:nil];
+                           dispatch_async(dispatch_get_main_queue(), ^{
+                             if (completion) completion(NO);
+                           });
+                           return;
+                       }
+
+                       CGSize natural = track.naturalSize;
+                       CGAffineTransform xf = track.preferredTransform;
+                       if (fabs(xf.a) < 0.01 && fabs(xf.d) < 0.01) {
+                           natural = CGSizeMake(natural.height, natural.width);
+                       }
+
+                       // 探测真实编码：bytevc2 到底是标准 HEVC 还是私有封装
+                       FourCharCode fourcc = 0;
+                       @try {
+                           id desc = [track.formatDescriptions firstObject];
+                           if (desc) {
+                               fourcc = CMFormatDescriptionGetMediaSubType((__bridge CMFormatDescriptionRef)desc);
+                           }
+                       } @catch (__unused NSException *e) {
+                       }
+                       unsigned long long bytes = 0;
+                       NSNumber *sizeNum = [[NSFileManager defaultManager] attributesOfItemAtPath:srcURL.path error:nil][NSFileSize];
+                       if ([sizeNum isKindOfClass:[NSNumber class]]) bytes = sizeNum.unsignedLongLongValue;
+                       NSLog(@"[DYYY][transcode] 源: %dx%d codec=%@ %.2fMB",
+                             (int)natural.width, (int)natural.height, DYYYFourCCName(fourcc), bytes / 1024.0 / 1024.0);
+
+                       // 分级尝试：passthrough → HEVC → H.264
+                       NSArray<NSDictionary *> *plans = @[
+                           @{ @"preset": AVAssetExportPresetPassthrough, @"type": AVFileTypeMPEG4, @"name": @"passthrough" },
+                           @{ @"preset": AVAssetExportPresetHEVCHighestQuality, @"type": AVFileTypeQuickTimeMovie, @"name": @"hevc" },
+                           @{ @"preset": AVAssetExportPresetHighestQuality, @"type": AVFileTypeMPEG4, @"name": @"h264" }
+                       ];
+                       [self runTranscodePlan:plans
+                                       index:0
+                                      source:asset
+                                     srcPath:srcURL
+                                    outStamp:stamp
+                                  completion:completion];
+                     }];
+      [task resume];
+    });
+}
+
+// 依次尝试转码方案，全部失败才放弃
++ (void)runTranscodePlan:(NSArray<NSDictionary *> *)plans
+                   index:(NSUInteger)index
+                  source:(AVAsset *)asset
+                 srcPath:(NSURL *)srcURL
+                outStamp:(NSString *)stamp
+              completion:(void (^)(BOOL success))completion {
+    if (index >= plans.count) {
+        NSLog(@"[DYYY][transcode] 所有方案均失败");
+        [[NSFileManager defaultManager] removeItemAtURL:srcURL error:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+          if (completion) completion(NO);
+        });
+        return;
+    }
+
+    NSDictionary *plan = plans[index];
+    NSString *preset = plan[@"preset"];
+    NSString *type = plan[@"type"];
+    NSString *name = plan[@"name"];
+
+    NSString *outPath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                                                       [NSString stringWithFormat:@"dyyy_out_%@_%@.%@", stamp, name,
+                                                                                  [type isEqualToString:AVFileTypeMPEG4] ? @"mp4" : @"mov"]];
+    NSURL *outURL = [NSURL fileURLWithPath:outPath];
+    [[NSFileManager defaultManager] removeItemAtURL:outURL error:nil];
+
+    AVAssetExportSession *session = [[AVAssetExportSession alloc] initWithAsset:asset presetName:preset];
+    if (!session) {
+        NSLog(@"[DYYY][transcode] %@: 不支持该 preset，试下一个", name);
+        [self runTranscodePlan:plans index:index + 1 source:asset srcPath:srcURL outStamp:stamp completion:completion];
+        return;
+    }
+    session.outputURL = outURL;
+    session.outputFileType = type;
+    session.shouldOptimizeForNetworkUse = YES;
+
+    NSLog(@"[DYYY][transcode] 尝试 %@", name);
+    [session exportAsynchronouslyWithCompletionHandler:^{
+      if (session.status != AVAssetExportSessionStatusCompleted) {
+          NSLog(@"[DYYY][transcode] %@ 失败: %@", name, session.error.localizedDescription ?: @"未知");
+          [[NSFileManager defaultManager] removeItemAtURL:outURL error:nil];
+          [self runTranscodePlan:plans index:index + 1 source:asset srcPath:srcURL outStamp:stamp completion:completion];
+          return;
+      }
+
+      unsigned long long outBytes = 0;
+      NSNumber *sz = [[NSFileManager defaultManager] attributesOfItemAtPath:outPath error:nil][NSFileSize];
+      if ([sz isKindOfClass:[NSNumber class]]) outBytes = sz.unsignedLongLongValue;
+      NSLog(@"[DYYY][transcode] %@ 完成，%.2fMB，入库中", name, outBytes / 1024.0 / 1024.0);
+
+      [[PHPhotoLibrary sharedPhotoLibrary]
+          performChanges:^{
+            PHAssetCreationRequest *req = [PHAssetCreationRequest creationRequestForAsset];
+            [req addResourceWithType:PHAssetResourceTypeVideo fileURL:outURL options:nil];
+          }
+          completionHandler:^(BOOL ok, NSError *_Nullable e) {
+            NSLog(@"[DYYY][transcode] %@ 入库%@%@",
+                  name, ok ? @"成功" : @"失败",
+                  ok ? @"" : [NSString stringWithFormat:@": %@", e.localizedDescription ?: @"未知"]);
+            [[NSFileManager defaultManager] removeItemAtURL:srcURL error:nil];
+            [[NSFileManager defaultManager] removeItemAtURL:outURL error:nil];
+            if (ok) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                  if (completion) completion(YES);
+                });
+            } else {
+                [self runTranscodePlan:plans index:index + 1 source:asset srcPath:srcURL outStamp:stamp completion:completion];
+            }
+          }];
+    }];
 }
 
 + (void)downloadMedia:(NSURL *)url mediaType:(MediaType)mediaType audio:(NSURL *)audioURL completion:(void (^)(BOOL success))completion {

@@ -67,6 +67,21 @@
                          completion:(void (^_Nullable)(BOOL success))completion;
 
 /**
+ * 下载后转码为 H.264 再存入相册。
+ *
+ * 用途：41.1 的高画质码率流是 bytevc2 编码，PhotoKit 直接入库会被拒。
+ * 该编码能被 AVFoundation 解码（HEVC 系），所以先落到临时文件，
+ * 再用 AVAssetExportSession 转成 MPEG-4/H.264，最后入库。
+ *
+ * 代价：每次保存多一次转码耗时（视片长 5-30 秒），且有一次再编码损失。
+ *
+ * @param url        候选的 playAddr 地址
+ * @param completion 入库成功与否
+ */
++ (void)saveTranscodedVideoFromURL:(NSURL *)url
+                        completion:(void (^_Nullable)(BOOL success))completion;
+
+/**
  * 带进度的媒体下载
  * @param url 媒体URL
  * @param mediaType 媒体类型
