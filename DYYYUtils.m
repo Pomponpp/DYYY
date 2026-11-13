@@ -2766,3 +2766,121 @@ NSString *DYYYPreferredImageURLString(NSArray *candidates) {
     }
     return nil;
 }
+
+#pragma mark - 视频无水印选档
+
+NSString *DYYYBestWatermarkFreeVideoURL(id videoModel,
+                                        NSInteger *outWidth,
+                                        NSInteger *outHeight,
+                                        NSInteger *outBitrate,
+                                        NSString **outGear) {
+    if (outWidth) *outWidth = 0;
+    if (outHeight) *outHeight = 0;
+    if (outBitrate) *outBitrate = 0;
+    if (outGear) *outGear = nil;
+    if (!videoModel) return nil;
+
+    NSArray *models = nil;
+    @try {
+        models = [videoModel valueForKey:@"bitrateModels"];
+    } @catch (__unused NSException *e) {
+    }
+    if (![models isKindOfClass:[NSArray class]] || models.count == 0) {
+        return nil;
+    }
+
+    id bestModel = nil;
+    long long bestArea = -1;
+    NSInteger bestBitrate = -1;
+    NSString *bestGear = nil;
+
+    for (id model in models) {
+        @try {
+            // bytevc2（isH265 == 2）相册解不了，直接跳过
+            id codec = [model valueForKey:@"isH265"];
+            if ([codec isKindOfClass:[NSNumber class]] && [codec integerValue] == 2) {
+                continue;
+            }
+
+            id playAddr = [model valueForKey:@"playAddr"];
+            if (!playAddr) continue;
+
+            NSArray *urls = nil;
+            if ([playAddr respondsToSelector:@selector(originURLList)]) {
+                urls = [playAddr originURLList];
+            }
+            if (![urls isKindOfClass:[NSArray class]] || urls.count == 0) continue;
+
+            // 宽高：模型层优先，其次 playAddr
+            NSNumber *w = nil, *h = nil;
+            w = [model valueForKey:@"width"];
+            h = [model valueForKey:@"height"];
+            if (![w isKindOfClass:[NSNumber class]] || ![h isKindOfClass:[NSNumber class]]) {
+                id pw = [playAddr valueForKey:@"width"];
+                id ph = [playAddr valueForKey:@"height"];
+                if ([pw isKindOfClass:[NSNumber class]]) w = pw;
+                if ([ph isKindOfClass:[NSNumber class]]) h = ph;
+            }
+            long long area = 0;
+            if ([w isKindOfClass:[NSNumber class]] && [h isKindOfClass:[NSNumber class]]) {
+                area = [w longLongValue] * [h longLongValue];
+            }
+
+            NSInteger bitrate = 0;
+            id br = [model valueForKey:@"bitrate"];
+            if ([br isKindOfClass:[NSNumber class]]) bitrate = [br integerValue];
+
+            NSString *gear = nil;
+            id g = [model valueForKey:@"gearName"];
+            if ([g isKindOfClass:[NSString class]]) gear = g;
+
+            BOOL better = NO;
+            if (!bestModel) {
+                better = YES;
+            } else if (area > bestArea) {
+                better = YES;
+            } else if (area == bestArea && bitrate > bestBitrate) {
+                better = YES;
+            }
+
+            if (better) {
+                bestModel = model;
+                bestArea = area;
+                bestBitrate = bitrate;
+                bestGear = gear;
+            }
+        } @catch (__unused NSException *e) {
+        }
+    }
+
+    if (!bestModel) return nil;
+
+    id bestPlayAddr = nil;
+    @try {
+        bestPlayAddr = [bestModel valueForKey:@"playAddr"];
+    } @catch (__unused NSException *e) {
+    }
+    if (!bestPlayAddr) return nil;
+
+    // 回传选中档位的真实宽高（模型层优先，其次 playAddr）
+    if (outWidth || outHeight) {
+        NSNumber *w = nil, *h = nil;
+        @try {
+            w = [bestModel valueForKey:@"width"];
+            h = [bestModel valueForKey:@"height"];
+            if (![w isKindOfClass:[NSNumber class]] || ![h isKindOfClass:[NSNumber class]]) {
+                id pw = [bestPlayAddr valueForKey:@"width"];
+                id ph = [bestPlayAddr valueForKey:@"height"];
+                if ([pw isKindOfClass:[NSNumber class]]) w = pw;
+                if ([ph isKindOfClass:[NSNumber class]]) h = ph;
+            }
+        } @catch (__unused NSException *e) {
+        }
+        if (outWidth) *outWidth = [w isKindOfClass:[NSNumber class]] ? [w integerValue] : 0;
+        if (outHeight) *outHeight = [h isKindOfClass:[NSNumber class]] ? [h integerValue] : 0;
+    }
+    if (outBitrate) *outBitrate = bestBitrate;
+    if (outGear) *outGear = bestGear;
+
+    return DYYYPreferredURLString(@[ bestPlayAddr ]);
+}

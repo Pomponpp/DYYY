@@ -7079,22 +7079,13 @@ static void DYYYPerformAvatarSave(UIViewController *avatarVC) {
                                                       }];
                               }
                           } else {
-                              // 保存质量优选（与长按面板一致）：
-                              //   downloadURL → playURL → h264URL
-                              // 不用带 Watermark 字样的字段（那是「带水印」的意思）。
-                              NSString *bestVideoURL = nil;
-                              @try {
-                                  id dlURL = [videoModel valueForKey:@"downloadURL"];
-                                  bestVideoURL = DYYYPreferredURLString(@[ dlURL ?: [NSNull null] ]);
-                                  NSLog(@"[DYYY][save] 双击视频 dl=%@ → %@",
-                                        dlURL ? @"有" : @"无",
-                                        bestVideoURL ? @"下载流命中" : @"回退");
-                              } @catch (__unused NSException *e) {
-                              }
-                              if (!bestVideoURL.length) {
-                                  bestVideoURL = DYYYPreferredURLString(@[ videoModel.playURL ?: [NSNull null] ]);
-                                  if (bestVideoURL.length) NSLog(@"[DYYY][save] 双击视频 → playURL 命中");
-                              }
+                              // 保存质量优选（与长按面板一致）：playAddr 最高档 → h264URL 兜底
+                              NSInteger dblW = 0, dblH = 0, dblBR = 0;
+                              NSString *dblGear = nil;
+                              NSString *bestVideoURL = DYYYBestWatermarkFreeVideoURL(videoModel, &dblW, &dblH, &dblBR, &dblGear);
+                              NSLog(@"[DYYY][save] 双击视频 → %@ %ldx%ld br=%ld gear=%@",
+                                    bestVideoURL ? @"playAddr 命中" : @"无可用档位",
+                                    (long)dblW, (long)dblH, (long)dblBR, dblGear ?: @"-");
                               if (!bestVideoURL.length) {
                                   bestVideoURL = DYYYPreferredURLString(@[ videoModel.h264URL ?: [NSNull null] ]);
                                   if (bestVideoURL.length) NSLog(@"[DYYY][save] 双击视频 → h264URL 兜底");

@@ -93,6 +93,12 @@
         if (huamiTGGroup.location != NSNotFound) {
             [attributedString addAttribute:NSLinkAttributeName value:@"https://t.me/huamidev" range:huamiTGGroup];
         }
+
+        // 当前维护仓库
+        NSRange maintainRange = [message rangeOfString:@"维护地址 Pomponpp/DYYY"];
+        if (maintainRange.location != NSNotFound) {
+            [attributedString addAttribute:NSLinkAttributeName value:@"https://github.com/Pomponpp/DYYY" range:maintainRange];
+        }
         self.messageTextView.attributedText = attributedString;
 
         // 设置链接颜色

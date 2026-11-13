@@ -1,4 +1,5 @@
 #import "DYYYManager.h"
+#import <AVFoundation/AVFoundation.h>
 #import <CoreAudioTypes/CoreAudioTypes.h>
 #import <CoreMedia/CMMetadata.h>
 #import <ImageIO/ImageIO.h>
@@ -11,6 +12,11 @@
 #import "DYYYUtils.h"
 #import "DYYYDownloadScheduler.h"
 #import "DYYYConstants.h"
+
+// 视频保存后回显实际规格（文件内使用，无需暴露到头文件）
+@interface DYYYManager (SpecReport)
++ (void)reportVideoSpecAtURL:(NSURL *)url;
+@end
 
 
 @interface DYYYManager () <NSURLSessionDownloadDelegate>
@@ -207,6 +213,9 @@
           dispatch_async(dispatch_get_main_queue(), ^{
             if (!success) {
                 [DYYYUtils showToast:@"保存失败"];
+            } else if (mediaType == MediaTypeVideo) {
+                // 视频保存成功后回显实际规格，便于判断画质档位（无水印流的真实上限）
+                [self reportVideoSpecAtURL:assetURL];
             }
             if (temporaryURL) {
                 [[NSFileManager defaultManager] removeItemAtPath:temporaryURL.path error:nil];
@@ -217,6 +226,40 @@
         }];
 }
 
+
+// 视频保存后回显实际规格（分辨率 + 文件大小）。
+// 用途：判断 playAddr（无水印流）的画质档位是否达到播放水平。
++ (void)reportVideoSpecAtURL:(NSURL *)url {
+    if (!url.path.length) return;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+      @try {
+          unsigned long long bytes = 0;
+          NSNumber *size = [[NSFileManager defaultManager] attributesOfItemAtPath:url.path error:nil][NSFileSize];
+          if ([size isKindOfClass:[NSNumber class]]) bytes = size.unsignedLongLongValue;
+
+          AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
+          AVAssetTrack *track = [[asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+          CGSize natural = track ? track.naturalSize : CGSizeZero;
+          // 竖屏视频 naturalSize 可能是横的，按 transform 纠正
+          if (track) {
+              CGAffineTransform t = track.preferredTransform;
+              if (fabs(t.a) < 0.01 && fabs(t.d) < 0.01) {
+                  natural = CGSizeMake(natural.height, natural.width);
+              }
+          }
+
+          double mb = bytes / 1024.0 / 1024.0;
+          NSLog(@"[DYYY][save] 实际保存 %dx%d %.2fMB", (int)natural.width, (int)natural.height, mb);
+
+          dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *msg = [NSString stringWithFormat:@"已保存 %dx%d · %.1fMB",
+                                                       (int)natural.width, (int)natural.height, mb];
+            [DYYYToast showSuccessToastWithMessage:msg];
+          });
+      } @catch (__unused NSException *e) {
+      }
+    });
+}
 
 + (NSString *)albumDescriptionForAwemeModel:(AWEAwemeModel *)model {
     if (!model) return nil;

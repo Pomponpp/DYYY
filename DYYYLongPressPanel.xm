@@ -145,26 +145,21 @@
               audioURL = [NSURL URLWithString:musicModel.playURL.originURLList.firstObject];
           }
 
-          // 保存质量优选：
-          //   downloadURL（下载专用流，41.1 实测有值）
-          //   → playURL（最高画质，走 DYYY.xm 的 hook）
-          //   → h264URL（兜底，旧逻辑）
+          // 保存质量优选：playAddr（无水印）最高档
           //
-          // 注意：不要用 endWatermarkDownloadURL / captionWatermarkDownloadURL。
-          // 这两个名字里的 Watermark 是「带水印」的意思，实测保存下来确实带水印。
-          // 旧实现直接取 h264URL，是最差的一条流，且过期后会保存失败。
-          NSString *bestVideoURL = nil;
-          @try {
-              id dlURL = [videoModel valueForKey:@"downloadURL"];
-              bestVideoURL = DYYYPreferredURLString(@[ dlURL ?: [NSNull null] ]);
-              NSLog(@"[DYYY][save] 长按视频 dl=%@ → %@",
-                    dlURL ? @"有" : @"无",
-                    bestVideoURL ? @"下载流命中" : @"回退");
-          } @catch (__unused NSException *e) {
-          }
-          if (!bestVideoURL.length) {
-              bestVideoURL = DYYYPreferredURLString(@[ videoModel.playURL ?: [NSNull null] ]);
-              if (bestVideoURL.length) NSLog(@"[DYYY][save] 长按视频 → playURL 命中");
+          // 41.1 实测 + 三个同类插件逆向确认：
+          //   playAddr 是「播放流」→ 无水印，但抖音按播放场景压缩
+          //   downloadURL / endWatermarkDownloadURL / captionWatermarkDownloadURL
+          //   → 都是「下载流」→ 画质高但带水印
+          // 要无水印只能用 playAddr，选档由 DYYYBestWatermarkFreeVideoURL 完成。
+          NSInteger pickedW = 0, pickedH = 0, pickedBR = 0;
+          NSString *pickedGear = nil;
+          NSString *bestVideoURL = DYYYBestWatermarkFreeVideoURL(videoModel, &pickedW, &pickedH, &pickedBR, &pickedGear);
+          NSLog(@"[DYYY][save] 长按视频 → %@ %ldx%ld br=%ld gear=%@",
+                bestVideoURL ? @"playAddr 命中" : @"无可用档位",
+                (long)pickedW, (long)pickedH, (long)pickedBR, pickedGear ?: @"-");
+          if (bestVideoURL.length) {
+              NSLog(@"[DYYY][save] URL=%@", bestVideoURL);
           }
           if (!bestVideoURL.length) {
               bestVideoURL = DYYYPreferredURLString(@[ videoModel.h264URL ?: [NSNull null] ]);
@@ -943,22 +938,13 @@
               audioURL = [NSURL URLWithString:musicModel.playURL.originURLList.firstObject];
           }
 
-          // 保存质量优选（与主面板一致）：
-          //   downloadURL → playURL → h264URL
-          // 不用带 Watermark 字样的字段（那是「带水印」的意思）。
-          NSString *bestVideoURL = nil;
-          @try {
-              id dlURL = [videoModel valueForKey:@"downloadURL"];
-              bestVideoURL = DYYYPreferredURLString(@[ dlURL ?: [NSNull null] ]);
-              NSLog(@"[DYYY][save] 备用面板视频 dl=%@ → %@",
-                    dlURL ? @"有" : @"无",
-                    bestVideoURL ? @"下载流命中" : @"回退");
-          } @catch (__unused NSException *e) {
-          }
-          if (!bestVideoURL.length) {
-              bestVideoURL = DYYYPreferredURLString(@[ videoModel.playURL ?: [NSNull null] ]);
-              if (bestVideoURL.length) NSLog(@"[DYYY][save] 备用面板视频 → playURL 命中");
-          }
+          // 保存质量优选（与主面板一致）：playAddr 最高档 → h264URL 兜底
+          NSInteger altW = 0, altH = 0, altBR = 0;
+          NSString *altGear = nil;
+          NSString *bestVideoURL = DYYYBestWatermarkFreeVideoURL(videoModel, &altW, &altH, &altBR, &altGear);
+          NSLog(@"[DYYY][save] 备用面板视频 → %@ %ldx%ld br=%ld gear=%@",
+                bestVideoURL ? @"playAddr 命中" : @"无可用档位",
+                (long)altW, (long)altH, (long)altBR, altGear ?: @"-");
           if (!bestVideoURL.length) {
               bestVideoURL = DYYYPreferredURLString(@[ videoModel.h264URL ?: [NSNull null] ]);
               if (bestVideoURL.length) NSLog(@"[DYYY][save] 备用面板视频 → h264URL 兜底");

@@ -379,6 +379,33 @@ NSString *_Nullable DYYYPreferredURLString(NSArray *_Nullable candidates);
  */
 NSString *_Nullable DYYYPreferredImageURLString(NSArray *_Nullable candidates);
 
+/**
+ * 从 AWEVideoModel 选「无水印 + 最高画质」的下载地址。
+ *
+ * 背景（41.1 实测 + 三个同类插件逆向确认）：
+ *   · playAddr 是「播放流」：无水印，但抖音按播放场景压缩
+ *   · downloadURL / endWatermarkDownloadURL / captionWatermarkDownloadURL
+ *     都是「下载流」：画质高但带水印
+ *   → 要无水印只能用 playAddr
+ *
+ * 选档策略（比 DYKiller 更准）：
+ *   1. 宽高优先从 bitrateModels 的模型层取（playAddr 上可能没有）
+ *   2. 排序：分辨率面积 ↓ → bitrate ↓ → gearName
+ *   3. 跳过 isH265 == 2（bytevc2，相册无法解码）
+ *
+ * @param videoModel AWEVideoModel 实例（KVC 访问，不要求 header 声明）
+ * @param outWidth   回传选中档位的宽度（像素）
+ * @param outHeight  回传选中档位的高度（像素）
+ * @param outBitrate 回传选中档位的码率
+ * @param outGear    回传选中档位的 gearName（可能为 nil）
+ * @return playAddr 的 URL 字符串；找不到可用档位时返回 nil
+ */
+NSString *_Nullable DYYYBestWatermarkFreeVideoURL(id _Nullable videoModel,
+                                                  NSInteger *_Nullable outWidth,
+                                                  NSInteger *_Nullable outHeight,
+                                                  NSInteger *_Nullable outBitrate,
+                                                  NSString *_Nullable *_Nullable outGear);
+
 #ifdef __cplusplus
 }
 #endif
