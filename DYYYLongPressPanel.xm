@@ -147,11 +147,9 @@
 
           // 保存质量优选：playAddr（无水印）最高档
           //
-          // 41.1 实测 + 三个同类插件逆向确认：
-          //   playAddr 是「播放流」→ 无水印，但抖音按播放场景压缩
-          //   downloadURL / endWatermarkDownloadURL / captionWatermarkDownloadURL
-          //   → 都是「下载流」→ 画质高但带水印
-          // 要无水印只能用 playAddr，选档由 DYYYBestWatermarkFreeVideoURL 完成。
+          // 41.1 实测：playAddr 是播放流，无水印；
+          // downloadURL / endWatermarkDownloadURL / captionWatermarkDownloadURL
+          // 都是下载流，画质高但带水印。要无水印只能用 playAddr。
           NSInteger pickedW = 0, pickedH = 0, pickedBR = 0;
           NSString *pickedGear = nil;
           NSString *bestVideoURL = DYYYBestWatermarkFreeVideoURL(videoModel, &pickedW, &pickedH, &pickedBR, &pickedGear);

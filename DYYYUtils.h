@@ -369,7 +369,7 @@ NSString *_Nullable DYYYPreferredURLString(NSArray *_Nullable candidates);
 /**
  * 图片专用优选：在 DYYYPreferredURLString 基础上过滤已知不可用格式。
  *
- * 过滤规则（来自 DYKiller 的踩坑记录）：
+ * 过滤规则（实测得出）：
  *   · .image 后缀         —— vvic 原图封装格式，相册与常规解析器不识别
  *   · dy-water 域名       —— 服务端水印模板
  *   · -download-webp 后缀 —— webp 转码下载版，质量与原图不一致
@@ -382,13 +382,13 @@ NSString *_Nullable DYYYPreferredImageURLString(NSArray *_Nullable candidates);
 /**
  * 从 AWEVideoModel 选「无水印 + 最高画质」的下载地址。
  *
- * 背景（41.1 实测 + 三个同类插件逆向确认）：
+ * 背景（41.1 实测）：
  *   · playAddr 是「播放流」：无水印，但抖音按播放场景压缩
  *   · downloadURL / endWatermarkDownloadURL / captionWatermarkDownloadURL
  *     都是「下载流」：画质高但带水印
  *   → 要无水印只能用 playAddr
  *
- * 选档策略（比 DYKiller 更准）：
+ * 选档策略：
  *   1. 宽高优先从 bitrateModels 的模型层取（playAddr 上可能没有）
  *   2. 排序：分辨率面积 ↓ → bitrate ↓ → gearName
  *   3. 跳过 isH265 == 2（bytevc2，相册无法解码）
