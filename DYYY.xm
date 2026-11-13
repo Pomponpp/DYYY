@@ -1212,12 +1212,19 @@ static void DYYYMigrateCombinedHDRModeIfNeeded(void) {
     });
 }
 
+// HDR 处理策略（41.1 起）：
+//   旧的「全局屏蔽 HDR / 全局过滤 HDR」两套做法都会降画质或吞作品：
+//     · 过滤码率档 → 真 HDR 作品没有可播档，整条跳过
+//     · 改写 hdrType/hdrBit → 解码器按 SDR 解 HDR 流，失败
+//     · LUT 置 nil → 色调映射被跳过，画面发灰
+//   这两个函数保留为恒 NO，让所有下游干预点自动失效，
+//   真正的护眼手段改为「限制屏幕亮度上限」（见 DYYYHDRBrightnessCap）。
 static BOOL DYYYShouldDisableAllHDR(void) {
-    return [[[NSUserDefaults standardUserDefaults] stringForKey:kDYYYHDRModeKey] isEqualToString:kDYYYHDRModeDisable];
+    return NO;
 }
 
 static BOOL DYYYShouldFilterGlobalHDR(void) {
-    return [[[NSUserDefaults standardUserDefaults] stringForKey:kDYYYHDRModeKey] isEqualToString:kDYYYHDRModeFilter];
+    return NO;
 }
 
 static id DYYYKVCValueIfPossible(id object, NSString *key) {
@@ -2041,18 +2048,66 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
+#pragma mark - HDR 亮度上限
+
+// 设置项取值："关闭" / "40%" / "50%" / "60%" / "70%" / "80%" / "90%"
+// 返回 0 表示不限制。
+static CGFloat DYYYHDRBrightnessCapValue(void) {
+    NSString *raw = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYHDRBrightnessCap"];
+    if (![raw isKindOfClass:[NSString class]] || raw.length == 0) {
+        return 0;
+    }
+    if ([raw isEqualToString:@"关闭"]) {
+        return 0;
+    }
+    NSInteger percent = [[raw stringByReplacingOccurrencesOfString:@"%" withString:@""] integerValue];
+    if (percent <= 0 || percent > 100) {
+        return 0;
+    }
+    return (CGFloat)percent / 100.0;
+}
+
 %hook AWEVideoPlayerScreenBrightnessManager
 
 - (BOOL)isHDRVideo {
-    if (DYYYShouldDisableAllHDR()) {
-        return NO;
-    }
     return %orig;
 }
 
 - (void)setIsHDRVideo:(BOOL)isHDRVideo {
-    // 播放器复用时会重新写入当前作品的 HDR 状态，需同时清除写入值和读取结果。
-    %orig(DYYYShouldDisableAllHDR() ? NO : isHDRVideo);
+    %orig;
+}
+
+// 抖音播放 HDR 时会把屏幕亮度往 1.0 拉，夜间很刺眼。
+// 这里不改流、不改 LUT、不改元数据，只在设置目标亮度时压一个上限，
+// 官方原有的过渡动画、定时器、用户手动调节逻辑全部照跑。
+- (void)setTargetBrightness:(CGFloat)targetBrightness {
+    CGFloat cap = DYYYHDRBrightnessCapValue();
+    if (cap <= 0) {
+        %orig;
+        return;
+    }
+
+    BOOL hdr = NO;
+    @try {
+        hdr = [self isHDRVideo];
+    } @catch (__unused NSException *e) {
+    }
+
+    // 双条件兜底：isHDRVideo 可能尚未写入，再用「亮度大幅跃升」特征判断。
+    BOOL bigJump = NO;
+    @try {
+        bigJump = (targetBrightness > [self originBrightness] + 0.25);
+    } @catch (__unused NSException *e) {
+    }
+
+    NSLog(@"[DYYY][hdr] setTargetBrightness=%.2f isHDR=%d bigJump=%d cap=%.2f",
+          targetBrightness, hdr, bigJump, cap);
+
+    if (!hdr && !bigJump) {
+        %orig;
+        return;
+    }
+    %orig(MIN(targetBrightness, cap));
 }
 
 %end

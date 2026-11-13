@@ -1224,9 +1224,11 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
               @"cellType" : @20,
               @"imageName" : @"ic_playertime_outlined_20"
           },
-          @{@"identifier" : @"DYYYHDRMode",
-            @"title" : @"全局HDR设置",
-            @"subTitle" : @"开启并选择后全局屏蔽HDR效果/过滤HDR作品。",
+          @{@"identifier" : @"DYYYHDRBrightnessCap",
+            @"title" : @"HDR 亮度上限",
+            @"subTitle" : @"限制 HDR 视频播放时的屏幕亮度上限\n"
+                          @"调低可避免夜间刺眼，不影响普通视频\n"
+                          @"不改画质，不干预播放内容",
             @"detail" : @"关闭",
             @"cellType" : @26,
             @"imageName" : @"ic_sun_outlined"},
@@ -1347,14 +1349,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                 };
                 [keywordListView show];
               };
-          } else if ([item.identifier isEqualToString:@"DYYYHDRMode"]) {
-              NSString *savedMode = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYHDRMode"] ?: @"关闭";
-              item.detail = savedMode;
+          } else if ([item.identifier isEqualToString:@"DYYYHDRBrightnessCap"]) {
+              NSString *savedCap = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYHDRBrightnessCap"] ?: @"关闭";
+              item.detail = savedCap;
               item.cellTappedBlock = ^{
-                NSArray *options = @[ @"关闭", @"全局屏蔽HDR效果", @"全局过滤HDR作品" ];
-                [DYYYOptionsSelectionView showWithPreferenceKey:@"DYYYHDRMode"
+                NSArray *options = @[ @"关闭", @"40%", @"50%", @"60%", @"70%", @"80%", @"90%" ];
+                [DYYYOptionsSelectionView showWithPreferenceKey:@"DYYYHDRBrightnessCap"
                                                    optionsArray:options
-                                                     headerText:@"选择 HDR 处理模式"
+                                                     headerText:@"选择 HDR 亮度上限"
                                                  onPresentingVC:topView()
                                                selectionChanged:^(NSString *selectedValue) {
                                                  item.detail = selectedValue;

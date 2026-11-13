@@ -1892,6 +1892,14 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEVideoPlayerScreenBrightnessManager : NSObject
 - (BOOL)isHDRVideo;
 - (void)setIsHDRVideo:(BOOL)isHDRVideo;
+- (CGFloat)originBrightness;
+- (void)setOriginBrightness:(CGFloat)originBrightness;
+- (CGFloat)targetBrightness;
+- (void)setTargetBrightness:(CGFloat)targetBrightness;
+- (void)adjustScreenBrightnessToTargetBrightness;
+- (void)restoreOriginalBrightness;
+- (BOOL)enableBrightnessAdjust;
+- (void)setEnableBrightnessAdjust:(BOOL)enable;
 @end
 
 @interface ALMOwnPlayerWrapper : NSObject
