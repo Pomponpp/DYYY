@@ -2786,30 +2786,41 @@ NSString *DYYYBestWatermarkFreeVideoURL(id videoModel,
     } @catch (__unused NSException *e) {
     }
     if (![models isKindOfClass:[NSArray class]] || models.count == 0) {
+        NSLog(@"[DYYY][save] 选档失败：bitrateModels %@",
+              models ? ([NSString stringWithFormat:@"count=%lu", (unsigned long)[(NSArray *)models count]]) : @"取不到");
         return nil;
     }
+    NSLog(@"[DYYY][save] bitrateModels count=%lu", (unsigned long)[(NSArray *)models count]);
 
     id bestModel = nil;
     long long bestArea = -1;
     NSInteger bestBitrate = -1;
     NSString *bestGear = nil;
+    NSInteger skipCodec = 0, skipNoAddr = 0, skipNoURL = 0;
 
     for (id model in models) {
         @try {
             // bytevc2（isH265 == 2）相册解不了，直接跳过
             id codec = [model valueForKey:@"isH265"];
             if ([codec isKindOfClass:[NSNumber class]] && [codec integerValue] == 2) {
+                skipCodec++;
                 continue;
             }
 
             id playAddr = [model valueForKey:@"playAddr"];
-            if (!playAddr) continue;
+            if (!playAddr) {
+                skipNoAddr++;
+                continue;
+            }
 
             NSArray *urls = nil;
             if ([playAddr respondsToSelector:@selector(originURLList)]) {
                 urls = [playAddr originURLList];
             }
-            if (![urls isKindOfClass:[NSArray class]] || urls.count == 0) continue;
+            if (![urls isKindOfClass:[NSArray class]] || urls.count == 0) {
+                skipNoURL++;
+                continue;
+            }
 
             // 宽高：模型层优先，其次 playAddr
             NSNumber *w = nil, *h = nil;
@@ -2853,7 +2864,11 @@ NSString *DYYYBestWatermarkFreeVideoURL(id videoModel,
         }
     }
 
-    if (!bestModel) return nil;
+    if (!bestModel) {
+        NSLog(@"[DYYY][save] 选档失败：全部跳过（codec=%ld noAddr=%ld noURL=%ld）",
+              (long)skipCodec, (long)skipNoAddr, (long)skipNoURL);
+        return nil;
+    }
 
     id bestPlayAddr = nil;
     @try {

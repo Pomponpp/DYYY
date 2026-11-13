@@ -228,37 +228,44 @@
 
 
 // 视频保存后回显实际规格（分辨率 + 文件大小）。
-// 用途：判断 playAddr（无水印流）的画质档位是否达到播放水平。
+// 必须【同步】读：调用方紧接着就会删掉临时文件，异步读会拿到 0。
 + (void)reportVideoSpecAtURL:(NSURL *)url {
     if (!url.path.length) return;
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-      @try {
-          unsigned long long bytes = 0;
-          NSNumber *size = [[NSFileManager defaultManager] attributesOfItemAtPath:url.path error:nil][NSFileSize];
-          if ([size isKindOfClass:[NSNumber class]]) bytes = size.unsignedLongLongValue;
 
-          AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
-          AVAssetTrack *track = [[asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
-          CGSize natural = track ? track.naturalSize : CGSizeZero;
-          // 竖屏视频 naturalSize 可能是横的，按 transform 纠正
-          if (track) {
-              CGAffineTransform t = track.preferredTransform;
-              if (fabs(t.a) < 0.01 && fabs(t.d) < 0.01) {
-                  natural = CGSizeMake(natural.height, natural.width);
-              }
-          }
+    unsigned long long bytes = 0;
+    CGSize natural = CGSizeZero;
+    @try {
+        NSNumber *size = [[NSFileManager defaultManager] attributesOfItemAtPath:url.path error:nil][NSFileSize];
+        if ([size isKindOfClass:[NSNumber class]]) bytes = size.unsignedLongLongValue;
 
-          double mb = bytes / 1024.0 / 1024.0;
-          NSLog(@"[DYYY][save] 实际保存 %dx%d %.2fMB", (int)natural.width, (int)natural.height, mb);
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
+        AVAssetTrack *track = [[asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+        natural = track ? track.naturalSize : CGSizeZero;
+        if (track) {
+            CGAffineTransform t = track.preferredTransform;
+            if (fabs(t.a) < 0.01 && fabs(t.d) < 0.01) {
+                natural = CGSizeMake(natural.height, natural.width);
+            }
+        }
+    } @catch (__unused NSException *e) {
+    }
 
-          dispatch_async(dispatch_get_main_queue(), ^{
-            NSString *msg = [NSString stringWithFormat:@"已保存 %dx%d · %.1fMB",
-                                                       (int)natural.width, (int)natural.height, mb];
-            [DYYYToast showSuccessToastWithMessage:msg];
-          });
-      } @catch (__unused NSException *e) {
-      }
-    });
+    double mb = bytes / 1024.0 / 1024.0;
+    NSLog(@"[DYYY][save] 实际保存 %dx%d %.2fMB", (int)natural.width, (int)natural.height, mb);
+
+    if (natural.width > 0 || bytes > 0) {
+        // Toast 容器宽度有限，只显示档位标签；完整分辨率看日志
+        int shortSide = (int)MIN(natural.width, natural.height);
+        NSString *tier = nil;
+        if (shortSide >= 1080) tier = @"1080P";
+        else if (shortSide >= 720) tier = @"720P";
+        else if (shortSide >= 540) tier = @"540P";
+        else if (shortSide > 0) tier = [NSString stringWithFormat:@"%dx%d", (int)natural.width, (int)natural.height];
+        else tier = @"视频";
+
+        NSString *msg = [NSString stringWithFormat:@"已保存 %@ · %.1fMB", tier, mb];
+        [DYYYToast showSuccessToastWithMessage:msg];
+    }
 }
 
 + (NSString *)albumDescriptionForAwemeModel:(AWEAwemeModel *)model {
