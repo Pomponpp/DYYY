@@ -1224,21 +1224,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
               @"cellType" : @20,
               @"imageName" : @"ic_playertime_outlined_20"
           },
-          @{@"identifier" : @"DYYYHDRBrightnessCap",
-            @"title" : @"HDR 亮度上限",
-            @"subTitle" : @"限制 HDR 视频播放时的屏幕亮度上限\n"
-                          @"调低可避免夜间刺眼，不影响普通视频\n"
-                          @"不改画质，不干预播放内容",
-            @"detail" : @"关闭",
-            @"cellType" : @26,
-            @"imageName" : @"ic_sun_outlined"},
-          @{@"identifier" : @"DYYYHDRDetectHint",
-            @"title" : @"HDR 检测提示",
-            @"subTitle" : @"刷到 HDR 视频时弹提示，用于确认当前内容是否被判定为 HDR\n"
-                          @"只在调试时开启，日常使用建议关闭",
-            @"detail" : @"",
-            @"cellType" : @6,
-            @"imageName" : @"ic_info_outlined_20"},
           @{@"identifier" : @"DYYYNoAds",
             @"title" : @"启用屏蔽广告",
             @"detail" : @"",
@@ -1355,20 +1340,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                   [item refreshCell];
                 };
                 [keywordListView show];
-              };
-          } else if ([item.identifier isEqualToString:@"DYYYHDRBrightnessCap"]) {
-              NSString *savedCap = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYHDRBrightnessCap"] ?: @"关闭";
-              item.detail = savedCap;
-              item.cellTappedBlock = ^{
-                NSArray *options = @[ @"关闭", @"40%", @"50%", @"60%", @"70%", @"80%", @"90%" ];
-                [DYYYOptionsSelectionView showWithPreferenceKey:@"DYYYHDRBrightnessCap"
-                                                   optionsArray:options
-                                                     headerText:@"选择 HDR 亮度上限"
-                                                 onPresentingVC:topView()
-                                               selectionChanged:^(NSString *selectedValue) {
-                                                 item.detail = selectedValue;
-                                                 [item refreshCell];
-                                               }];
               };
           }
           [filterItems addObject:item];
