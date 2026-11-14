@@ -1711,6 +1711,17 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
 
 %end
 
+// 诊断：抖音到底改不改系统亮度？
+// 只打日志，不改值。用来确认 HDR 提亮是走 UIScreen 还是别的路径。
+%hook UIScreen
+
+- (void)setBrightness:(CGFloat)brightness {
+    NSLog(@"[DYYY][hdr] UIScreen.setBrightness=%.3f cap=%.2f", brightness, DYYYHDRBrightnessCapValue());
+    %orig;
+}
+
+%end
+
 %hook AWEVideoPlayerScreenBrightnessManager
 
 - (BOOL)isHDRVideo {
