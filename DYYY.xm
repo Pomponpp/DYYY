@@ -1678,12 +1678,13 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
 - (void)setIsHDRVideo:(BOOL)isHDRVideo {
     %orig;
 
-    // HDR 检测提示：用于确认当前播放的内容是否判定为 HDR。
-    // 开启后每命中一条 HDR 视频弹一次提示，方便在推荐流里找到测试样本。
-    if (isHDRVideo && DYYYGetBool(@"DYYYHDRDetectHint")) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-          [DYYYUtils showToast:@"检测到 HDR 视频"];
-        });
+    if (isHDRVideo) {
+        NSLog(@"[DYYY][hdr] setIsHDRVideo=YES videoItemID=%@", [self videoItemID]);
+        if (DYYYGetBool(@"DYYYHDRDetectHint")) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [DYYYUtils showToast:@"检测到 HDR 视频"];
+            });
+        }
     }
 }
 
@@ -1692,6 +1693,8 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
 // 官方原有的过渡动画、定时器、用户手动调节逻辑全部照跑。
 - (void)setTargetBrightness:(CGFloat)targetBrightness {
     CGFloat cap = DYYYHDRBrightnessCapValue();
+
+    // 上限关闭时完全不动，避免影响任何视频。
     if (cap <= 0) {
         %orig;
         return;
@@ -1707,15 +1710,16 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
         hdr = NO;
     }
 
+    // 诊断：记录每一次调用，用来看 isHDRVideo 是否在此时已经就绪。
+    NSLog(@"[DYYY][hdr] setTargetBrightness=%.2f isHDR=%d origin=%.2f cap=%.2f id=%@",
+          targetBrightness, hdr, [self originBrightness], cap, [self videoItemID]);
+
     if (!hdr) {
         %orig;
         return;
     }
 
     CGFloat capped = MIN(targetBrightness, cap);
-    if (capped < targetBrightness) {
-        NSLog(@"[DYYY][hdr] 限制亮度 %.2f → %.2f (cap=%.2f)", targetBrightness, capped, cap);
-    }
     %orig(capped);
 }
 

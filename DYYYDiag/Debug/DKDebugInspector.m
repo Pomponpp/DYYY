@@ -316,9 +316,7 @@ static void DKEnsureDebugWindow(void) {
         [self.wrenchButton setTitle:@"W" forState:UIControlStateNormal];
         self.wrenchButton.titleLabel.font = [UIFont boldSystemFontOfSize:20];
     }
-    // 不用 addTarget/TouchUpInside：系统在拖动结束后同样会补一次 TouchUpInside，
-    // 导致「拖一下扳手就弹出面板」。改为完全由 pan 手势的位移判定：
-    // 位移超过 4pt 算拖动，不弹面板；否则当单击处理。
+    [self.wrenchButton addTarget:self action:@selector(wrenchTouchUpInside) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:self.wrenchButton];
 
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleWrenchPan:)];
@@ -359,35 +357,43 @@ static void DKEnsureDebugWindow(void) {
 
     switch (pan.state) {
         case UIGestureRecognizerStateBegan:
-            // 记录起点，用于判断这次手势是「拖」还是「点」
             self.wrenchDragStartCenter = self.wrenchButton.center;
             self.wrenchDidDrag = NO;
             break;
-        case UIGestureRecognizerStateChanged:
-            if (fabs(delta.x) > 2.0 || fabs(delta.y) > 2.0) {
-                self.wrenchDidDrag = YES;
-            }
+
+        case UIGestureRecognizerStateChanged: {
+            // pan 只有在手指真正移动后才会进 Changed，
+            // 所以只要进了这里，就说明这次是「拖」不是「点」。
+            self.wrenchDidDrag = YES;
             self.wrenchButton.center = CGPointMake(self.wrenchButton.center.x + delta.x,
                                                    self.wrenchButton.center.y + delta.y);
             [pan setTranslation:CGPointZero inView:self.view];
             [self clampWrenchButton];
             break;
-        case UIGestureRecognizerStateEnded:
-        case UIGestureRecognizerStateCancelled: {
-            // 位移超过阈值就算拖动，不触发点击
-            CGPoint moved = CGPointMake(self.wrenchButton.center.x - self.wrenchDragStartCenter.x,
-                                        self.wrenchButton.center.y - self.wrenchDragStartCenter.y);
-            BOOL dragged = self.wrenchDidDrag || hypot(moved.x, moved.y) > 4.0;
-            if (!dragged) {
-                // 没位移 → 当成单击，手动打开面板
-                [self showDebugMenu];
-            }
-            self.wrenchDidDrag = NO;
-            break;
         }
+
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+            // 拖动结束：本次手势标记为已拖动，抑制随之而来的 touchUpInside。
+            // 标记会在 wrenchTouchUpInside 里消费掉并复位。
+            break;
+
         default:
             break;
     }
+}
+
+// 单击入口。pan 手势一旦真移动过就会把 wrenchDidDrag 置 YES，
+// 这次 touchUpInside 直接忽略；否则正常弹面板。
+// 定时复位兜底：万一 touchUpInside 没来（被上层吃掉），2 秒后自动清标记，
+// 避免下次单击被误判成拖动残留。
+- (void)wrenchTouchUpInside {
+    if (self.wrenchDidDrag) {
+        self.wrenchDidDrag = NO;
+        return;
+    }
+    [self showDebugMenu];
 }
 
 - (void)showDebugMenu {
