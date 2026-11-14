@@ -389,10 +389,16 @@ static NSData *DKScreenshotPNG(UIWindow *targetWindow) {
 #pragma mark - 页面类收集
 
 // 收集一个类及其整条继承链的类名：跳过运行时生成子类噪声，但继续上溯 → 自动收到真实基类。
+//
+// 注意：这里必须用 class_getName 而不是 NSStringFromClass。
+// 抖音的 Swift 类里有畸形 mangled 名，NSStringFromClass 会走到
+// objc_class::demangledName → swift::Demangle::failAssert 直接 abort，
+// 整个导出进程被杀。class_getName 只读原始 C 字符串，不触发 demangle。
 static void DKCollectClassAndSupers(Class cls, NSMutableSet<NSString *> *names) {
     for (int i = 0; cls && i < 50; i++) {
         if (!DKClassIsSafe(cls)) break;
-        NSString *name = NSStringFromClass(cls);
+        const char *raw = class_getName(cls);
+        NSString *name = raw ? [NSString stringWithUTF8String:raw] : nil;
         if (name.length && !DKClassNameIsRuntimeGenerated(name)) [names addObject:name];
         cls = class_getSuperclass(cls);
     }

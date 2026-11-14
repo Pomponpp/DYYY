@@ -5,7 +5,7 @@
 //  全局扳手：独立高层级 window 承载调试按钮，点选页面元素后复用
 //  DKDebugCapture / DKDebugExport 生成导出包。
 //
-//  来源：本目录（DYYYDiag/）的采集骨架与 FLEX 类 dump 参考 参考实现，
+//  来源：本目录（DYYYDiag/）的采集骨架与 FLEX 类 dump 参考开源社区实现，
 //  DYYY 接入了自有运行流水、状态指纹、compat 三件套（audit /
 //  class-list / target-methods），并把浮窗与日志统一为「诊断模式」。
 //  详见 CREDITS.md。
@@ -36,6 +36,9 @@
 @interface DKDebugOverlayViewController : UIViewController
 @property (nonatomic, strong) UIButton *wrenchButton;
 @property (nonatomic, assign) BOOL didPlaceButton;
+// 扳手拖动判定：区分「拖」与「点」，避免拖动结束被当成点击弹面板。
+@property (nonatomic, assign) CGPoint wrenchDragStartCenter;
+@property (nonatomic, assign) BOOL wrenchDidDrag;
 - (BOOL)capturesOverlayTouches;
 - (void)exportWholePage;
 @end
@@ -313,7 +316,9 @@ static void DKEnsureDebugWindow(void) {
         [self.wrenchButton setTitle:@"W" forState:UIControlStateNormal];
         self.wrenchButton.titleLabel.font = [UIFont boldSystemFontOfSize:20];
     }
-    [self.wrenchButton addTarget:self action:@selector(showDebugMenu) forControlEvents:UIControlEventTouchUpInside];
+    // 不用 addTarget/TouchUpInside：系统在拖动结束后同样会补一次 TouchUpInside，
+    // 导致「拖一下扳手就弹出面板」。改为完全由 pan 手势的位移判定：
+    // 位移超过 4pt 算拖动，不弹面板；否则当单击处理。
     [self.view addSubview:self.wrenchButton];
 
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleWrenchPan:)];
@@ -351,10 +356,38 @@ static void DKEnsureDebugWindow(void) {
 
 - (void)handleWrenchPan:(UIPanGestureRecognizer *)pan {
     CGPoint delta = [pan translationInView:self.view];
-    self.wrenchButton.center = CGPointMake(self.wrenchButton.center.x + delta.x,
-                                           self.wrenchButton.center.y + delta.y);
-    [pan setTranslation:CGPointZero inView:self.view];
-    [self clampWrenchButton];
+
+    switch (pan.state) {
+        case UIGestureRecognizerStateBegan:
+            // 记录起点，用于判断这次手势是「拖」还是「点」
+            self.wrenchDragStartCenter = self.wrenchButton.center;
+            self.wrenchDidDrag = NO;
+            break;
+        case UIGestureRecognizerStateChanged:
+            if (fabs(delta.x) > 2.0 || fabs(delta.y) > 2.0) {
+                self.wrenchDidDrag = YES;
+            }
+            self.wrenchButton.center = CGPointMake(self.wrenchButton.center.x + delta.x,
+                                                   self.wrenchButton.center.y + delta.y);
+            [pan setTranslation:CGPointZero inView:self.view];
+            [self clampWrenchButton];
+            break;
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled: {
+            // 位移超过阈值就算拖动，不触发点击
+            CGPoint moved = CGPointMake(self.wrenchButton.center.x - self.wrenchDragStartCenter.x,
+                                        self.wrenchButton.center.y - self.wrenchDragStartCenter.y);
+            BOOL dragged = self.wrenchDidDrag || hypot(moved.x, moved.y) > 4.0;
+            if (!dragged) {
+                // 没位移 → 当成单击，手动打开面板
+                [self showDebugMenu];
+            }
+            self.wrenchDidDrag = NO;
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 - (void)showDebugMenu {

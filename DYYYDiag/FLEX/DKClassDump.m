@@ -198,7 +198,11 @@ static NSString *DKMethodLine(Method m, BOOL isClassMethod) {
 static NSString *DKHeaderForClass(Class cls, NSString *imageName) {
     if (!DKClassIsSafe(cls)) return nil;
     @try {
-        NSString *className = NSStringFromClass(cls);
+        // 用 class_getName 而非 NSStringFromClass：
+        // 畸形 Swift mangled 名会让 NSStringFromClass 走 demangle 并 abort，
+        // @try 拦不住（abort 不是 ObjC 异常）。
+        const char *rawName = class_getName(cls);
+        NSString *className = rawName ? [NSString stringWithUTF8String:rawName] : nil;
         if (className.length == 0) return nil;
         if (DKIsLikelySwiftName(className)) {
             return [NSString stringWithFormat:
@@ -207,11 +211,12 @@ static NSString *DKHeaderForClass(Class cls, NSString *imageName) {
         }
 
         Class superCls = class_getSuperclass(cls);
-        NSString *superName = superCls ? NSStringFromClass(superCls) : @"NSObject";
+        const char *rawSuper = superCls ? class_getName(superCls) : NULL;
+        NSString *superName = rawSuper ? [NSString stringWithUTF8String:rawSuper] : @"NSObject";
 
         NSMutableString *h = [NSMutableString string];
         [h appendString:@"//\n"];
-        [h appendString:@"// Dumped by 参考实现 DKClassDump\n"];
+        [h appendString:@"// Dumped by DYYY ClassDump\n"];
         [h appendFormat:@"// Bundle: %@\n", NSBundle.mainBundle.bundleIdentifier ?: @"Unknown"];
         [h appendFormat:@"// Image: %@\n", imageName ?: @"Unknown"];
         [h appendString:@"//\n\n"];
