@@ -4,6 +4,7 @@
 #import "AwemeHeaders.h"
 #import "../DYYYClassRegistry.h"
 #import "DKDYYYBridge.h"
+#import "Shared/DKUtils.h"
 #import "Debug/DKDebugInspector.h"
 #import "DYYYToast.h"
 
