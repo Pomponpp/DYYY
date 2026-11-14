@@ -1688,39 +1688,43 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
     }
 }
 
-// 抖音播放 HDR 时会把屏幕亮度往 1.0 拉，夜间很刺眼。
-// 这里不改流、不改 LUT、不改元数据，只在设置目标亮度时压一个上限，
-// 官方原有的过渡动画、定时器、用户手动调节逻辑全部照跑。
-- (void)setTargetBrightness:(CGFloat)targetBrightness {
+// 抖音真正执行亮度调节的入口。
+// 41.1 实测 setTargetBrightness: 压根不会被调用（日志 0 次），
+// 亮度是在这里读 targetBrightness 属性后落到屏幕的。
+- (void)adjustScreenBrightnessToTargetBrightness {
     CGFloat cap = DYYYHDRBrightnessCapValue();
-
-    // 上限关闭时完全不动，避免影响任何视频。
     if (cap <= 0) {
         %orig;
         return;
     }
 
-    // 只认 isHDRVideo。不要用「目标亮度比 originBrightness 高多少」来判断：
-    // originBrightness 在 setTargetBrightness: 被调用时常常还是 0，
-    // 任何大于 0.25 的目标亮度都会被误判成 HDR，结果把全站视频都压暗了。
     BOOL hdr = NO;
     @try {
         hdr = [self isHDRVideo];
     } @catch (__unused NSException *e) {
         hdr = NO;
     }
-
-    // 诊断：记录每一次调用，用来看 isHDRVideo 是否在此时已经就绪。
-    NSLog(@"[DYYY][hdr] setTargetBrightness=%.2f isHDR=%d origin=%.2f cap=%.2f id=%@",
-          targetBrightness, hdr, [self originBrightness], cap, [self videoItemID]);
-
     if (!hdr) {
         %orig;
         return;
     }
 
-    CGFloat capped = MIN(targetBrightness, cap);
-    %orig(capped);
+    CGFloat target = 0;
+    @try {
+        target = [self targetBrightness];
+    } @catch (__unused NSException *e) {
+    }
+
+    NSLog(@"[DYYY][hdr] adjust 前 target=%.2f cap=%.2f id=%@", target, cap, [self videoItemID]);
+
+    if (target > cap) {
+        @try {
+            [self setTargetBrightness:cap];
+        } @catch (__unused NSException *e) {
+        }
+        NSLog(@"[DYYY][hdr] 已把 target 压到 %.2f", cap);
+    }
+    %orig;
 }
 
 %end
