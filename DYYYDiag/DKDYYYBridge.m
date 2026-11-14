@@ -37,7 +37,7 @@ static BOOL DYYYDiagExportBusy = NO;
     DKDebugInspectorRefreshOverlay();
     // 调用方在主线程：直接同步查窗口（无 dispatch_sync，避免主队列死锁）
     for (UIWindow *w in [UIApplication sharedApplication].windows) {
-        if ([NSStringFromClass(w.class) hasPrefix:@"DKDebug"] && w.rootViewController && !w.hidden) {
+        if ([DKNameOfObject(w) hasPrefix:@"DKDebug"] && w.rootViewController && !w.hidden) {
             return w.rootViewController;
         }
     }

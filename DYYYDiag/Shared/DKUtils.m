@@ -9,6 +9,17 @@
 
 #import <objc/runtime.h>
 
+NSString *DKNameOfClass(Class cls) {
+    if (!cls) return @"";
+    const char *raw = class_getName(cls);
+    return raw ? [NSString stringWithUTF8String:raw] : @"";
+}
+
+NSString *DKNameOfObject(id object) {
+    if (!object) return @"";
+    return DKNameOfClass([object class]);
+}
+
 BOOL DKPrefBool(NSString *key) {
     if (DKGlassIsGatedKey(key) && !DKGlassOSAvailable()) return NO;
     // 诊断浮层开关映射到 DYYY 设置键（其余键原样透传）
@@ -54,7 +65,7 @@ UIViewController *DKPlayInteractionControllerForView(UIView *view) {
 static UIViewController *DKSearchChildController(UIViewController *controller, NSString *className, NSUInteger depth) {
     if (!controller || depth > 12) return nil;
     for (UIViewController *child in controller.childViewControllers) {
-        if ([NSStringFromClass(child.class) isEqualToString:className]) return child;
+        if ([DKNameOfObject(child) isEqualToString:className]) return child;
         UIViewController *match = DKSearchChildController(child, className, depth + 1);
         if (match) return match;
     }

@@ -1675,14 +1675,19 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
         hdr = [self awe_isCurrentVideoHDR];
     } @catch (__unused NSException *e) {
     }
+    BOOL adjusted = NO;
+    @try {
+        adjusted = [self hadAdjustedWithHDR];
+    } @catch (__unused NSException *e) {
+    }
     double diff = 0, mean = 0;
     @try {
         diff = [self awe_getBrightDiff];
         mean = [self awe_getBrightnessMean];
     } @catch (__unused NSException *e) {
     }
-    NSLog(@"[DYYY][hdr] adjustWhenPlayed hdr=%d diff=%.3f mean=%.3f cap=%.2f",
-          hdr, diff, mean, DYYYHDRBrightnessCapValue());
+    NSLog(@"[DYYY][hdr] adjustWhenPlayed hdr=%d hadAdjusted=%d diff=%.3f mean=%.3f cap=%.2f",
+          hdr, adjusted, diff, mean, DYYYHDRBrightnessCapValue());
     %orig;
 }
 

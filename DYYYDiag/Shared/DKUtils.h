@@ -23,6 +23,15 @@ extern "C" {
 /// 读取某开关（NSUserDefaults BOOL）。
 BOOL DKPrefBool(NSString *key);
 
+/// 安全取类名。
+///
+/// 不能用 NSStringFromClass：它会触发 Swift 类名 demangle，
+/// 抖音里存在畸形的 mangled 名，demangler 断言失败会 abort，
+/// 而 abort 不是 ObjC 异常，@try 拦不住，整个进程直接被杀。
+/// class_getName 只读原始 C 字符串，不走 demangle。
+NSString *DKNameOfClass(Class cls);
+NSString *DKNameOfObject(id object);
+
 /// 读取某单选项（NSUserDefaults NSInteger）。未设置时为 0。
 NSInteger DKPrefInteger(NSString *key);
 

@@ -21,8 +21,14 @@ static NSString *DKStringFromPointer(const void *pointer) {
     return [NSString stringWithFormat:@"%p", pointer];
 }
 
+// 取对象类名。
+// 不能用 NSStringFromClass：它会触发 Swift 类名 demangle，
+// 抖音存在畸形 mangled 名，demangler 断言失败会 abort（@try 拦不住）。
+// class_getName 只读原始 C 字符串，不走 demangle。
 static NSString *DKClassName(id object) {
-    return object ? NSStringFromClass([object class]) : @"";
+    if (!object) return @"";
+    const char *raw = class_getName([object class]);
+    return raw ? [NSString stringWithUTF8String:raw] : @"";
 }
 
 static NSString *DKObjectDesc(id object) {

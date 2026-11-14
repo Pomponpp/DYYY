@@ -82,7 +82,7 @@ static BOOL DKDebugExportBusy;
 #pragma mark - UI 工具
 
 static BOOL DKIsDebugOverlayWindow(UIWindow *window) {
-    return [NSStringFromClass(window.class) hasPrefix:@"DKDebug"];
+    return [DKNameOfObject(window) hasPrefix:@"DKDebug"];
 }
 
 static void DKPresentError(UIViewController *presenter, NSString *message) {
@@ -179,18 +179,18 @@ static NSString *DKDebugPageIdentity(void) {
     UIViewController *top = root;
     if ([top isKindOfClass:[UITabBarController class]]) {
         UIViewController *sel = ((UITabBarController *)top).selectedViewController;
-        [out appendFormat:@"tab=%@\r\n", NSStringFromClass(sel.class)];
+        [out appendFormat:@"tab=%@\r\n", DKNameOfObject(sel)];
         if (sel) top = sel;
     }
     if ([top isKindOfClass:[UINavigationController class]]) {
         top = ((UINavigationController *)top).topViewController ?: top;
     }
-    [out appendFormat:@"顶层=%@\r\n", NSStringFromClass(top.class)];
+    [out appendFormat:@"顶层=%@\r\n", DKNameOfObject(top)];
 
     // 父链（最多 8 层），能看出是 feed / 详情 / 主页 / 作品
     NSMutableArray<NSString *> *chain = [NSMutableArray array];
     for (UIViewController *c = top; c && chain.count < 8; c = c.parentViewController) {
-        [chain addObject:NSStringFromClass(c.class)];
+        [chain addObject:DKNameOfObject(c)];
     }
     [out appendFormat:@"父链=%@\r\n", [chain componentsJoinedByString:@" < "]];
 
