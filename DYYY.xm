@@ -1725,6 +1725,65 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
 
 %end
 
+// 41.1 里实际被调用的是子类 AWEBDSimPlayerBizConfig。
+// 只 hook 父类 BDSimPlayerBizConfig 不会触发——子类覆盖了这些方法。
+// 这里单独再挂一次子类，两边都留日志，看究竟哪条路径在跑。
+%hook AWEBDSimPlayerBizConfig
+
+- (BOOL)enableHDRBrightnessOpt {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] AWEBDSim.enableHDRBrightnessOpt=%d", v);
+    return v;
+}
+
+- (double)getHDRBrightnessThreshold {
+    double v = 0;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] AWEBDSim.getHDRBrightnessThreshold=%.3f", v);
+    return v;
+}
+
+- (BOOL)hdrPlaybackEnabled {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] AWEBDSim.hdrPlaybackEnabled=%d", v);
+    return v;
+}
+
+- (BOOL)hdrAutomaticIdentification {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] AWEBDSim.hdrAutomaticIdentification=%d", v);
+    return v;
+}
+
+- (BOOL)enableHDRFullModelAdaptation {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] AWEBDSim.enableHDRFullModelAdaptation=%d", v);
+    return v;
+}
+
+%end
+
+// 顺便探一下：HDR 播放时抖音到底用哪个播放器配置类。
+// 这几个类如果存在，说明 HDR 链路可能在这边。
 %hook AWEDPlayerBrightnessContainer
 
 - (void)awe_adjustBrightnessWhenPlayed {
