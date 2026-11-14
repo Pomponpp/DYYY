@@ -10088,6 +10088,71 @@ static void findTargetViewInView(UIView *view) {
 %end
 
 
+// ===== 评论分享横栏诊断 =====
+//
+// 「隐藏评论分享」这条功能一直没生效：旧做法是 hook 分享面板的 cell
+// （AWECommentShareContainerCell / AWEIMCommentShareTableViewCell），
+// 但 41.1 的实际数据源来自 Swift 类 ShareCommentHorizontalSectionViewModel。
+//
+// 本组只打日志、不做过滤，先看清 fetchSectionDataSource 返回什么结构、
+// 每一项靠什么字段区分「私信联系人」，再决定过滤条件。
+//
+// Swift 类在运行时是 mangled 名，%hook 直接写不了，
+// 必须用 %group + %init(占位名 = 运行时类) 挂载。
+%group DYYYCommentShareDiagGroup
+
+%hook ShareCommentHorizontalSectionViewModel
+
+- (id)fetchSectionDataSource {
+    id data = nil;
+    @try {
+        data = %orig;
+    } @catch (__unused NSException *e) {
+        data = nil;
+    }
+
+    @try {
+        NSLog(@"[DYYY][share] fetch 返回 class=%@", NSStringFromClass([data class]));
+
+        if ([data isKindOfClass:[NSArray class]]) {
+            NSArray *arr = (NSArray *)data;
+            NSLog(@"[DYYY][share] 数组，共 %lu 项", (unsigned long)arr.count);
+            NSUInteger limit = MIN(arr.count, (NSUInteger)12);
+            for (NSUInteger i = 0; i < limit; i++) {
+                id item = arr[i];
+                NSString *desc = @"";
+                @try {
+                    desc = [item description];
+                } @catch (__unused NSException *e) {
+                    desc = @"<desc 失败>";
+                }
+                if (desc.length > 300) desc = [desc substringToIndex:300];
+                NSLog(@"[DYYY][share]   [%lu] %@ → %@", (unsigned long)i,
+                      NSStringFromClass([item class]), desc);
+            }
+        } else if ([data isKindOfClass:[NSDictionary class]]) {
+            NSLog(@"[DYYY][share] 字典 keys=%@", [(NSDictionary *)data allKeys]);
+        } else {
+            NSString *desc = @"";
+            @try {
+                desc = [data description];
+            } @catch (__unused NSException *e) {
+                desc = @"<desc 失败>";
+            }
+            if (desc.length > 500) desc = [desc substringToIndex:500];
+            NSLog(@"[DYYY][share] 其他类型 → %@", desc);
+        }
+    } @catch (__unused NSException *e) {
+        NSLog(@"[DYYY][share] 日志采集异常");
+    }
+
+    return data;
+}
+
+%end
+
+%end
+
 %ctor {
     // 诊断浮层：启动早期一次性安装（hidden 待命），不抢焦点、不参与转场
     DKDebugInspectorInstall();
@@ -10133,6 +10198,13 @@ static void findTargetViewInView(UIView *view) {
                                                             "_TtC20AWECommentSwiftBizUI27CommentInteractionBaseLabel");
     if (interactionBaseLabelClass) {
         %init(DYYYCommentExactTimeGroup, AWECommentSwiftBizUI_CommentInteractionBaseLabel = interactionBaseLabelClass);
+    }
+
+    // 评论分享横栏诊断：41.1 的数据源是 Swift 类，必须按运行时 mangled 名挂载。
+    Class shareSectionVMClass = DYYYResolveSwiftClass("AWEIMShareImpl.ShareCommentHorizontalSectionViewModel",
+                                                       "_TtC14AWEIMShareImpl38ShareCommentHorizontalSectionViewModel");
+    if (shareSectionVMClass) {
+        %init(DYYYCommentShareDiagGroup, ShareCommentHorizontalSectionViewModel = shareSectionVMClass);
     }
     
     Class imMenuComponentClass = objc_getClass("AWEIMCustomMenuComponent");

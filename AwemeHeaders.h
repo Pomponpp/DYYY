@@ -806,6 +806,15 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 // 继承按 UITableViewCell 声明，本处只用到 layoutSubviews 与 hidden。
 @interface AWECommentShareContainerCell : UITableViewCell
 @end
+
+// 41.1 评论分享横栏的数据源 ViewModel（Swift）。
+// 运行时类名：_TtC14AWEIMShareImpl38ShareCommentHorizontalSectionViewModel
+// 「隐藏评论分享」的真正落点在这里，不再经过上面的容器 cell。
+@interface _TtC14AWEIMShareImpl38ShareCommentHorizontalSectionViewModel : NSObject
+- (id)fetchSectionDataSource;
+- (id)commentPageContext;
+- (void)setCommentPageContext:(id)context;
+@end
 @interface AWEProfilePublishGuideCollectionViewCell : UIView
 @end
 
