@@ -39,6 +39,7 @@
 // 扳手拖动判定：区分「拖」与「点」，避免拖动结束被当成点击弹面板。
 @property (nonatomic, assign) CGPoint wrenchDragStartCenter;
 @property (nonatomic, assign) BOOL wrenchDidDrag;
+- (void)persistWrenchPosition;
 - (BOOL)capturesOverlayTouches;
 - (void)exportWholePage;
 @end
@@ -112,25 +113,54 @@ static NSString *DKExportErrorMessage(NSError *error, NSString *fallback) {
     return message;
 }
 
-static void DKShareExport(DKDebugExportResult *result, UIViewController *presenter, UIView *sourceView) {
-    if (!result.zipURL) {
+// 导出完成后的收尾。
+//
+// 之前直接弹 UIActivityViewController（系统分享面板），
+// 它会盖一层灰蒙版并且层级高于扳手浮窗，用户没关掉之前扳手完全点不动，
+// 看起来就像「导出后整个界面被蒙住、扳手失效」。
+//
+// 改为先弹一个轻量提示：说明文件已生成，给两个按钮
+//   「分享」→ 才弹系统分享面板
+//   「完成」→ 只清理临时文件，界面立刻恢复可用
+// 默认走「完成」，不再强制进分享流程。
+static void DKFinishExport(DKDebugExportResult *result, UIViewController *presenter, UIView *sourceView) {
+    if (!result || !result.zipURL) {
         DKDebugCleanupExport(result);
         DKPresentError(presenter, @"ZIP 文件不存在");
         return;
     }
-    UIActivityViewController *activity = [[UIActivityViewController alloc] initWithActivityItems:@[result.zipURL]
-                                                                          applicationActivities:nil];
-    if (activity.popoverPresentationController) {
-        activity.popoverPresentationController.sourceView = sourceView ?: presenter.view;
-        activity.popoverPresentationController.sourceRect = (sourceView ?: presenter.view).bounds;
-    }
-    activity.completionWithItemsHandler = ^(__unused UIActivityType activityType,
-                                            __unused BOOL completed,
-                                            __unused NSArray *returnedItems,
-                                            __unused NSError *activityError) {
-        DKDebugCleanupExport(result);
-    };
-    [presenter presentViewController:activity animated:YES completion:nil];
+
+    NSString *name = result.zipURL.lastPathComponent ?: @"诊断包";
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"导出完成"
+                                            message:[NSString stringWithFormat:@"已生成 %@\n点「分享」可保存到文件或发出去。", name]
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"分享"
+                                             style:UIAlertActionStyleDefault
+                                           handler:^(__unused UIAlertAction *action) {
+                                             UIActivityViewController *activity =
+                                                 [[UIActivityViewController alloc] initWithActivityItems:@[ result.zipURL ]
+                                                                                   applicationActivities:nil];
+                                             if (activity.popoverPresentationController) {
+                                                 activity.popoverPresentationController.sourceView = sourceView ?: presenter.view;
+                                                 activity.popoverPresentationController.sourceRect = (sourceView ?: presenter.view).bounds;
+                                             }
+                                             activity.completionWithItemsHandler =
+                                                 ^(__unused UIActivityType type, __unused BOOL completed,
+                                                   __unused NSArray *items, __unused NSError *error) {
+                                                   DKDebugCleanupExport(result);
+                                                 };
+                                             [presenter presentViewController:activity animated:YES completion:nil];
+                                           }]];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"完成"
+                                             style:UIAlertActionStyleCancel
+                                           handler:^(__unused UIAlertAction *action) {
+                                             DKDebugCleanupExport(result);
+                                           }]];
+
+    [presenter presentViewController:alert animated:YES completion:nil];
 }
 
 static void DKSetProgress(UIAlertController *alert, NSString *text) {
@@ -157,7 +187,7 @@ static void DKCreateExportInBackground(DKDebugExportContext *context,
             DKDebugExportBusy = NO;
             [progressAlert dismissViewControllerAnimated:YES completion:^{
                 if (result) {
-                    DKShareExport(result, presenter, context.sourceView ?: presenter.view);
+                    DKFinishExport(result, presenter, context.sourceView ?: presenter.view);
                 } else {
                     DKPresentError(presenter, DKExportErrorMessage(exportError, @"没有生成 ZIP 文件"));
                 }
@@ -329,13 +359,46 @@ static void DKEnsureDebugWindow(void) {
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     if (!self.didPlaceButton) {
-        UIEdgeInsets insets = self.view.safeAreaInsets;
-        CGFloat x = self.view.bounds.size.width - insets.right - 12.0 - 24.0;
-        CGFloat y = insets.top + 12.0 + 24.0;
-        self.wrenchButton.center = CGPointMake(x, y);
+        // 位置记忆：优先恢复上次拖动到的位置（按屏幕坐标存，与安全区无关）；
+        // 没有记录或落在屏幕外时，回落到默认右上角。
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        NSString *stored = [defaults stringForKey:@"DYYYWrenchPosition"];
+        BOOL restored = NO;
+        if (stored.length > 0) {
+            NSArray *parts = [stored componentsSeparatedByString:@","];
+            if (parts.count == 2) {
+                CGFloat sx = [parts[0] doubleValue];
+                CGFloat sy = [parts[1] doubleValue];
+                CGRect screen = UIScreen.mainScreen.bounds;
+                if (sx > 0 && sy > 0 && sx < screen.size.width && sy < screen.size.height) {
+                    // 存储值是相对屏幕的绝对坐标，这里转成窗口内坐标
+                    UIWindow *win = self.view.window;
+                    if (win) {
+                        CGPoint inWindow = [win convertPoint:CGPointMake(sx, sy) fromWindow:nil];
+                        self.wrenchButton.center = inWindow;
+                        restored = YES;
+                    }
+                }
+            }
+        }
+        if (!restored) {
+            UIEdgeInsets insets = self.view.safeAreaInsets;
+            CGFloat x = self.view.bounds.size.width - insets.right - 12.0 - 24.0;
+            CGFloat y = insets.top + 12.0 + 24.0;
+            self.wrenchButton.center = CGPointMake(x, y);
+        }
         self.didPlaceButton = YES;
     }
     [self clampWrenchButton];
+}
+
+// 把当前扳手位置存成屏幕绝对坐标，跨启动、跨屏幕旋转都能还原。
+- (void)persistWrenchPosition {
+    UIWindow *win = self.view.window;
+    if (!win) return;
+    CGPoint inScreen = [win convertPoint:self.wrenchButton.center toWindow:nil];
+    NSString *value = [NSString stringWithFormat:@"%.1f,%.1f", inScreen.x, inScreen.y];
+    [[NSUserDefaults standardUserDefaults] setObject:value forKey:@"DYYYWrenchPosition"];
 }
 
 - (void)clampWrenchButton {
@@ -375,8 +438,10 @@ static void DKEnsureDebugWindow(void) {
         case UIGestureRecognizerStateEnded:
         case UIGestureRecognizerStateCancelled:
         case UIGestureRecognizerStateFailed:
-            // 拖动结束：本次手势标记为已拖动，抑制随之而来的 touchUpInside。
-            // 标记会在 wrenchTouchUpInside 里消费掉并复位。
+            // 拖动结束后记住位置，下次启动直接还原。
+            if (self.wrenchDidDrag) {
+                [self persistWrenchPosition];
+            }
             break;
 
         default:
@@ -444,15 +509,52 @@ static void DKEnsureDebugWindow(void) {
     DKStartExport(context, DKDebugExportModePage);
 }
 
-// 面板（菜单/进度/分享）在场时窗口恢复全量命中——否则"关闭"的触摸被穿透。
-// （音频专项删除时误切掉了原实现，按原版补回。）
+// 面板（菜单/进度）在场时窗口恢复全量命中——否则"关闭"的触摸被穿透。
+//
+// 注意：不能只看 presentedViewController != nil。
+// 分享面板（UIActivityViewController）在「交给别的 App 处理」的路径下
+// （比如微信输入法中转），completionWithItemsHandler 可能不触发，
+// dismiss 也可能被 App 切换打断，presentedViewController 会一直挂着。
+// 这时浮层会整屏吞掉触摸，表现为「导出后界面被蒙住、扳手点不动」。
+//
+// 所以这里要把分享面板排除掉，并且跳过正在 dismiss 的控制器。
 - (BOOL)capturesOverlayTouches {
-    return self.presentedViewController != nil;
+    UIViewController *presented = self.presentedViewController;
+    if (!presented) return NO;
+    if (presented.isBeingDismissed) return NO;
+    if ([presented isKindOfClass:[UIActivityViewController class]]) return NO;
+    return YES;
 }
 
 @end
 
 #pragma mark - 对外入口
+
+// 回到前台时清理残局。
+//
+// 场景：导出 ZIP → 系统分享面板 → 选微信输入法/其它 App 中转 → 分享完切回抖音。
+// 这条路径下 UIActivityViewController 的 completionWithItemsHandler 常常不触发，
+// dismiss 也可能被 App 切换打断，导致：
+//   · DKDebugExportBusy 一直是 YES（下次导出报「已有导出正在进行」）
+//   · presentedViewController 挂着已失效的分享面板
+//   · 浮层持续吞触摸，扳手点不动
+// 这里在每次回到前台时统一收尾。
+static void DKRecoverOverlayStateIfNeeded(void) {
+    UIViewController *controller = DKDebugController;
+    if (!controller) return;
+
+    UIViewController *presented = controller.presentedViewController;
+    if (presented) {
+        BOOL isStaleShare = [presented isKindOfClass:[UIActivityViewController class]];
+        BOOL isGone = presented.isBeingDismissed || presented.view.window == nil;
+        if (isStaleShare || isGone) {
+            [controller dismissViewControllerAnimated:NO completion:nil];
+        }
+    }
+
+    // 导出流程没有正常收尾时，busy 标记会一直卡住，这里无条件放行。
+    DKDebugExportBusy = NO;
+}
 
 void DKDebugInspectorRefreshOverlay(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -487,6 +589,8 @@ void DKDebugInspectorInstall(void) {
             DKDebugInspectorRefreshOverlay();
         }];
         [nc addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *note) {
+            // 从分享面板/别的 App 切回来时，先收掉残留状态，再刷新浮层。
+            DKRecoverOverlayStateIfNeeded();
             DKDebugInspectorRefreshOverlay();
         }];
         DKDebugInspectorRefreshOverlay();
