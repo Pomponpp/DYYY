@@ -1674,13 +1674,15 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
 %hook BDSimPlayerBizConfig
 
 - (BOOL)enableHDRBrightnessOpt {
-    BOOL v = NO;
+    BOOL orig = NO;
     @try {
-        v = %orig;
+        orig = %orig;
     } @catch (__unused NSException *e) {
     }
-    NSLog(@"[DYYY][hdr] BDSim.enableHDRBrightnessOpt=%d", v);
-    return v;
+    if (DYYYHDRBrightnessCapValue() > 0) {
+        return NO;
+    }
+    return orig;
 }
 
 - (double)getHDRBrightnessThreshold {
@@ -1731,13 +1733,27 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
 %hook AWEBDSimPlayerBizConfig
 
 - (BOOL)enableHDRBrightnessOpt {
-    BOOL v = NO;
+    BOOL orig = NO;
     @try {
-        v = %orig;
+        orig = %orig;
     } @catch (__unused NSException *e) {
     }
-    NSLog(@"[DYYY][hdr] AWEBDSim.enableHDRBrightnessOpt=%d", v);
-    return v;
+
+    // 只要用户把「HDR 亮度上限」设成非「关闭」，就关掉抖音自己的
+    // HDR 亮度优化。这是抖音内置的那套「播 HDR 时把屏幕拉亮」的机制，
+    // 关掉之后系统不会为 HDR 内容提升背光，我们手动设置的亮度就能保持。
+    //
+    // 日志实测：41.1 里这个值默认是 1（开启），阈值 getHDRBrightnessThreshold
+    // 恒为 0，说明它不按阈值判断，而是直接按这个开关走。
+    CGFloat cap = DYYYHDRBrightnessCapValue();
+    if (cap > 0) {
+        if (orig) {
+            NSLog(@"[DYYY][hdr] AWEBDSim.enableHDRBrightnessOpt 1 → 0（用户设了上限 %.2f）", cap);
+        }
+        return NO;
+    }
+
+    return orig;
 }
 
 - (double)getHDRBrightnessThreshold {
