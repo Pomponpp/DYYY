@@ -726,6 +726,12 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)applyWidthPercentToSubviews:(CGFloat)widthPercent;
 @end
 
+// 拖动时的预览滑块：挂在进度容器里那个带缩略图的浮层内，
+// 浮层平时 hidden=1 alpha=0，拖动时才显示。
+// 群聊「异常进度条」疑似与它有关，需要记录它的显隐时机。
+@interface AWEProgressPreviewSlider : UIView
+@end
+
 @interface AWEFeedChannelObject : NSObject
 @property(nonatomic, copy) NSString *channelID;
 @property(nonatomic, copy) NSString *channelTitle;

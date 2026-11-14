@@ -10111,12 +10111,17 @@ static void findTargetViewInView(UIView *view) {
         data = nil;
     }
 
+    // fetchSectionDataSource 返回的是 ViewModel 自己（builder 风格），
+    // 真正的好友列表在 cellModels 属性里（对照 ObjC 版
+    // AWECommentShareSectionViewModel 的 cellModels / noFriends）。
     @try {
-        NSLog(@"[DYYY][share] fetch 返回 class=%@", NSStringFromClass([data class]));
+        id models = [self valueForKey:@"cellModels"];
+        NSLog(@"[DYYY][share] cellModels=%@ class=%@",
+              models, NSStringFromClass([models class]));
 
-        if ([data isKindOfClass:[NSArray class]]) {
-            NSArray *arr = (NSArray *)data;
-            NSLog(@"[DYYY][share] 数组，共 %lu 项", (unsigned long)arr.count);
+        if ([models isKindOfClass:[NSArray class]]) {
+            NSArray *arr = (NSArray *)models;
+            NSLog(@"[DYYY][share] 共 %lu 项", (unsigned long)arr.count);
             NSUInteger limit = MIN(arr.count, (NSUInteger)12);
             for (NSUInteger i = 0; i < limit; i++) {
                 id item = arr[i];
@@ -10126,30 +10131,63 @@ static void findTargetViewInView(UIView *view) {
                 } @catch (__unused NSException *e) {
                     desc = @"<desc 失败>";
                 }
-                if (desc.length > 300) desc = [desc substringToIndex:300];
+                if (desc.length > 260) desc = [desc substringToIndex:260];
                 NSLog(@"[DYYY][share]   [%lu] %@ → %@", (unsigned long)i,
                       NSStringFromClass([item class]), desc);
             }
-        } else if ([data isKindOfClass:[NSDictionary class]]) {
-            NSLog(@"[DYYY][share] 字典 keys=%@", [(NSDictionary *)data allKeys]);
-        } else {
-            NSString *desc = @"";
-            @try {
-                desc = [data description];
-            } @catch (__unused NSException *e) {
-                desc = @"<desc 失败>";
-            }
-            if (desc.length > 500) desc = [desc substringToIndex:500];
-            NSLog(@"[DYYY][share] 其他类型 → %@", desc);
         }
     } @catch (__unused NSException *e) {
-        NSLog(@"[DYYY][share] 日志采集异常");
+        NSLog(@"[DYYY][share] 读 cellModels 失败: %@", e.reason);
+    }
+
+    @try {
+        id noFriends = [self valueForKey:@"noFriends"];
+        NSLog(@"[DYYY][share] noFriends=%@", noFriends);
+    } @catch (__unused NSException *e) {
     }
 
     return data;
 }
 
 %end
+
+%end
+
+// ===== 群聊进度条诊断 =====
+//
+// 现象：群聊聊天窗内视频拖动进度条时出现「异常进度条」。
+// 从导出的视图树看，进度容器 AWEPlayInteractionProgressContainerView 里
+// 除了主滑块 AWEFeedProgressSlider，还有一条 AWEProgressPreviewSlider，
+// 它挂在一个 hidden=1 alpha=0 的浮层里（含缩略图 + 两个时间标签）。
+//
+// 本组只记录显隐/透明度变化（值真的变了才打），用来看拖动时到底哪层被点亮。
+%hook AWEProgressPreviewSlider
+
+- (void)setHidden:(BOOL)hidden {
+    BOOL old = self.hidden;
+    %orig;
+    if (old != hidden) {
+        NSLog(@"[DYYY][prog] PreviewSlider hidden %d → %d", old ? 1 : 0, hidden ? 1 : 0);
+    }
+}
+
+- (void)setAlpha:(CGFloat)alpha {
+    CGFloat old = self.alpha;
+    %orig;
+    if (fabs(old - alpha) > 0.01) {
+        NSLog(@"[DYYY][prog] PreviewSlider alpha %.2f → %.2f", old, alpha);
+    }
+}
+
+- (void)layoutSubviews {
+    %orig;
+    static CGRect lastFrame;
+    CGRect f = self.frame;
+    if (!CGRectEqualToRect(lastFrame, f)) {
+        lastFrame = f;
+        NSLog(@"[DYYY][prog] PreviewSlider frame=%@", NSStringFromCGRect(f));
+    }
+}
 
 %end
 
