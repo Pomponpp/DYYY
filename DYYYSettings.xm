@@ -1232,6 +1232,13 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"detail" : @"关闭",
             @"cellType" : @26,
             @"imageName" : @"ic_sun_outlined"},
+          @{@"identifier" : @"DYYYHDRDetectHint",
+            @"title" : @"HDR 检测提示",
+            @"subTitle" : @"刷到 HDR 视频时弹提示，用于确认当前内容是否被判定为 HDR\n"
+                          @"只在调试时开启，日常使用建议关闭",
+            @"detail" : @"",
+            @"cellType" : @6,
+            @"imageName" : @"ic_info_outlined_20"},
           @{@"identifier" : @"DYYYNoAds",
             @"title" : @"启用屏蔽广告",
             @"detail" : @"",

@@ -1666,11 +1666,25 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
 %hook AWEVideoPlayerScreenBrightnessManager
 
 - (BOOL)isHDRVideo {
-    return %orig;
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+        v = NO;
+    }
+    return v;
 }
 
 - (void)setIsHDRVideo:(BOOL)isHDRVideo {
     %orig;
+
+    // HDR 检测提示：用于确认当前播放的内容是否判定为 HDR。
+    // 开启后每命中一条 HDR 视频弹一次提示，方便在推荐流里找到测试样本。
+    if (isHDRVideo && DYYYGetBool(@"DYYYHDRDetectHint")) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [DYYYUtils showToast:@"检测到 HDR 视频"];
+        });
+    }
 }
 
 // 抖音播放 HDR 时会把屏幕亮度往 1.0 拉，夜间很刺眼。
@@ -1683,27 +1697,26 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
         return;
     }
 
+    // 只认 isHDRVideo。不要用「目标亮度比 originBrightness 高多少」来判断：
+    // originBrightness 在 setTargetBrightness: 被调用时常常还是 0，
+    // 任何大于 0.25 的目标亮度都会被误判成 HDR，结果把全站视频都压暗了。
     BOOL hdr = NO;
     @try {
         hdr = [self isHDRVideo];
     } @catch (__unused NSException *e) {
+        hdr = NO;
     }
 
-    // 双条件兜底：isHDRVideo 可能尚未写入，再用「亮度大幅跃升」特征判断。
-    BOOL bigJump = NO;
-    @try {
-        bigJump = (targetBrightness > [self originBrightness] + 0.25);
-    } @catch (__unused NSException *e) {
-    }
-
-    NSLog(@"[DYYY][hdr] setTargetBrightness=%.2f isHDR=%d bigJump=%d cap=%.2f",
-          targetBrightness, hdr, bigJump, cap);
-
-    if (!hdr && !bigJump) {
+    if (!hdr) {
         %orig;
         return;
     }
-    %orig(MIN(targetBrightness, cap));
+
+    CGFloat capped = MIN(targetBrightness, cap);
+    if (capped < targetBrightness) {
+        NSLog(@"[DYYY][hdr] 限制亮度 %.2f → %.2f (cap=%.2f)", targetBrightness, capped, cap);
+    }
+    %orig(capped);
 }
 
 %end
