@@ -123,6 +123,29 @@ static NSString *DKExportErrorMessage(NSError *error, NSString *fallback) {
 //   「分享」→ 才弹系统分享面板
 //   「完成」→ 只清理临时文件，界面立刻恢复可用
 // 默认走「完成」，不再强制进分享流程。
+// 找一个属于 App 主窗口的控制器来承载系统面板（分享/键盘依赖的 UI）。
+//
+// 不能直接用浮层控制器：浮层 window 的 canBecomeKeyWindow 返回 NO，
+// 拿不到键盘焦点，UIActivityViewController 会卡死——既分享不出去也关不掉。
+// 这里沿窗口层级找第一个非浮层、能 present 的控制器。
+static UIViewController *DKHostControllerForPresentation(UIViewController *fallback) {
+    UIWindow *target = DKDebugTargetWindow();
+    UIViewController *root = target.rootViewController;
+    if (!root) return fallback;
+
+    UIViewController *top = root;
+    while (top.presentedViewController &&
+           !top.presentedViewController.isBeingDismissed) {
+        top = top.presentedViewController;
+    }
+
+    // 若当前顶层就是我们自己的浮层控制器，退回窗口根控制器
+    if ([top isKindOfClass:DKDebugOverlayViewController.class]) {
+        return root;
+    }
+    return top ?: root;
+}
+
 static void DKFinishExport(DKDebugExportResult *result, UIViewController *presenter, UIView *sourceView) {
     if (!result || !result.zipURL) {
         DKDebugCleanupExport(result);
@@ -139,19 +162,28 @@ static void DKFinishExport(DKDebugExportResult *result, UIViewController *presen
     [alert addAction:[UIAlertAction actionWithTitle:@"分享"
                                              style:UIAlertActionStyleDefault
                                            handler:^(__unused UIAlertAction *action) {
+                                             // 关键：分享面板必须从抖音自己的控制器弹出。
+                                             //
+                                             // 之前是从浮层控制器（DKDebugController）present，
+                                             // 而浮层 window 的 canBecomeKeyWindow 返回 NO，
+                                             // 拿不到键盘焦点 → UIActivityViewController 卡死，
+                                             // 既分享不出去也关不掉。
+                                             //
+                                             // 改为找一个属于 App 主窗口的控制器来 present。
+                                             UIViewController *host = DKHostControllerForPresentation(presenter);
                                              UIActivityViewController *activity =
                                                  [[UIActivityViewController alloc] initWithActivityItems:@[ result.zipURL ]
                                                                                    applicationActivities:nil];
                                              if (activity.popoverPresentationController) {
-                                                 activity.popoverPresentationController.sourceView = sourceView ?: presenter.view;
-                                                 activity.popoverPresentationController.sourceRect = (sourceView ?: presenter.view).bounds;
+                                                 activity.popoverPresentationController.sourceView = host.view;
+                                                 activity.popoverPresentationController.sourceRect = host.view.bounds;
                                              }
                                              activity.completionWithItemsHandler =
                                                  ^(__unused UIActivityType type, __unused BOOL completed,
                                                    __unused NSArray *items, __unused NSError *error) {
                                                    DKDebugCleanupExport(result);
                                                  };
-                                             [presenter presentViewController:activity animated:YES completion:nil];
+                                             [host presentViewController:activity animated:YES completion:nil];
                                            }]];
 
     [alert addAction:[UIAlertAction actionWithTitle:@"完成"
