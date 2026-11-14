@@ -125,6 +125,7 @@ UITableViewCellContentView  {{0, 0}, {428, 926}}
 
 | 版本 | 内容 | 状态 |
 |---|---|---|
+| **v100** | HDR 改为亮度上限，移除降画质与吞作品的干预 | ✅ 待构建 |
 | **v98** | h264 兜底项改排最后，让 bytevc2 先被尝试 | ✅ |
 | **v97** | bytevc2 转码入库（passthrough → HEVC → H.264 分级） | ✅ 代码生效，但源不可解 |
 | **v96** | 候选列表补 h264 兜底 + gearName 解析分辨率 | ✅ |
@@ -296,6 +297,48 @@ p_watchForUserScreenBrightnessChange:       用户手动调就放弃控制
 - `BrightnessEnhanceManager` 在 `CreativePerform`（创作）目录，**不管播放**
 - `IESVSWatermarkServiceImpl` 是直播/短剧水印，**不是播放水印**
 - `disable_video_max_brightness_mean` 只是 VEK 配置 key，改不了
+
+### HDR 处理 —— 已定案（v100）
+
+**旧做法全部废弃（两个函数改为恒返回 NO，120 处干预点自动失效）：**
+
+| 旧做法 | 后果 |
+|---|---|
+| 过滤 HDR 码率档 | 真 HDR 作品没有可播档，整条跳过 |
+| 改写 `hdrType` / `hdrBit` | 解码器按 SDR 解 HDR 流，失败 |
+| LUT 置 nil | 色调映射缺失，画面发灰 |
+| 命中后 `return nil` | 作品从推荐流直接消失 |
+
+**新做法：只限制屏幕亮度上限。**
+
+```objc
+%hook AWEVideoPlayerScreenBrightnessManager
+- (void)setTargetBrightness:(CGFloat)targetBrightness {
+    CGFloat cap = DYYYHDRBrightnessCapValue();
+    if (cap <= 0) { %orig; return; }
+
+    BOOL hdr = [self isHDRVideo];
+    BOOL bigJump = (targetBrightness > [self originBrightness] + 0.25);
+    if (!hdr && !bigJump) { %orig; return; }
+
+    %orig(MIN(targetBrightness, cap));
+}
+%end
+```
+
+**双条件判断的意义**：`isHDRVideo` 可能尚未写入（setter 顺序不确定），
+再用「目标亮度比原始亮度高出 0.25 以上」这个特征兜底。
+两者都不满足时原样放行，保证普通视频零影响。
+
+**为什么不改流**：官方播放 HDR 时解码出来始终是 HDR 数据，
+亮度调节发生在显示层（EDR 增益），不降画质。
+任何改数据层的做法（换流 / 去 LUT）都会降画质。
+
+**设置项**：`DYYYHDRBrightnessCap` = 关闭 / 40% / 50% / 60% / 70% / 80% / 90%，默认关闭。
+
+**待验证**：IM（聊天）里的视频是否也走同一个亮度管理类。
+日志 `[DYYY][hdr]` 会在两边都打印，实测确认后再决定是否需要单独处理
+`IESIMVideoPlayerWrapper.setupHDREnable:`。
 
 ### 消息防撤回相关类
 
