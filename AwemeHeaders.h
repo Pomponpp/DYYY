@@ -1754,6 +1754,8 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (BOOL)enableHDRBrightnessOpt;
 - (BOOL)enableHDRFullModelAdaptation;
 - (BOOL)hdrAutomaticIdentification;
+- (BOOL)hdrPlaybackEnabled;
+- (double)getHDRBrightnessThreshold;
 @end
 
 @interface AWEBDSimPlayerBizConfig : BDSimPlayerBizConfig

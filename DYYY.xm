@@ -1667,6 +1667,64 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
 // 该类的 awe_adjustBrightnessWhenPlayed / awe_adjustBrightnessWhenPaused
 // 才是播放/暂停时真正调屏幕亮度的方法。
 // 本版先只挂诊断日志，确认调用时机与 HDR 判定，再决定在哪一层做限制。
+// 抖音自己的 HDR 亮度开关与阈值。
+// getHDRBrightnessThreshold 是它判断「亮到什么程度要处理」的界线，
+// enableHDRBrightnessOpt 是这套优化的总开关。
+// 本版只读日志，确认它们在实际设备上的取值，再决定怎么用。
+%hook BDSimPlayerBizConfig
+
+- (BOOL)enableHDRBrightnessOpt {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] BDSim.enableHDRBrightnessOpt=%d", v);
+    return v;
+}
+
+- (double)getHDRBrightnessThreshold {
+    double v = 0;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] BDSim.getHDRBrightnessThreshold=%.3f", v);
+    return v;
+}
+
+- (BOOL)hdrPlaybackEnabled {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] BDSim.hdrPlaybackEnabled=%d", v);
+    return v;
+}
+
+- (BOOL)hdrAutomaticIdentification {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] BDSim.hdrAutomaticIdentification=%d", v);
+    return v;
+}
+
+- (BOOL)enableHDRFullModelAdaptation {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] BDSim.enableHDRFullModelAdaptation=%d", v);
+    return v;
+}
+
+%end
+
 %hook AWEDPlayerBrightnessContainer
 
 - (void)awe_adjustBrightnessWhenPlayed {
