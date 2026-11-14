@@ -1900,6 +1900,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)restoreOriginalBrightness;
 - (BOOL)enableBrightnessAdjust;
 - (void)setEnableBrightnessAdjust:(BOOL)enable;
+- (id)videoItemID;
+- (void)setVideoItemID:(id)videoItemID;
+- (BOOL)isAdjusting;
+- (void)setIsAdjusting:(BOOL)isAdjusting;
 @end
 
 @interface ALMOwnPlayerWrapper : NSObject
