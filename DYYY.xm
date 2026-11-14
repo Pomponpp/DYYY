@@ -1663,6 +1663,49 @@ static CGFloat DYYYHDRBrightnessCapValue(void) {
     return (CGFloat)percent / 100.0;
 }
 
+// 41.1 的亮度调节入口在这里，不是 AWEVideoPlayerScreenBrightnessManager。
+// 该类的 awe_adjustBrightnessWhenPlayed / awe_adjustBrightnessWhenPaused
+// 才是播放/暂停时真正调屏幕亮度的方法。
+// 本版先只挂诊断日志，确认调用时机与 HDR 判定，再决定在哪一层做限制。
+%hook AWEDPlayerBrightnessContainer
+
+- (void)awe_adjustBrightnessWhenPlayed {
+    BOOL hdr = NO;
+    @try {
+        hdr = [self awe_isCurrentVideoHDR];
+    } @catch (__unused NSException *e) {
+    }
+    double diff = 0, mean = 0;
+    @try {
+        diff = [self awe_getBrightDiff];
+        mean = [self awe_getBrightnessMean];
+    } @catch (__unused NSException *e) {
+    }
+    NSLog(@"[DYYY][hdr] adjustWhenPlayed hdr=%d diff=%.3f mean=%.3f cap=%.2f",
+          hdr, diff, mean, DYYYHDRBrightnessCapValue());
+    %orig;
+}
+
+- (void)awe_adjustBrightnessWhenPaused {
+    NSLog(@"[DYYY][hdr] adjustWhenPaused");
+    %orig;
+}
+
+- (BOOL)awe_isCurrentVideoHDR {
+    BOOL v = NO;
+    @try {
+        v = %orig;
+    } @catch (__unused NSException *e) {
+        v = NO;
+    }
+    if (v) {
+        NSLog(@"[DYYY][hdr] container.isHDR=YES");
+    }
+    return v;
+}
+
+%end
+
 %hook AWEVideoPlayerScreenBrightnessManager
 
 - (BOOL)isHDRVideo {
