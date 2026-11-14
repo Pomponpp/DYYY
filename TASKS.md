@@ -121,6 +121,90 @@ UITableViewCellContentView  {{0, 0}, {428, 926}}
 
 ---
 
+## 发布流程（固定做法，别再试错）
+
+### CI 现状
+
+```
+build workflow：只产 packages/DYYY.dylib（不打包 deb）
+publish workflow：仍在找 packages/*.deb → 必然失败
+```
+
+**原因**：编译曾经超过 15 分钟被砍，为提速把 workflow 改成「只编 arm64 + 只编译不打包」。
+publish 脚本没同步改，所以每次 publish 都报 `No .deb files found`。
+
+### 正确发布步骤
+
+```
+1. 推送代码
+2. workflow_dispatch 触发 build（或等 push 自动触发）
+3. 只关心 build job 的结果，忽略 publish 失败
+4. build 成功后，从 run 的 artifacts 下载 DYYY-dylib-NNN
+5. 用 API 手动创建 release + 上传 dylib
+```
+
+### build artifact 下载与发布（可直接复用）
+
+```bash
+# 1. 取最新一次 build 成功的 run id
+GET /repos/{owner}/{repo}/actions/workflow-runs?per_page=10
+#    只挑 name=="build deb" 且 conclusion=="success" 的
+
+# 2. 取该 run 的 artifact id
+GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts
+
+# 3. 下载 zip
+GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip
+#    （Windows 环境没有 unzip，用 7z e）
+
+# 4. 建 release（tag 格式 DYYY_2.2-9#NN）
+POST /repos/{owner}/{repo}/releases
+   tag_name:            "DYYY_2.2-9#NN"      ← 注意 # 在 URL 里要写成 %23
+   target_commitish:    main 的当前 sha
+   name:                "DYYY_2.2-9#NN"
+
+# 5. 上传资产（文件名不能带 #，会被当 URL fragment）
+POST https://uploads.github.com/repos/{owner}/{repo}/releases/{release_id}/assets?name=DYYY_2.2-9-NN.dylib
+```
+
+**命名规范**：
+```
+tag       DYYY_2.2-9#NN       （可以带 #）
+asset     DYYY_2.2-9-NN.dylib （必须用 -，不能用 #）
+release 正文里引用版本号用 vNN，不要用 #NN（会被自动链接到上游 issue）
+```
+
+### runner 排队的坑
+
+```
+现象：build job 卡在 queued，runner_name 为空，15 分钟后 cancelled
+注解：The job was not acquired by Runner of type hosted
+原因：macOS runner 容量不足，与代码无关
+
+应对：
+· 不要反复 dispatch，白等 15 分钟
+· 换 macos-13 也一样（仍是 macOS 池）
+· 等几小时后重新 dispatch，或等 push 自动触发
+· 判断依据：changes（ubuntu）能跑起来但 build 拿不到机器，就是排队问题
+```
+
+### 编译错误重灾区
+
+```
+1. 字符串引号不配对
+   DYYYSettingViewController.m 改协议文案时漏过结尾引号，
+   报 unexpected token after Objective-C string。
+   改文案后必须检查引号。
+
+2. 宏不能用在 %hook / %init
+   logos.pl 早于 cpp，会生成 objc_getClass("DYYY_T_XXX") 拿不到类。
+
+3. 前向声明缺失
+   用了新类的方法要先在 AwemeHeaders.h 补 @interface / 方法声明。
+```
+
+---
+
 ## 二、已完成（近期）
 
 | 版本 | 内容 | 状态 |
