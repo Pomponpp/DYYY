@@ -10161,6 +10161,9 @@ static void findTargetViewInView(UIView *view) {
 // 它挂在一个 hidden=1 alpha=0 的浮层里（含缩略图 + 两个时间标签）。
 //
 // 本组只记录显隐/透明度变化（值真的变了才打），用来看拖动时到底哪层被点亮。
+// 群聊「拖动时进度条上移」的探针挂在 DYYYProgressUnderlineFix.xm 里
+// 已有的 AWEPlayInteractionProgressContainerView hook 上，
+// 避免同一方法跨文件重复 %hook 造成符号冲突。
 %hook AWEProgressPreviewSlider
 
 - (void)setHidden:(BOOL)hidden {
@@ -10188,6 +10191,37 @@ static void findTargetViewInView(UIView *view) {
         NSLog(@"[DYYY][prog] PreviewSlider frame=%@", NSStringFromCGRect(f));
     }
 }
+
+%end
+
+// 评论分享横栏的控制器：cell 的 model 从这里流过去。
+//
+// ViewModel 的 cellModels 是 Swift 私有 stored property，KVC 读不到（返回 nil），
+// 所以改从控制器这两个方法拿真实数据项：
+//   sizeForItemAtIndex:model:collectionViewSize:
+//   configCell:index:model:
+%group DYYYCommentShareCellDiagGroup
+
+%hook ShareCommentHorizontalSectionController
+
+- (id)configCell:(id)cell index:(long long)index model:(id)model {
+    @try {
+        NSString *desc = @"";
+        @try {
+            desc = [model description];
+        } @catch (__unused NSException *e) {
+            desc = @"<desc 失败>";
+        }
+        if (desc.length > 260) desc = [desc substringToIndex:260];
+        NSLog(@"[DYYY][share] configCell[%lld] cell=%@ model=%@ → %@",
+              index, NSStringFromClass([cell class]),
+              NSStringFromClass([model class]), desc);
+    } @catch (__unused NSException *e) {
+    }
+    return %orig;
+}
+
+%end
 
 %end
 
@@ -10243,6 +10277,13 @@ static void findTargetViewInView(UIView *view) {
                                                        "_TtC14AWEIMShareImpl38ShareCommentHorizontalSectionViewModel");
     if (shareSectionVMClass) {
         %init(DYYYCommentShareDiagGroup, ShareCommentHorizontalSectionViewModel = shareSectionVMClass);
+    }
+
+    // 控制器：cell 的 model 从这里过，能拿到真实数据项。
+    Class shareSectionVCClass = DYYYResolveSwiftClass("AWEIMShareImpl.ShareCommentHorizontalSectionController",
+                                                      "_TtC14AWEIMShareImpl39ShareCommentHorizontalSectionController");
+    if (shareSectionVCClass) {
+        %init(DYYYCommentShareCellDiagGroup, ShareCommentHorizontalSectionController = shareSectionVCClass);
     }
     
     Class imMenuComponentClass = objc_getClass("AWEIMCustomMenuComponent");

@@ -62,6 +62,19 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
 %hook AWEPlayInteractionProgressContainerView
 - (void)layoutSubviews {
     %orig;
+
+    // 群聊「拖动时进度条上移」的定位探针（只打日志，不改值）。
+    // 录屏逐帧测出：拖动过程中进度条 y 从 1740px 上移到 1563px，
+    // 约 87pt ≈ tabBarHeight(83)，松手后弹回。
+    // 这里记录容器自身位置，看是容器整体上移还是内部滑块单独上移。
+    static CGRect lastFrame;
+    CGRect f = self.frame;
+    if (!CGRectEqualToRect(lastFrame, f)) {
+        lastFrame = f;
+        NSLog(@"[DYYY][prog] 容器 frame=%@ super=%@",
+              NSStringFromCGRect(f), NSStringFromClass([self.superview class]));
+    }
+
     DYYYFixClearProgressUnderline(self);
 }
 %end

@@ -168,6 +168,16 @@ static BOOL DYYYIsInHomeFeedContext(UIView *view) {
 - (void)layoutSubviews {
     %orig;
     DYYYApplyFloatClearProgressStateToView(self);
+
+    // 群聊「拖动时进度条上移」探针：只记录纵向位置变化。
+    // 宽度随播放进度变化，不记录，避免刷屏。
+    static CGFloat lastY = -99999;
+    CGFloat y = self.frame.origin.y;
+    if (fabs(y - lastY) > 0.5) {
+        lastY = y;
+        NSLog(@"[DYYY][prog] 滑块 y=%.1f h=%.1f super=%@",
+              y, self.frame.size.height, NSStringFromClass([self.superview class]));
+    }
 }
 
 - (void)setAlpha:(CGFloat)alpha {
