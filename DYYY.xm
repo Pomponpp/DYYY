@@ -10157,12 +10157,15 @@ static void findTargetViewInView(UIView *view) {
         h = 0;
     }
 
-    // 「隐藏评论分享」：直接把横栏 section 高度归零。
+    // 「隐藏评论分享」：横栏 section 高度归零。
     //
-    // 之前走的是「隐藏 cell」路线，结果 cell 藏起来了但 section 仍占 147pt，
-    // 评论区留一条空白；而且隐藏 cell 会干扰评论面板的触摸链，
-    // 返回时界面卡住只能点扳手。
-    // 改成高度归零后 cell 根本不参与布局，既不留白也不影响触摸。
+    // 演进过程（都实测过）：
+    //   ① 隐藏 cell → section 仍占 147pt，留白条；且干扰评论面板触摸链
+    //   ② 只把高度归零 → 不留白条，但 cell 被压扁后头像溢出显示
+    //   ③ 本版：高度归零 + 让 cell 内容层透明 + 裁剪，两者配合才干净
+    //
+    // 内容层处理放在 ShareCommentHorizontalSectionCell 的 layoutSubviews 里，
+    // 因为这里只拿到高度，拿不到 cell 实例。
     if (DYYYGetBool(@"DYYYHideCommentShareToFriends")) {
         return 0;
     }
@@ -10250,11 +10253,36 @@ static void findTargetViewInView(UIView *view) {
 // 横栏真实 cell：
 //   _TtC14AWEIMShareImplP33_DB14BB85C1CC09CCB67653826FB30C8028CommentHorizontalSectionCell
 //
-// 不要用「隐藏 cell」来实现「隐藏评论分享」。
-// 实测：cell 设 hidden 后 section 仍占 147pt，评论区留一条白条；
-// 而且会干扰评论面板的触摸链。
-// 正解在 ShareCommentHorizontalSectionViewModel 的 sectionTotalHeight：
-// 开关开启时直接返回 0，cell 根本不参与布局。
+// 「隐藏评论分享」的两段配合：
+//   ① ViewModel 的 sectionTotalHeight 返回 0  → 不留白条
+//   ② 本 hook 让 cell 内容层透明 + 裁剪      → 压扁后头像不溢出
+//
+// 注意不能用 hidden：实测设 hidden 会干扰评论面板的触摸链，
+// 返回时界面卡死只能点扳手。这里只改 alpha 与 clipsToBounds，不碰交互。
+%group DYYYCommentShareCellHideGroup
+
+%hook ShareCommentHorizontalSectionCell
+
+- (void)layoutSubviews {
+    %orig;
+
+    if (DYYYGetBool(@"DYYYHideCommentShareToFriends")) {
+        UIView *cellView = (UIView *)self;
+        // 裁剪：高度被压到 0 时，子视图不会溢出来画头像
+        cellView.clipsToBounds = YES;
+        // 透明：即使有 1pt 残影也看不见
+        cellView.alpha = 0;
+    } else {
+        UIView *cellView = (UIView *)self;
+        if (cellView.alpha == 0) {
+            cellView.alpha = 1;
+        }
+    }
+}
+
+%end
+
+%end
 
 %ctor {
     // 诊断浮层：启动早期一次性安装（hidden 待命），不抢焦点、不参与转场
@@ -10315,6 +10343,14 @@ static void findTargetViewInView(UIView *view) {
                                                       "_TtC14AWEIMShareImpl39ShareCommentHorizontalSectionController");
     if (shareSectionVCClass) {
         %init(DYYYCommentShareCellDiagGroup, ShareCommentHorizontalSectionController = shareSectionVCClass);
+    }
+
+    // 横栏 cell：配合 sectionTotalHeight 归零，让内容层透明并裁剪。
+    Class shareCellClass = objc_getClass("_TtC14AWEIMShareImplP33_DB14BB85C1CC09CCB67653826FB30C8028CommentHorizontalSectionCell");
+    if (shareCellClass) {
+        %init(DYYYCommentShareCellHideGroup, ShareCommentHorizontalSectionCell = shareCellClass);
+    } else {
+        NSLog(@"[DYYY][share] 未找到横栏 cell 类");
     }
 
     Class imMenuComponentClass = objc_getClass("AWEIMCustomMenuComponent");
