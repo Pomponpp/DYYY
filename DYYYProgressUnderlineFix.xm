@@ -115,6 +115,20 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
     %orig;
 }
 
+// 位置也可能走 center 而不是 frame，一起挂上。
+- (void)setCenter:(CGPoint)center {
+    CGFloat oldY = self.center.y;
+    if (fabs(oldY - center.y) > 1.0) {
+        NSLog(@"[DYYY][prog] 容器D setCenter y %.1f → %.1f", oldY, center.y);
+        NSArray<NSString *> *stack = [NSThread callStackSymbols];
+        NSUInteger limit = MIN(stack.count, (NSUInteger)14);
+        for (NSUInteger i = 0; i < limit; i++) {
+            NSLog(@"[DYYY][prog]    %@", stack[i]);
+        }
+    }
+    %orig;
+}
+
 %end
 
 %hook AWEStoryProgressContainerView

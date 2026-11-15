@@ -128,8 +128,25 @@ static NSString *DKExportErrorMessage(NSError *error, NSString *fallback) {
 // 不能直接用浮层控制器：浮层 window 的 canBecomeKeyWindow 返回 NO，
 // 拿不到键盘焦点，UIActivityViewController 会卡死——既分享不出去也关不掉。
 // 这里沿窗口层级找第一个非浮层、能 present 的控制器。
-static UIViewController *DKHostControllerForPresentation(UIViewController *fallback) {
-    UIWindow *target = DKDebugTargetWindow();
+// 定义在文件靠后位置，导出收尾时要用，先声明。
+static void DKRecoverOverlayStateIfNeeded(void);
+
+// 导出收尾统一入口：清理临时文件 + 等面板真正关掉后复位浮层状态。
+//
+// 为什么不能只靠 App 回到前台时复位：
+// 在抖音内部直接「完成」的路径下没有切 App，DidBecomeActive 不会触发，
+// 残留的 presentedViewController 会一直让浮层接管触摸，
+// 表现为「导出完返回，界面点不动，只剩扳手能点」。
+static void DKFinalizeExportAndRecover(DKDebugExportResult *result) {
+    DKDebugCleanupExport(result);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.45 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                     DKRecoverOverlayStateIfNeeded();
+                     DKDebugInspectorRefreshOverlay();
+                   });
+}
+
+static UIViewController *DKHostControllerForPresentation(UIViewController *fallback) {    UIWindow *target = DKDebugTargetWindow();
     UIViewController *root = target.rootViewController;
     if (!root) return fallback;
 
@@ -181,7 +198,7 @@ static void DKFinishExport(DKDebugExportResult *result, UIViewController *presen
                                              activity.completionWithItemsHandler =
                                                  ^(__unused UIActivityType type, __unused BOOL completed,
                                                    __unused NSArray *items, __unused NSError *error) {
-                                                   DKDebugCleanupExport(result);
+                                                   DKFinalizeExportAndRecover(result);
                                                  };
                                              [host presentViewController:activity animated:YES completion:nil];
                                            }]];
@@ -189,7 +206,7 @@ static void DKFinishExport(DKDebugExportResult *result, UIViewController *presen
     [alert addAction:[UIAlertAction actionWithTitle:@"完成"
                                              style:UIAlertActionStyleCancel
                                            handler:^(__unused UIAlertAction *action) {
-                                             DKDebugCleanupExport(result);
+                                             DKFinalizeExportAndRecover(result);
                                            }]];
 
     [presenter presentViewController:alert animated:YES completion:nil];
@@ -555,6 +572,12 @@ static void DKEnsureDebugWindow(void) {
     if (!presented) return NO;
     if (presented.isBeingDismissed) return NO;
     if ([presented isKindOfClass:[UIActivityViewController class]]) return NO;
+
+    // 引用还在、但视图已经不在任何窗口上 → 是 dismiss 后没清干净的残留。
+    // 这时候若仍然接管触摸，整个浮层会吞掉抖音的点击，
+    // 表现为「只能点扳手、其他都没反应」。
+    if (presented.isViewLoaded && presented.view.window == nil) return NO;
+
     return YES;
 }
 
