@@ -10149,6 +10149,17 @@ static void findTargetViewInView(UIView *view) {
     return data;
 }
 
+- (double)sectionTotalHeight {
+    double h = 0;
+    @try {
+        h = %orig;
+    } @catch (__unused NSException *e) {
+        h = 0;
+    }
+    NSLog(@"[DYYY][share] sectionTotalHeight=%.1f", h);
+    return h;
+}
+
 %end
 
 %end
@@ -10225,6 +10236,29 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
+// 横栏真实 cell（日志确认的类名）：
+//   _TtC14AWEIMShareImplP33_DB14BB85C1CC09CCB67653826FB30C8028CommentHorizontalSectionCell
+// 上一个 %hook 的 AWECommentShareContainerCell 是猜的类名，41.1 并不存在，
+// 所以「隐藏评论分享」一直没生效。这里挂真实类。
+%group DYYYCommentShareCellHideGroup
+
+%hook ShareCommentHorizontalSectionCell
+
+- (void)layoutSubviews {
+    %orig;
+
+    if (DYYYGetBool(@"DYYYHideCommentShareToFriends")) {
+        // 占位类没有头文件声明，强制按 UIView 调用，避免属性访问编译报错。
+        UIView *cellView = (UIView *)self;
+        cellView.hidden = YES;
+        cellView.alpha = 0;
+    }
+}
+
+%end
+
+%end
+
 %ctor {
     // 诊断浮层：启动早期一次性安装（hidden 待命），不抢焦点、不参与转场
     DKDebugInspectorInstall();
@@ -10284,6 +10318,14 @@ static void findTargetViewInView(UIView *view) {
                                                       "_TtC14AWEIMShareImpl39ShareCommentHorizontalSectionController");
     if (shareSectionVCClass) {
         %init(DYYYCommentShareCellDiagGroup, ShareCommentHorizontalSectionController = shareSectionVCClass);
+    }
+
+    // 横栏真实 cell：开关开启时整个横栏隐藏。
+    Class shareCellClass = objc_getClass("_TtC14AWEIMShareImplP33_DB14BB85C1CC09CCB67653826FB30C8028CommentHorizontalSectionCell");
+    if (shareCellClass) {
+        %init(DYYYCommentShareCellHideGroup, ShareCommentHorizontalSectionCell = shareCellClass);
+    } else {
+        NSLog(@"[DYYY][share] 未找到横栏 cell 类");
     }
     
     Class imMenuComponentClass = objc_getClass("AWEIMCustomMenuComponent");

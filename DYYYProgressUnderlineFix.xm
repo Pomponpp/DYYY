@@ -80,10 +80,41 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
 %end
 
 %hook AWEDPlayerProgressContainerView
+
 - (void)layoutSubviews {
     %orig;
+
+    // 群聊拖动时这个容器整体上移了约 83pt（= tabBarHeight），松手复原。
+    // 记录自身与父视图位置，判断是谁动的。
+    static CGRect lastFrame;
+    static CGRect lastSuperFrame;
+    CGRect f = self.frame;
+    CGRect sf = self.superview ? self.superview.frame : CGRectZero;
+    if (!CGRectEqualToRect(lastFrame, f) || !CGRectEqualToRect(lastSuperFrame, sf)) {
+        lastFrame = f;
+        lastSuperFrame = sf;
+        NSLog(@"[DYYY][prog] 容器D frame=%@ 父=%@ super=%@",
+              NSStringFromCGRect(f), NSStringFromCGRect(sf),
+              NSStringFromClass([self.superview class]));
+    }
+
     DYYYFixClearProgressUnderline(self);
 }
+
+// 谁在改这个容器的 frame？打调用栈，一次就能定位。
+- (void)setFrame:(CGRect)frame {
+    CGFloat oldY = self.frame.origin.y;
+    if (fabs(oldY - frame.origin.y) > 1.0) {
+        NSLog(@"[DYYY][prog] 容器D setFrame y %.1f → %.1f", oldY, frame.origin.y);
+        NSArray<NSString *> *stack = [NSThread callStackSymbols];
+        NSUInteger limit = MIN(stack.count, (NSUInteger)14);
+        for (NSUInteger i = 0; i < limit; i++) {
+            NSLog(@"[DYYY][prog]    %@", stack[i]);
+        }
+    }
+    %orig;
+}
+
 %end
 
 %hook AWEStoryProgressContainerView
