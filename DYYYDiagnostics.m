@@ -230,10 +230,8 @@ static void DYYYUncaughtExceptionHandler(NSException *exception) {
 
     [self appendRuntimeLogLine:@"—— 导出时刻开关状态 ——"];
     [self appendRuntimeLogLine:[NSString stringWithFormat:
-        @"[DYYY][fullscreen] 导出状态：全屏=%d 详情页新机制(实验)=%d 评论避让视频=%d 毛玻璃=%d",
+        @"[DYYY][fullscreen] 导出状态：全屏=%d 毛玻璃=%d",
         DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
-        1,
-        DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
         DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0]];
 
     NSDateFormatter *fmt = [[NSDateFormatter alloc] init];

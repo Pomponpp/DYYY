@@ -1389,9 +1389,35 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath;
 - (double)fixedCellHeight;
 - (double)cellHeightAtIndex:(long long)index;
-- (void)setupDetailTableView;
+// 41.2 行高来源探针用：无参数版与带容器版（运行时 dump 确认两者都存在）
+- (double)cellHeight;
+- (double)cellHeightAtIndex:(long long)index forContainer:(id)container;
+- (double)setupDetailTableView;
 - (double)contentOffsetYForCellAtIndex:(long long)index;
 - (void)adjustTableViewHeightForTargetIndex:(long long)index;
+@end
+
+// 详情页行高/翻页基准入口（滚动 delegate 容器与各数据层）。
+// Logos 的 %hook 按类名直接挂，这里只为 %orig 类型转换提供声明。
+@interface AWEDetailFeedScrollDelegateContainer : NSObject
+- (CGFloat)fixedCellHeight;
+@end
+@interface AWEUserProfileAdDataLayer : NSObject
+- (CGFloat)originalTableViewHeight;
+- (void)setOriginalTableViewHeight:(CGFloat)height;
+@end
+@interface AWEUserProFileAdVideoDataController : NSObject
+- (CGFloat)originalTableViewHeight;
+- (void)updateOriginalTableViewHeight:(CGFloat)height;
+@end
+@interface AWELivePostWorkLiveCardLayoutController : NSObject
+- (CGFloat)originalTableViewHeight;
+- (void)setOriginalTableViewHeight:(CGFloat)height;
+@end
+@interface AWELivePostWorkLiveCardLayoutDataLayer : NSObject
+- (CGFloat)normalHeight;
+- (CGFloat)originalTableViewHeight;
+- (void)setOriginalTableViewHeight:(CGFloat)height;
 @end
 // 41.1 视图树实锤：评论列表区不透明底色来源（rgba(0.086,0.086,0.086,1.0)），
 // 盖在原生毛玻璃层之上，是"评论区黑色"的真凶。

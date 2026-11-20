@@ -366,6 +366,78 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %end
 
+// ===== 详情页行高入口全覆盖 =====
+// 行高/翻页基准的查询链路不经过 AWEAwemeDetailTableViewController 的
+// respondsToSelector 主路径——真实 delegate 容器与数据层各持一份基准高度。
+// 每个入口都接同一个行高纯函数，保证"建行/落点/翻页看到同一行高"。
+// 各入口带挂载确认日志（诊断模式），改版失效一眼可见。
+
+// delegate 容器：滚动/翻页吸附读它
+%hook AWEDetailFeedScrollDelegateContainer
+
+- (CGFloat)fixedCellHeight {
+    CGFloat original = %orig;
+    CGFloat adjusted = [DYYYFullscreenCoordinator fullCellHeightForNative:original];
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        static BOOL loggedOnce = NO;
+        if (!loggedOnce) { loggedOnce = YES;
+            NSLog(@"[DYYY][rowh] AWEDetailFeedScrollDelegateContainer.fixedCellHeight 挂载生效 %.1f → %.1f", original, adjusted);
+        }
+    }
+    return adjusted;
+}
+
+%end
+
+// 他人主页作品详情：数据层基准（从直播间/带直播卡主页进入时行高走这里）
+%hook AWEUserProfileAdDataLayer
+
+- (CGFloat)originalTableViewHeight {
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+}
+- (void)setOriginalTableViewHeight:(CGFloat)height {
+    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+}
+
+%end
+
+%hook AWEUserProFileAdVideoDataController
+
+- (CGFloat)originalTableViewHeight {
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+}
+- (void)updateOriginalTableViewHeight:(CGFloat)height {
+    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+}
+
+%end
+
+// 作者正在直播时主页作品详情：直播卡布局（provider block 返回压缩高度，须在此处改）
+%hook AWELivePostWorkLiveCardLayoutController
+
+- (CGFloat)originalTableViewHeight {
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+}
+- (void)setOriginalTableViewHeight:(CGFloat)height {
+    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+}
+
+%end
+
+%hook AWELivePostWorkLiveCardLayoutDataLayer
+
+- (CGFloat)normalHeight {
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+}
+- (CGFloat)originalTableViewHeight {
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+}
+- (void)setOriginalTableViewHeight:(CGFloat)height {
+    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+}
+
+%end
+
 %hook AWEPlayInteractionSearchAnchorView
 
 - (void)layoutSubviews {

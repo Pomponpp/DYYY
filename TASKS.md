@@ -1,7 +1,10 @@
 # DYYY 项目任务清单
 
-> 最后更新：2026-11-13 · 当前发布版本 **DYYY_2.2-9#87**
-> 目标：**抖音 41.1.0**（只适配最新版，旧版本不做适配）
+> 最后更新：2026-11-21 · git HEAD `91a86ba` + 全屏几何无状态化（未提交，等验收）
+> 目标：**抖音 41.2.0**（只适配最新版，旧版本不做适配）
+>
+> ⚠ 本文件在 2026-11-13（#87）之后停止同步，落后约 33 个版本。
+> 2026-11-20 的交接复核只补了 P1 的真凶，其余条目状态待重新核对。
 
 ---
 
@@ -27,6 +30,85 @@
 `AWEIMShareImpl.ShareCommentHorizontalSectionViewModel`，开关开启时整栏隐藏。
 
 **成本**：一个新 group、Swift 类动态绑定、中等风险。
+
+### ✅ 2026-11-20 复核 —— 先前判断有误，已用二进制验证纠正
+
+> 这一段保留错误判断与纠正过程，防止下次重犯同样的推断错误。
+
+**先前的错误判断**：`check_compat.sh` 报 `ShareCommentHorizontalSectionCell` 缺失，
+据此推断"`%hook` 类名多写了一个 `Share`，所以从没挂上过"。
+
+**验证后的真相（41.1 / 41.2 二进制逐字节核对）**：
+
+```
+%hook ShareCommentHorizontalSectionCell          ← 这是 Logos 占位名，不是真类名
+```
+
+配套的 `%ctor` 里已有正确的动态绑定（`DYYY.xm:10355` 附近）：
+
+```objc
+Class shareCellClass = objc_getClass("_TtC14AWEIMShareImplP33_DB14BB85C1CC09CCB67653826FB30C8028CommentHorizontalSectionCell");
+if (shareCellClass) {
+    %init(DYYYCommentShareCellHideGroup, ShareCommentHorizontalSectionCell = shareCellClass);
+}
+```
+
+核实结果：
+
+| mangled 名 | 41.1 | 41.2 |
+|---|---|---|
+| `_TtC14AWEIMShareImpl38ShareCommentHorizontalSectionViewModel` | 1 | 1 |
+| `_TtC14AWEIMShareImpl39ShareCommentHorizontalSectionController` | 1 | 1 |
+| `_TtC14AWEIMShareImplP33_..._8028CommentHorizontalSectionCell` | 1 | 1 |
+
+**类名没错、绑定没错、两版都在。**
+
+**`check_compat.sh` 会误报的原因**：脚本只扫 `%hook` 后面的字面量，
+对「占位名 + `%init` 动态绑定」这种写法必然报缺失。这是脚本的已知局限，不是代码问题。
+
+**P1 的真实状态**：代码处于**诊断阶段**——`%hook ShareCommentHorizontalSectionViewModel`
+的 `fetchSectionDataSource` 里目前只有 `NSLog` 打 `cellModels` / `noFriends`，
+隐藏逻辑还没写。最新提交 `91a86ba`（"评论分享读 cellModels"）就是这一步。
+
+**下一步（需要真机）**：长按一条评论触发分享面板 → 导出日志 →
+看 `[DYYY][share] cellModels=...` 的实际结构 → 才能写隐藏/过滤逻辑。
+
+**状态**：等待真机日志，不是等代码修改。
+
+---
+
+## 41.2.0 详情页错位 · 无状态化改造（2026-11-21，代码完成待验证）
+
+**现象**：41.2 上详情页"表按 926 滚、cell 按 843 排"（差 2×83），同一 offset 下 cell 高度 843/926 混排，持续数秒。
+
+**根因（诊断包 + 二进制交叉实锤）**：行高 hook 挂在 `AWEAwemeDetailTableViewController` 且 audit 显示"生效"，但真实调用链在 delegate 容器与数据层类上——hook 生效却不在调用路径，行高查询拿到原生 843。旧实现依赖的 `original` 关联对象在真实入口上从未被记录。
+
+**改造内容（净 -70 行）**：
+
+| 项 | 改动 |
+|---|---|
+| 行高 | `detailRowHeight`（有状态，依赖关联对象）→ 删除；新增 `fullCellHeightForNative:` 纯函数：窗口高与原生行高差值落在 (1,160] 即回答满视口，其余透传 |
+| 入口 | 1 个 controller → **6 个**：补 `AWEDetailFeedScrollDelegateContainer` / `AWEUserProfileAdDataLayer` / `AWEUserProFileAdVideoDataController` / `AWELivePostWorkLiveCardLayoutController` / `AWELivePostWorkLiveCardLayoutDataLayer`（含 normalHeight） |
+| 表高 | `adjustDetailTableFrame` 删掉"记录原高"，只撑不记 |
+| HUD 钉位 | 整段删除（`DYYYGeoHUDAdjustFrame` / `DYYYGeoRememberOriginalHeight` / `DYYYGeoTableForView` / `DYYYGeoInteractionClass`）——互动层按原生走 |
+| 播放器容器钉满 | **保留**（`DYYYGeoContainerTarget`，画面满的真正来源，无状态） |
+| 评论避让/图文避让 | 按用户决定移除：`targetForPlayer` 避让分支、图片 transform 四方法、caption 以外的状态字段、设置项「评论避让视频」 |
+| 保留 | 清屏（独立文件）、底栏透明、毛玻璃调用面、caption 防下移（毛玻璃场景）、横屏入口避让、全屏诊断日志、`frameForPureModeContainer`（清屏） |
+| `usesRecommendedLayout` | mediaHost 判定 → 轻量 refer 白名单（homepage_hot / homepage_hot_container） |
+| 进度条黑线 | 扫描收紧：只扫直接子视图 + `isMemberOfClass` 严格 UIView（曾误伤滑块内部图层） |
+| 探针 | `[DYYY][rowh]` 4 个保留（controller 侧），新入口各带挂载确认日志（诊断模式） |
+
+**验证记录**：hook 345+33=378 配对平衡；改动 9 文件花括号全平；头文件声明与实现同步；6 个新入口 selector 在 41.2 二进制全部存在（类 3~5 次、selector 1~2 次，无 Logos 静默挂空风险）。
+
+**真机测试清单（装包后）**：
+1. 详情页上下滑（错位是否消失，重点）
+2. 从搜索进视频（对比某插件还存在的搜索黑底问题）
+3. 清屏模式（mediaHost 路径回归）
+4. 毛玻璃 + 文案位置（caption 防下移）
+5. 底栏透明（详情页/作品页/合集快捷回复栏）
+6. 右侧点赞列位置（HUD 钉位删除后回归原生布局，需确认无下移）
+7. 他人主页 / 直播卡主页进详情（新入口路径）
+8. 关闭全屏开关（原生行为恢复）
 
 ---
 

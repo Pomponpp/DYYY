@@ -7,10 +7,10 @@
 + (BOOL)usesDetailLayoutForController:(UIViewController *)controller;
 + (BOOL)usesFullscreenLayoutForController:(UIViewController *)controller;
 + (CGRect)frameForPureModeContainer:(UIViewController *)controller proposed:(CGRect)frame;
-// 详情页全屏（对齐验证过的机制）：
+// 详情页全屏：
 //   adjustDetailTableFrame 是表高的唯一写入通道；
 //   prepareDetailTableNew 供建行/落点/翻页入口在放行原生之前同步表高；
-//   detailRowHeight 只"回答"行高，不改写任何东西。
+//   fullCellHeightForNative 只"回答"行高，不改写任何东西（无状态纯函数）。
 + (UIViewController *)controllerForTable:(UITableView *)table;
 + (void)prepareDetailTableNew:(UIViewController *)controller;
 // 首页 feed 表撑高：由 AWEFeedTableViewController 布局前后调用。
@@ -18,7 +18,7 @@
 + (void)syncFeedTableHeight:(UIViewController *)controller;
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame;
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target;
-+ (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight;
++ (CGFloat)fullCellHeightForNative:(CGFloat)nativeHeight;
 + (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;
@@ -39,8 +39,6 @@
 + (void)preparePlayer:(UIView *)player;
 + (void)layoutPlayerContainer:(UIViewController *)controller;
 + (void)finishPlayer:(UIView *)player;
-+ (CGAffineTransform)transformForImageView:(UIView *)view proposed:(CGAffineTransform)transform;
-+ (void)layoutImageView:(UIView *)view;
 + (void)beginCommentInWindow:(UIWindow *)window;
 + (BOOL)hasCommentInWindow:(UIWindow *)window;
 + (void)commentController:(UIViewController *)controller visible:(BOOL)visible;

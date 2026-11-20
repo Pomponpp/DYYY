@@ -27,17 +27,12 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
 
     static const CGFloat tol = 1.0;
 
-    // 直接子视图 + 下探一层，覆盖抖音改类名/换层级的情况
-    NSMutableArray<UIView *> *candidates = [NSMutableArray arrayWithArray:container.subviews];
-    for (UIView *sub in container.subviews) {
-        if (sub.subviews.count) {
-            [candidates addObjectsFromArray:sub.subviews];
-        }
-    }
+    // 只扫直接子视图且严格 UIView：下探或含子类会误伤滑块内部的
+    // 轨道填充/缩略图层（曾导致拖动进度条渲染异常）。
+    NSArray<UIView *> *candidates = container.subviews;
 
     for (UIView *v in candidates) {
-        if (![v isKindOfClass:[UIView class]]) continue;
-        if ([v isKindOfClass:[UIControl class]]) continue;  // 不碰滑块、按钮等可交互控件
+        if (![v isMemberOfClass:[UIView class]]) continue;  // 严格 UIView，不含子类
         if (v.hidden) continue;
 
         UIColor *color = v.backgroundColor;
