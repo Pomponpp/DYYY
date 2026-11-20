@@ -139,12 +139,33 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
 static const CGFloat kDYYYRowHeightDiffMin = 1.0;
 static const CGFloat kDYYYRowHeightDiffMax = 160.0;
 
+// 群聊视频详情页（IM 详情）不在全屏作用域：
+// 它原生就是"扣底栏 83"布局，拖进度条时抖音自己把进度容器上移一个底栏
+// 给输入栏让位（原生交互）。行高/表高若在这里接管，会与原生让位布局打架
+// ——表现为拖动中画面跳起一个底栏高度、出现两条底栏分界线，松手弹回。
++ (BOOL)isImDetailController:(UIViewController *)controller {
+    static Class imDetailClass;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ imDetailClass = NSClassFromString(@"AWEAwemeIMDetailTableViewController"); });
+    for (UIViewController *parent = controller; parent; parent = parent.parentViewController) {
+        if (imDetailClass && [parent isKindOfClass:imDetailClass]) return YES;
+    }
+    return NO;
+}
+
++ (BOOL)isImDetailView:(UIView *)view {
+    UIViewController *controller = [DYYYUtils firstAvailableViewControllerFromView:view];
+    return controller ? [self isImDetailController:controller] : NO;
+}
+
 
 + (void)prepareDetailTableNew:(UIViewController *)controller {
     // 表高单一来源：只负责把被底栏压缩的表撑回满视口，不记录任何状态。
     // 行高由 fullCellHeightForNative 纯函数独立回答（锚 = 原生底栏差值区间），
     // 两者无先后依赖——这是修复"表 926 滚 / cell 843 排"错位的关键。
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !controller) return;
+    // 群聊视频详情页（IM 详情）不在作用域，见 isImDetailController: 注释。
+    if ([self isImDetailController:controller]) return;
     if (![controller respondsToSelector:@selector(tableView)]) return;
     UITableView *table = [(id)controller tableView];
     if (!table) return;

@@ -353,6 +353,11 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
         %orig;
         return;
     }
+    // 群聊视频详情页（IM 详情）保持原生表高，见 isImDetailView: 注释
+    if ([DYYYFullscreenCoordinator isImDetailView:self]) {
+        %orig;
+        return;
+    }
     CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:frame];
     if (CGRectIsNull(adjusted)) {
         %orig;
@@ -373,10 +378,12 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 // 各入口带挂载确认日志（诊断模式），改版失效一眼可见。
 
 // delegate 容器：滚动/翻页吸附读它
+// 群聊视频详情页（IM 详情）保持原生行高：拖动让位是原生交互
 %hook AWEDetailFeedScrollDelegateContainer
 
 - (CGFloat)fixedCellHeight {
     CGFloat original = %orig;
+    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
     CGFloat adjusted = [DYYYFullscreenCoordinator fullCellHeightForNative:original];
     if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
         static BOOL loggedOnce = NO;
@@ -393,10 +400,12 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 %hook AWEUserProfileAdDataLayer
 
 - (CGFloat)originalTableViewHeight {
-    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+    CGFloat original = %orig;
+    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (void)setOriginalTableViewHeight:(CGFloat)height {
-    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+    %orig([DYYYFullscreenCoordinator isImDetailView:self] ? height : [DYYYFullscreenCoordinator fullCellHeightForNative:height]);
 }
 
 %end
@@ -404,10 +413,12 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 %hook AWEUserProFileAdVideoDataController
 
 - (CGFloat)originalTableViewHeight {
-    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+    CGFloat original = %orig;
+    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (void)updateOriginalTableViewHeight:(CGFloat)height {
-    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+    %orig([DYYYFullscreenCoordinator isImDetailView:self] ? height : [DYYYFullscreenCoordinator fullCellHeightForNative:height]);
 }
 
 %end
@@ -416,10 +427,12 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 %hook AWELivePostWorkLiveCardLayoutController
 
 - (CGFloat)originalTableViewHeight {
-    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+    CGFloat original = %orig;
+    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (void)setOriginalTableViewHeight:(CGFloat)height {
-    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+    %orig([DYYYFullscreenCoordinator isImDetailView:self] ? height : [DYYYFullscreenCoordinator fullCellHeightForNative:height]);
 }
 
 %end
@@ -427,13 +440,17 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 %hook AWELivePostWorkLiveCardLayoutDataLayer
 
 - (CGFloat)normalHeight {
-    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+    CGFloat original = %orig;
+    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (CGFloat)originalTableViewHeight {
-    return [DYYYFullscreenCoordinator fullCellHeightForNative:%orig];
+    CGFloat original = %orig;
+    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
+    return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (void)setOriginalTableViewHeight:(CGFloat)height {
-    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+    %orig([DYYYFullscreenCoordinator isImDetailView:self] ? height : [DYYYFullscreenCoordinator fullCellHeightForNative:height]);
 }
 
 %end

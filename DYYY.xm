@@ -4260,6 +4260,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
         return %orig;
     }
+    // 群聊视频详情页（IM 详情）保持原生行高：拖动让位是原生交互
+    if ([DYYYFullscreenCoordinator isImDetailController:self]) {
+        return %orig;
+    }
     [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     double nativeHeight = %orig;
     return [DYYYFullscreenCoordinator fullCellHeightForNative:nativeHeight];
@@ -4271,6 +4275,9 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 - (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        return %orig;
+    }
+    if ([DYYYFullscreenCoordinator isImDetailController:self]) {
         return %orig;
     }
     [DYYYFullscreenCoordinator prepareDetailTableNew:self];

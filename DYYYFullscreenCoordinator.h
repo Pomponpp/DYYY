@@ -19,6 +19,8 @@
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame;
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target;
 + (CGFloat)fullCellHeightForNative:(CGFloat)nativeHeight;
++ (BOOL)isImDetailController:(UIViewController *)controller;
++ (BOOL)isImDetailView:(UIView *)view;
 + (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;
