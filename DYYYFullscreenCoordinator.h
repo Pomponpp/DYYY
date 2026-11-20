@@ -20,7 +20,10 @@
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target;
 + (CGFloat)fullCellHeightForNative:(CGFloat)nativeHeight;
 + (BOOL)isImDetailController:(UIViewController *)controller;
-+ (BOOL)isImDetailView:(UIView *)view;
+// 数据层对象（非 UIView 子类）用 id 接收，内部走 nextResponder 链找 VC
++ (BOOL)isImDetailView:(id)view;
++ (void)setImDetailActive:(BOOL)active;
++ (BOOL)imDetailActive;
 + (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;

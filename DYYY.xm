@@ -4236,6 +4236,22 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     }
 }
 
+// IM 详情页（群聊视频）活跃标记：数据层/delegate 容器 hook 透过
+// isImDetailView: 读它做排除（数据层不在 responder 链，无法反查 VC）。
+- (void)viewWillAppear:(BOOL)animated {
+    %orig;
+    if ([DYYYFullscreenCoordinator isImDetailController:self]) {
+        [DYYYFullscreenCoordinator setImDetailActive:YES];
+    }
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    %orig;
+    if ([DYYYFullscreenCoordinator isImDetailController:self]) {
+        [DYYYFullscreenCoordinator setImDetailActive:NO];
+    }
+}
+
 
 - (BOOL)prefersStatusBarHidden {
     if (DYYYGetBool(@"DYYYHideStatusbar")) {

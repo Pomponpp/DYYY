@@ -153,9 +153,26 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
     return NO;
 }
 
-+ (BOOL)isImDetailView:(UIView *)view {
++ (BOOL)isImDetailView:(id)view {
+    // 数据层对象（DataLayer/DataController 等非视图）不在 responder 链上，
+    // 无法反查 VC——改读全局标记：IM 详情页生命周期 hook 维护（imDetailActive）。
+    if (![view isKindOfClass:[UIView class]]) return [self imDetailActive];
     UIViewController *controller = [DYYYUtils firstAvailableViewControllerFromView:view];
-    return controller ? [self isImDetailController:controller] : NO;
+    return controller ? [self isImDetailController:controller] : [self imDetailActive];
+}
+
+// IM 详情页活跃标记：由 DYYY.xm 的 IMDetail 生命周期 hook 维护。
+static NSInteger imDetailActiveCount = 0;
++ (void)setImDetailActive:(BOOL)active {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self setImDetailActive:active]; });
+        return;
+    }
+    imDetailActiveCount += active ? 1 : -1;
+    if (imDetailActiveCount < 0) imDetailActiveCount = 0;
+}
++ (BOOL)imDetailActive {
+    return imDetailActiveCount > 0;
 }
 
 
