@@ -8,11 +8,10 @@
 + (BOOL)usesFullscreenLayoutForController:(UIViewController *)controller;
 + (CGRect)frameForPureModeContainer:(UIViewController *)controller proposed:(CGRect)frame;
 // 详情页全屏：
-//   adjustDetailTableFrame 是表高的唯一写入通道；
-//   prepareDetailTableNew 供建行/落点/翻页入口在放行原生之前同步表高；
-//   fullCellHeightForNative 只"回答"行高，不改写任何东西（无状态纯函数）。
+//   adjustDetailTableFrame 是表高的唯一写入通道（写入时拉满 + layout 兜底）；
+//   fullCellHeightForNative 只"回答"行高，不改写任何东西（无状态纯函数）；
+//   群聊视频页（IM 详情）不在作用域，见 isImDetailController: 注释。
 + (UIViewController *)controllerForTable:(UITableView *)table;
-+ (void)prepareDetailTableNew:(UIViewController *)controller;
 // 首页 feed 表撑高：由 AWEFeedTableViewController 布局前后调用。
 // 必须早于 cell 排版，否则表变高而 cell 仍按旧高度排，造成网格错位。
 + (void)syncFeedTableHeight:(UIViewController *)controller;
@@ -24,7 +23,6 @@
 + (BOOL)isImDetailView:(id)view;
 + (void)setImDetailActive:(BOOL)active;
 + (BOOL)imDetailActive;
-+ (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;
 + (BOOL)isImageContentController:(UIViewController *)controller;

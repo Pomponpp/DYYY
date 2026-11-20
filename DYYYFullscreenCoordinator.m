@@ -130,7 +130,8 @@
     return height > 0 && table.bounds.size.height > 0 ? table.bounds.size.height : height;
 }
 // ===== 详情页全屏几何 =====
-// 表高由 prepareDetailTableNew 撑回满视口；行高由 fullCellHeightForNative 纯函数
+// 表高唯一写入通道 = AWEFeedDataSafeTableView.setFrame 拦截（写入时拉满+layout 兜底）；
+// 行高 = fullCellHeightForNative 纯函数
 // 独立回答（锚 = 原生底栏高）。两者无先后依赖、无共享状态——
 // 这是修复"表 926 滚 / cell 843 排"错位的关键。
 static const CGFloat kDYYYDetailHeightTol = 0.5;
@@ -191,32 +192,6 @@ static NSInteger imDetailActiveCount = 0;
 }
 
 
-+ (void)prepareDetailTableNew:(UIViewController *)controller {
-    // 表高单一来源：只负责把被底栏压缩的表撑回满视口，不记录任何状态。
-    // 行高由 fullCellHeightForNative 纯函数独立回答（锚 = 原生底栏差值区间），
-    // 两者无先后依赖——这是修复"表 926 滚 / cell 843 排"错位的关键。
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !controller) return;
-    // 群聊视频详情页（IM 详情）不在作用域，见 isImDetailController: 注释。
-    if ([self isImDetailController:controller]) return;
-    if (![controller respondsToSelector:@selector(tableView)]) return;
-    UITableView *table = [(id)controller tableView];
-    if (!table) return;
-    UIView *root = controller.viewIfLoaded;
-    if (!root) return;
-    // 半屏/异形窗口不接管（键盘态、小窗等）
-    UIWindow *window = table.window ?: root.window;
-    if (window && window.windowLevel != UIWindowLevelNormal) return;
-    if (table.superview && ![table isDescendantOfView:root]) return;
-    if (!CGAffineTransformIsIdentity(table.transform)) return;
-
-    CGFloat target = table.superview ? CGRectGetHeight(table.superview.bounds) : CGRectGetHeight(root.bounds);
-    CGRect adjusted = [self adjustDetailTableFrame:table frame:table.frame target:target];
-    if (CGRectIsNull(adjusted)) return;
-    table.frame = adjusted;
-    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        NSLog(@"[DYYY][table] prepare 撑高 %.1f → %.1f", CGRectGetHeight(table.frame), target);
-    }
-}
 
 // 表写入通道的统一规则（首页表与详情表共用）：
 // 返回 CGRectNull = 放行不干预。
@@ -263,21 +238,6 @@ static NSInteger imDetailActiveCount = 0;
     return frame;
 }
 
-+ (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target {
-    if (!table || target <= 0) return;
-    NSArray<UITableViewCell *> *cells = table.visibleCells;
-    for (UITableViewCell *cell in cells) {
-        CGFloat h = CGRectGetHeight(cell.frame);
-        if (h > 0 && fabs(h - target) > 0.5 && h >= target * 0.5) {
-            CGRect f = cell.frame;
-            f.size.height = target;
-            cell.frame = f;
-            if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-                NSLog(@"[DYYY][table] 对齐残留 cell %.1f → %.1f", h, target);
-            }
-        }
-    }
-}
 
 // 行高纯函数入口：供全部行高 hook 调用。
 // 原生值比窗口矮 1~160pt（扣底栏型压缩）→ 回答满视口；其余透传。

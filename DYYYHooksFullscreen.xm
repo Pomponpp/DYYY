@@ -369,6 +369,18 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
     %orig(adjusted);
 }
 
+// 兜底：若布局后仍矮于父视图（布局早期半成品漏网），再拉满一次。
+- (void)layoutSubviews {
+    %orig;
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return;
+    UIView *sv = self.superview;
+    if (sv && CGRectGetHeight(sv.bounds) > 0 && self.frame.size.height < CGRectGetHeight(sv.bounds) - 0.5) {
+        CGRect f = self.frame;
+        f.size.height = CGRectGetHeight(sv.bounds);
+        self.frame = f;
+    }
+}
+
 %end
 
 // ===== 详情页行高入口全覆盖 =====

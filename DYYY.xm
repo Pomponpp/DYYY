@@ -4223,19 +4223,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 // 主页状态栏
 %hook AWEAwemeDetailTableViewController
-- (void)viewDidLayoutSubviews {
-    // 对齐已验证实现：只在布局【前后】各同步一次表高。
-    // 不碰 inset、不做 beginUpdates/endUpdates、不分页状态——
-    // 表高只有一个来源，避免两套体系各摆一次造成位移。
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-    %orig;
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
 // IM 详情页（群聊视频）活跃标记：数据层/delegate 容器 hook 透过
 // isImDetailView: 读它做排除（数据层不在 responder 链，无法反查 VC）。
 - (void)viewWillAppear:(BOOL)animated {
@@ -4280,7 +4267,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if ([DYYYFullscreenCoordinator isImDetailController:self]) {
         return %orig;
     }
-    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     double nativeHeight = %orig;
     return [DYYYFullscreenCoordinator fullCellHeightForNative:nativeHeight];
 }
@@ -4296,47 +4282,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if ([DYYYFullscreenCoordinator isImDetailController:self]) {
         return %orig;
     }
-    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     double nativeHeight = %orig;
     return [DYYYFullscreenCoordinator fullCellHeightForNative:nativeHeight];
 }
 
-// 详情页建行/落点/翻页入口（对齐已验证实现的同源纪律）：
-// 每个入口都先 prepare 撑高表，再放行原生——建行、落点、分页看到同一个表高。
-// 翻页入口在 %orig 前后各准备一次（落点在 %orig 内算定，前后都需同源）。
-- (void)setupDetailTableView {
-    %orig;
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
-- (void)viewWillLayoutSubviews {
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-    %orig;
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
-
-- (double)contentOffsetYForCellAtIndex:(long long)index {
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-    return %orig;
-}
-
-- (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-    %orig;
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
 
 // ── 41.2 行高来源探针（纯观测，不改任何返回值）─────────────────
 // 背景：41.2 上详情页出现「表按 926 滚、cell 按 843 排」的持续错位（差 2×83）。

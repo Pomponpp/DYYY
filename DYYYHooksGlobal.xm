@@ -103,16 +103,6 @@
 %end
 
 %hook AWEBaseListViewController
-- (void)viewDidLayoutSubviews {
-    // 对齐已验证实现：布局前后各同步一次表高（不碰 inset、不做 beginUpdates）
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-    %orig;
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    }
-}
 
 %new
 - (void)applyBlurEffectIfNeeded {
