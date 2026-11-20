@@ -144,11 +144,26 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
 // 给输入栏让位（原生交互）。行高/表高若在这里接管，会与原生让位布局打架
 // ——表现为拖动中画面跳起一个底栏高度、出现两条底栏分界线，松手弹回。
 + (BOOL)isImDetailController:(UIViewController *)controller {
-    static Class imDetailClass;
+    static Class quickReplayClass;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ imDetailClass = NSClassFromString(@"AWEAwemeIMDetailTableViewController"); });
+    dispatch_once(&once, ^{ quickReplayClass = NSClassFromString(@"AWEIMFeedVideoQuickReplayInputViewController"); });
     for (UIViewController *parent = controller; parent; parent = parent.parentViewController) {
-        if (imDetailClass && [parent isKindOfClass:imDetailClass]) return YES;
+        // 特征 1：父链本身就是群聊快捷回复输入栏
+        if (quickReplayClass && [parent isKindOfClass:quickReplayClass]) return YES;
+        // 特征 2：子 VC 里有群聊快捷回复输入栏（快照实测：它以子 VC 形式
+        // 压在 y=843 位置；viewWillAppear 阶段 addChild 已完成）
+        for (UIViewController *child in parent.childViewControllers) {
+            if (quickReplayClass && [child isKindOfClass:quickReplayClass]) return YES;
+        }
+        // 特征 3：聊天来源的 refer
+        if ([parent respondsToSelector:@selector(referString)]) {
+            NSString *refer = [(AWEPlayInteractionViewController *)parent referString];
+            if (refer.length > 0) {
+                NSString *lower = [refer lowercaseString];
+                if ([lower isEqualToString:@"chat"] || [lower containsString:@"chat_room"] ||
+                    [lower hasPrefix:@"im_"]) return YES;
+            }
+        }
     }
     return NO;
 }
