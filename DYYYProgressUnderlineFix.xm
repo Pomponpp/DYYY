@@ -62,12 +62,14 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
     // 录屏逐帧测出：拖动过程中进度条 y 从 1740px 上移到 1563px，
     // 约 87pt ≈ tabBarHeight(83)，松手后弹回。
     // 这里记录容器自身位置，看是容器整体上移还是内部滑块单独上移。
-    static CGRect lastFrame;
-    CGRect f = self.frame;
-    if (!CGRectEqualToRect(lastFrame, f)) {
-        lastFrame = f;
-        NSLog(@"[DYYY][prog] 容器 frame=%@ super=%@",
-              NSStringFromCGRect(f), NSStringFromClass([self.superview class]));
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        static CGRect lastFrame;
+        CGRect f = self.frame;
+        if (!CGRectEqualToRect(lastFrame, f)) {
+            lastFrame = f;
+            NSLog(@"[DYYY][prog] 容器 frame=%@ super=%@",
+                  NSStringFromCGRect(f), NSStringFromClass([self.superview class]));
+        }
     }
 
     DYYYFixClearProgressUnderline(self);
@@ -79,18 +81,18 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
 - (void)layoutSubviews {
     %orig;
 
-    // 群聊拖动时这个容器整体上移了约 83pt（= tabBarHeight），松手复原。
-    // 记录自身与父视图位置，判断是谁动的。
-    static CGRect lastFrame;
-    static CGRect lastSuperFrame;
-    CGRect f = self.frame;
-    CGRect sf = self.superview ? self.superview.frame : CGRectZero;
-    if (!CGRectEqualToRect(lastFrame, f) || !CGRectEqualToRect(lastSuperFrame, sf)) {
-        lastFrame = f;
-        lastSuperFrame = sf;
-        NSLog(@"[DYYY][prog] 容器D frame=%@ 父=%@ super=%@",
-              NSStringFromCGRect(f), NSStringFromCGRect(sf),
-              NSStringFromClass([self.superview class]));
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        static CGRect lastFrame;
+        static CGRect lastSuperFrame;
+        CGRect f = self.frame;
+        CGRect sf = self.superview ? self.superview.frame : CGRectZero;
+        if (!CGRectEqualToRect(lastFrame, f) || !CGRectEqualToRect(lastSuperFrame, sf)) {
+            lastFrame = f;
+            lastSuperFrame = sf;
+            NSLog(@"[DYYY][prog] 容器D frame=%@ 父=%@ super=%@",
+                  NSStringFromCGRect(f), NSStringFromCGRect(sf),
+                  NSStringFromClass([self.superview class]));
+        }
     }
 
     DYYYFixClearProgressUnderline(self);
@@ -98,13 +100,15 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
 
 // 谁在改这个容器的 frame？打调用栈，一次就能定位。
 - (void)setFrame:(CGRect)frame {
-    CGFloat oldY = self.frame.origin.y;
-    if (fabs(oldY - frame.origin.y) > 1.0) {
-        NSLog(@"[DYYY][prog] 容器D setFrame y %.1f → %.1f", oldY, frame.origin.y);
-        NSArray<NSString *> *stack = [NSThread callStackSymbols];
-        NSUInteger limit = MIN(stack.count, (NSUInteger)14);
-        for (NSUInteger i = 0; i < limit; i++) {
-            NSLog(@"[DYYY][prog]    %@", stack[i]);
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        CGFloat oldY = self.frame.origin.y;
+        if (fabs(oldY - frame.origin.y) > 1.0) {
+            NSLog(@"[DYYY][prog] 容器D setFrame y %.1f → %.1f", oldY, frame.origin.y);
+            NSArray<NSString *> *stack = [NSThread callStackSymbols];
+            NSUInteger limit = MIN(stack.count, (NSUInteger)14);
+            for (NSUInteger i = 0; i < limit; i++) {
+                NSLog(@"[DYYY][prog]    %@", stack[i]);
+            }
         }
     }
     %orig;
@@ -112,13 +116,15 @@ static void DYYYFixClearProgressUnderline(UIView *container) {
 
 // 位置也可能走 center 而不是 frame，一起挂上。
 - (void)setCenter:(CGPoint)center {
-    CGFloat oldY = self.center.y;
-    if (fabs(oldY - center.y) > 1.0) {
-        NSLog(@"[DYYY][prog] 容器D setCenter y %.1f → %.1f", oldY, center.y);
-        NSArray<NSString *> *stack = [NSThread callStackSymbols];
-        NSUInteger limit = MIN(stack.count, (NSUInteger)14);
-        for (NSUInteger i = 0; i < limit; i++) {
-            NSLog(@"[DYYY][prog]    %@", stack[i]);
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        CGFloat oldY = self.center.y;
+        if (fabs(oldY - center.y) > 1.0) {
+            NSLog(@"[DYYY][prog] 容器D setCenter y %.1f → %.1f", oldY, center.y);
+            NSArray<NSString *> *stack = [NSThread callStackSymbols];
+            NSUInteger limit = MIN(stack.count, (NSUInteger)14);
+            for (NSUInteger i = 0; i < limit; i++) {
+                NSLog(@"[DYYY][prog]    %@", stack[i]);
+            }
         }
     }
     %orig;
