@@ -28,6 +28,8 @@
 
 #import <UIKit/UIKit.h>
 
+// 覆盖 @3x 像素对齐带来的亚像素漂移；表高与行高判据共用。
+static const CGFloat kDYYYTolerance = 0.5;
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -36,32 +38,32 @@ extern "C" {
 BOOL DYYYFullscreenCoreOn(void);
 
 /// 视频容器（Merge 根视图）此刻应有的 frame；算不出来返回 CGRectNull。
-CGRect DYYYFullscreenContainerTarget(UIView *view);
+CGRect DYYYFullscreenContainerTarget(id view);
 
 /// 两个矩形是否已经一致（容差覆盖 @3x 亚像素漂移）。
 BOOL DYYYFullscreenRectsClose(CGRect lhs, CGRect rhs);
 
 /// 视频表撑高：写入时拦截与布局前后同步共用这一个函数。
-CGRect DYYYFullscreenTableAdjust(UITableView *table, CGRect frame, CGFloat target);
+CGRect DYYYFullscreenTableAdjust(id table, CGRect frame, CGFloat target);
 
 /// 表撑高前的高度；没被撑高过返回 nil。
-NSNumber *DYYYFullscreenTableOriginalHeight(UIView *table);
+NSNumber *DYYYFullscreenTableOriginalHeight(id table);
 
 /// 该视图所在的视频表；不在表内返回 nil。
-UIView *DYYYFullscreenTableForView(UIView *view);
+UIView *DYYYFullscreenTableForView(id view);
 
 /// 详情页行高：带「表被撑高过」前提，拿不到原高就回答原生值。
-double DYYYFullscreenRowHeight(UITableView *table, double nativeHeight);
+double DYYYFullscreenRowHeight(id table, double nativeHeight);
 
 /// HUD 高度钉位：只向下压，不向上拉。返回 CGRectNull 表示放行。
-CGRect DYYYFullscreenHUDAdjust(UIView *view, CGRect frame);
+CGRect DYYYFullscreenHUDAdjust(id view, CGRect frame);
 
 /// 容器补钉（幂等）：把 Merge 根视图按目标 frame 放好。
-BOOL DYYYFullscreenPinContainer(UIViewController *merge);
+BOOL DYYYFullscreenPinContainer(id merge);
 
 /// 背景色延伸：非满屏视频（横屏/低比例）容器被钉高后，
 /// 把露出来的那层祖先涂成播放器原生背景色，消除底部黑边。
-void DYYYFullscreenSyncBackdrop(UIViewController *controller);
+void DYYYFullscreenSyncBackdrop(id controller);
 
 /// 供 .xm 侧递增统计（Logos 块里不能直接改 .m 的 static 变量）。
 void DYYYFullscreenNotePin(BOOL willDisplay);

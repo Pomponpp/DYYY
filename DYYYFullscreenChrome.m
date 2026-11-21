@@ -153,7 +153,8 @@ static double DYYYCellHeightFor(UIView *view) {
 }
 #pragma mark - 图文
 
-void DYYYChromeSuppressRichShrink(UIViewController *controller) {
+void DYYYChromeSuppressRichShrink(id controller) {
+    UIViewController *vc = (UIViewController *)controller;
     // 缩放抑制在钩子层直接 return，不进 %orig；这里只做计数。
     if (!controller) return;
     gDYYYHitShrink++;
@@ -161,7 +162,8 @@ void DYYYChromeSuppressRichShrink(UIViewController *controller) {
 }
 
 // 图文向 Cell 底部溢出时，只解除真实阻挡它的裁剪层；原本不裁剪的不接管。
-void DYYYChromeAllowRichOverflow(UIView *view) {
+void DYYYChromeAllowRichOverflow(id viewObj) {
+    UIView *view = (UIView *)viewObj;
     if (!view) return;
     gDYYYHitRichOverflow++;
     DYYYChromeInitTables();
@@ -180,7 +182,8 @@ static void DYYYRestoreRichOverflow(UIView *view) {
     objc_setAssociatedObject(view, &kDYYYRichClipKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-void DYYYChromeStretchRichGradient(UIView *gradient) {
+void DYYYChromeStretchRichGradient(id gradientObj) {
+    UIView *gradient = (UIView *)gradientObj;
     if (!gradient) return;
     gDYYYHitRichGradient++;
     CGFloat height = CGRectGetHeight(gradient.bounds);
@@ -199,7 +202,8 @@ void DYYYChromeStretchRichGradient(UIView *gradient) {
         DYYYRestoreTransformBaseline(gradient, &kDYYYRichGradientTransformKey);
     }
 }
-CGAffineTransform DYYYChromeRichCenterTransform(UIView *view, CGAffineTransform native) {
+CGAffineTransform DYYYChromeRichCenterTransform(id viewObj, CGAffineTransform native) {
+    UIView *view = (UIView *)viewObj;
     gDYYYHitRichCenter++;
     if (!DYYYFullscreenCoreOn()) return native;
     // 原生写入非单位矩阵（用户正在缩放）→ 保持原生值，释放接管。
@@ -209,7 +213,8 @@ CGAffineTransform DYYYChromeRichCenterTransform(UIView *view, CGAffineTransform 
 
 #pragma mark - 卡片
 
-CGFloat DYYYChromeCardInset(UIView *view) {
+CGFloat DYYYChromeCardInset(id viewObj) {
+    UIView *view = (UIView *)viewObj;
     if (!view || !DYYYFullscreenCoreOn()) return 0.0;
     gDYYYHitCardInset++;
 
@@ -258,7 +263,8 @@ static void DYYYRestoreConstraint(NSLayoutConstraint *c) {
     [gDYYYFittedConstraints removeObject:c];
 }
 
-BOOL DYYYChromeFitCard(UIView *container, CGFloat inset, DYYYCardType type) {
+BOOL DYYYChromeFitCard(id containerObj, CGFloat inset, DYYYCardType type) {
+    UIView *container = (UIView *)containerObj;
     if (!container.superview || type >= DYYYCardTypeCount) return NO;
     gDYYYHitCardFit++;
     DYYYChromeInitTables();
@@ -307,7 +313,8 @@ static DYYYCardBackdropView *DYYYCardBackdrop(UIView *host) {
     return nil;
 }
 
-void DYYYChromeSyncCardBackdrop(UIView *host, CGFloat inset, DYYYCardType type) {
+void DYYYChromeSyncCardBackdrop(id hostObj, CGFloat inset, DYYYCardType type) {
+    UIView *host = (UIView *)hostObj;
     if (!host || type >= DYYYCardTypeCount) return;
     gDYYYHitCardBackdrop++;
     DYYYChromeInitTables();
@@ -428,7 +435,8 @@ static void DYYYCardScheduleSample(UIView *host, NSTimeInterval delay, BOOL resa
                    });
 }
 
-void DYYYChromeRequestBackdropSample(UIView *host) {
+void DYYYChromeRequestBackdropSample(id hostObj) {
+    UIView *host = (UIView *)hostObj;
     if (!DYYYFullscreenCoreOn() || !host || !DYYYCardBackdrop(host)) return;
     DYYYCardScheduleSample(host, kDYYYSampleDelay, NO);
     DYYYCardScheduleSample(host, kDYYYResampleDelay, YES);
@@ -449,7 +457,8 @@ static CGFloat DYYYLiveLift(UIView *container) {
     return full - original.doubleValue;
 }
 
-void DYYYChromeLiftLiveChrome(UIView *container) {
+void DYYYChromeLiftLiveChrome(id containerObj) {
+    UIView *container = (UIView *)containerObj;
     if (!container) return;
     gDYYYHitLive++;
     CGFloat lift = DYYYFullscreenCoreOn() ? DYYYLiveLift(container) : 0.0;
@@ -469,7 +478,8 @@ void DYYYChromeLiftLiveChrome(UIView *container) {
     if (lift > kDYYYChromeTolerance) gDYYYLiveLifts++;
 }
 
-void DYYYChromeStretchVideoGradient(UIView *gradient) {
+void DYYYChromeStretchVideoGradient(id gradientObj) {
+    UIView *gradient = (UIView *)gradientObj;
     if (!gradient) return;
     gDYYYHitVideoGradient++;
     CGFloat height = CGRectGetHeight(gradient.bounds);
@@ -518,7 +528,8 @@ static UIView *DYYYFindStatusBarCover(UIView *hudView) {
     return nil;
 }
 
-void DYYYChromeHideStatusBarCover(UIViewController *interaction) {
+void DYYYChromeHideStatusBarCover(id interactionObj) {
+    UIViewController *interaction = (UIViewController *)interactionObj;
     gDYYYHitCover++;
     UIView *hudView = interaction.viewIfLoaded;
     if (!hudView) return;

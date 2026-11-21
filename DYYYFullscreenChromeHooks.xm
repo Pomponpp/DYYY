@@ -41,7 +41,7 @@
 - (void)viewDidLayoutSubviews {
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (!view) return;
     DYYYChromeAllowRichOverflow(view);
 }
@@ -111,7 +111,7 @@ static void DYYYInstallRichMediaHooks(void) {
 - (void)viewWillLayoutSubviews {
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (!view) return;
     CGFloat inset = DYYYChromeCardInset(view);
     DYYYChromeFitCard(view, inset, DYYYCardTypeSpecial);
@@ -121,7 +121,7 @@ static void DYYYInstallRichMediaHooks(void) {
 - (void)viewDidLayoutSubviews {
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (!view) return;
     CGFloat inset = DYYYChromeCardInset(view);
     DYYYChromeFitCard(view, inset, DYYYCardTypeSpecial);
@@ -131,7 +131,7 @@ static void DYYYInstallRichMediaHooks(void) {
 
 - (void)hunterContainerDidFinishLoadWithURL:(id)url {
     %orig;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (view) DYYYChromeRequestBackdropSample(view.superview ?: view);
 }
 
@@ -143,7 +143,7 @@ static void DYYYInstallRichMediaHooks(void) {
 - (void)attachPanelViewControllerIfNeeded {
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (!view) return;
     CGFloat inset = DYYYChromeCardInset(view);
     DYYYChromeFitCard(view, inset, DYYYCardTypeSpecial);
@@ -152,7 +152,7 @@ static void DYYYInstallRichMediaHooks(void) {
 - (void)viewWillLayoutSubviews {
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (!view) return;
     DYYYChromeFitCard(view, DYYYChromeCardInset(view), DYYYCardTypeSpecial);
 }
@@ -160,7 +160,7 @@ static void DYYYInstallRichMediaHooks(void) {
 - (void)viewDidLayoutSubviews {
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (!view) return;
     CGFloat inset = DYYYChromeCardInset(view);
     DYYYChromeFitCard(view, inset, DYYYCardTypeSpecial);
@@ -174,7 +174,7 @@ static void DYYYInstallRichMediaHooks(void) {
 
 - (void)configureWithModel:(id)model {
     if (!DYYYFullscreenCoreOn()) { %orig; return; }
-    DYYYChromeSyncCardBackdrop(self.contentView, 0.0, DYYYCardTypeSpecial);
+    DYYYChromeSyncCardBackdrop([(UITableViewCell *)self contentView], 0.0, DYYYCardTypeSpecial);
     %orig;
 }
 
@@ -186,14 +186,14 @@ static void DYYYInstallRichMediaHooks(void) {
 - (void)viewWillLayoutSubviews {
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (view) DYYYChromeFitCard(view, DYYYChromeCardInset(view), DYYYCardTypeSpecial);
 }
 
 - (void)viewDidLayoutSubviews {
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [(UIViewController *)self viewIfLoaded];
     if (!view) return;
     CGFloat inset = DYYYChromeCardInset(view);
     DYYYChromeFitCard(view, inset, DYYYCardTypeSpecial);

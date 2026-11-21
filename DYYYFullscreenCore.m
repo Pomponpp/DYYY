@@ -31,8 +31,6 @@
 // 图文、横屏、低比例竖屏拉满会 aspect-fill 过裁，只保持容器自然满幅。
 static const CGFloat kDYYYCoverAspectMin = 1.70;
 static const long long kDYYYAwemeTypeImage = 68;
-// 覆盖 @3x 像素对齐带来的亚像素漂移。
-static const CGFloat kDYYYTolerance = 0.5;
 // 表高至少要到容器的这个比例才认作「已排好、只差一个底栏」，排除布局早期半成品。
 static const CGFloat kDYYYMinHeightRatio = 0.5;
 // 从 HUD 往上找视频表的最大层数。
@@ -113,19 +111,20 @@ static BOOL DYYYMergeCanCoverScreen(UIView *view) {
     // 宽或高为 0：model 还没就绪，按比例达标处理，等下一轮补算。
     return width <= 0.0 || height <= 0.0 || (height / width) >= kDYYYCoverAspectMin;
 }
-CGRect DYYYFullscreenContainerTarget(UIView *view) {
+CGRect DYYYFullscreenContainerTarget(id view) {
+    UIView *v = (UIView *)view;
     if (!DYYYFullscreenCoreOn()) return CGRectNull;
 
     // 作用域只到主窗口：画中画/横屏播放器自带一整套同样的层级，
     // 钉成满幅会把小窗撑成盖住整页的全屏播放器。
-    UIWindow *window = view.window;
+    UIWindow *window = v.window;
     if (window && window.windowLevel != UIWindowLevelNormal) return CGRectNull;
-    UIView *parent = view.superview;
+    UIView *parent = v.superview;
     CGFloat width = CGRectGetWidth(parent.bounds);
     CGFloat height = CGRectGetHeight(parent.bounds);
     if (width <= 0.0 || height <= 0.0) return CGRectNull;
-    if (DYYYMergeCanCoverScreen(view)) {
-        CGFloat full = DYYYFullCellHeight(view);
+    if (DYYYMergeCanCoverScreen(v)) {
+        CGFloat full = DYYYFullCellHeight(v);
         if (full > height) height = full;
     }
     return CGRectMake(0.0, 0.0, width, height);
@@ -138,19 +137,22 @@ BOOL DYYYFullscreenRectsClose(CGRect lhs, CGRect rhs) {
 }
 
 #pragma mark - 第 2 层：表撑高
-UIView *DYYYFullscreenTableForView(UIView *view) {
+UIView *DYYYFullscreenTableForView(id view) {
+    UIView *v = (UIView *)view;
     Class tableCls = DYYYTableClass();
     if (!tableCls) return nil;
-    UIView *ancestor = view.superview;
+    UIView *ancestor = v.superview;
     for (NSUInteger i = 0; ancestor && i < kDYYYAncestorLimit; i++, ancestor = ancestor.superview) {
         if ([ancestor isKindOfClass:tableCls]) return ancestor;
     }
     return nil;
 }
-NSNumber *DYYYFullscreenTableOriginalHeight(UIView *table) {
-    return objc_getAssociatedObject(table, &kDYYYOriginalHeightKey);
+NSNumber *DYYYFullscreenTableOriginalHeight(id table) {
+    UIView *tbl = (UIView *)table;
+    return objc_getAssociatedObject(tbl, &kDYYYOriginalHeightKey);
 }
-CGRect DYYYFullscreenTableAdjust(UITableView *table, CGRect frame, CGFloat target) {
+CGRect DYYYFullscreenTableAdjust(id tableObj, CGRect frame, CGFloat target) {
+    UITableView *table = (UITableView *)tableObj;
     if (!table) return CGRectNull;
     if (!DYYYFullscreenCoreOn()) {
         // 关闭后一律放行，抖音写什么就是什么；标记清掉以免 HUD 继续被钉。
@@ -177,7 +179,8 @@ CGRect DYYYFullscreenTableAdjust(UITableView *table, CGRect frame, CGFloat targe
 }
 
 #pragma mark - 第 2 层：行高
-double DYYYFullscreenRowHeight(UITableView *table, double nativeHeight) {
+double DYYYFullscreenRowHeight(id tableObj, double nativeHeight) {
+    UITableView *table = (UITableView *)tableObj;
     if (!DYYYFullscreenCoreOn() || !NSThread.isMainThread || !table) return nativeHeight;
     NSNumber *original = DYYYFullscreenTableOriginalHeight(table);
     CGFloat target = CGRectGetHeight(table.bounds);
@@ -195,9 +198,10 @@ double DYYYFullscreenRowHeight(UITableView *table, double nativeHeight) {
 }
 
 #pragma mark - 第 2 层：HUD 钉位
-CGRect DYYYFullscreenHUDAdjust(UIView *view, CGRect frame) {
+CGRect DYYYFullscreenHUDAdjust(id view, CGRect frame) {
+    UIView *v = (UIView *)view;
     if (!DYYYFullscreenCoreOn()) return CGRectNull;
-    UIView *table = DYYYFullscreenTableForView(view);
+    UIView *table = DYYYFullscreenTableForView(v);
     if (!table) return CGRectNull;
     NSNumber *original = DYYYFullscreenTableOriginalHeight(table);
     // 拿不到原高 → 这页不在作用域，完全放行。
@@ -214,7 +218,8 @@ CGRect DYYYFullscreenHUDAdjust(UIView *view, CGRect frame) {
 }
 
 #pragma mark - 第 3 层：容器补钉
-BOOL DYYYFullscreenPinContainer(UIViewController *merge) {
+BOOL DYYYFullscreenPinContainer(id mergeObj) {
+    UIViewController *merge = (UIViewController *)mergeObj;
     if (!DYYYFullscreenCoreOn()) return NO;
     UIView *view = merge.viewIfLoaded;
     if (!view) return NO;
@@ -366,7 +371,8 @@ static BOOL DYYYIsUnderRichContent(UIViewController *controller) {
 }
 
 // 主入口：涂色或还原。color 为 nil 表示本条不需要延伸（关闭全屏/无背景色）。
-void DYYYFullscreenSyncBackdrop(UIViewController *controller) {
+void DYYYFullscreenSyncBackdrop(id controllerObj) {
+    UIViewController *controller = (UIViewController *)controllerObj;
     if (![NSThread isMainThread] || !controller) return;
     UIView *anchor = controller.viewIfLoaded;
     if (!anchor) return;

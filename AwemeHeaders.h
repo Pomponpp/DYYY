@@ -516,7 +516,40 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEFeedTableViewController : UIViewController
+@property (nonatomic, strong) UITableView *tableView;
 @end
+
+// ===== 视频全屏装饰层用到的类 =====
+// 只声明本工程实际访问的成员，其余留给运行时。
+
+@interface RichContentContainerViewController : UIViewController
+@end
+
+@interface AWESpecialCardTemplateLynxViewController : UIViewController
+@end
+
+@interface AWESpecialCardTemplateNativeViewController : UIViewController
+@end
+
+@interface AWESpecialCardTemplatePureCell : UITableViewCell
+@property (nonatomic, strong) UIView *contentView;
+@end
+
+@interface AWEFeedPOIDynamicCardCellViewController : UIViewController
+@end
+
+@interface AWELivePreStream4LayerContainerView : UIView
+@end
+
+@interface AWEGradientView : UIView
+@end
+
+@interface AWEKnowledgeGradientView : UIView
+@end
+
+@interface AWEStoryContainerCollectionView : UICollectionView
+@end
+
 
 @interface AWEFeedTableView : UIView
 @end

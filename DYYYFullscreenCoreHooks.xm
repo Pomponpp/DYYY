@@ -125,10 +125,10 @@ static void DYYYSyncTable(UITableView *table) {
 %hook AWEFeedTableViewController
 
 - (void)viewDidLayoutSubviews {
-    if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
+    if (DYYYFullscreenCoreOn()) DYYYSyncTable([(UIViewController *)self tableView]);
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    DYYYSyncTable(self.tableView);
+    DYYYSyncTable([(UIViewController *)self tableView]);
 }
 
 %end
@@ -136,10 +136,10 @@ static void DYYYSyncTable(UITableView *table) {
 %hook AWEAwemeDetailTableViewController
 
 - (void)viewDidLayoutSubviews {
-    if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
+    if (DYYYFullscreenCoreOn()) DYYYSyncTable([(UIViewController *)self tableView]);
     %orig;
     if (!DYYYFullscreenCoreOn()) return;
-    DYYYSyncTable(self.tableView);
+    DYYYSyncTable([(UIViewController *)self tableView]);
 }
 
 %end
@@ -153,18 +153,18 @@ static void DYYYSyncTable(UITableView *table) {
 
 - (void)setupDetailTableView {
     %orig;
-    if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
+    if (DYYYFullscreenCoreOn()) DYYYSyncTable([(UIViewController *)self tableView]);
 }
 
 - (void)viewWillLayoutSubviews {
-    if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
+    if (DYYYFullscreenCoreOn()) DYYYSyncTable([(UIViewController *)self tableView]);
     %orig;
-    if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
+    if (DYYYFullscreenCoreOn()) DYYYSyncTable([(UIViewController *)self tableView]);
 }
 
 - (double)fixedCellHeight {
     if (!DYYYFullscreenCoreOn()) return %orig;
-    UITableView *table = self.tableView;
+    UITableView *table = [(UIViewController *)self tableView];
     DYYYSyncTable(table);
     double native = %orig;
     return DYYYFullscreenRowHeight(table, native);
@@ -172,7 +172,7 @@ static void DYYYSyncTable(UITableView *table) {
 
 - (double)cellHeightAtIndex:(long long)index {
     if (!DYYYFullscreenCoreOn()) return %orig;
-    UITableView *table = self.tableView;
+    UITableView *table = [(UIViewController *)self tableView];
     DYYYSyncTable(table);
     double native = %orig;
     return DYYYFullscreenRowHeight(table, native);
@@ -186,14 +186,14 @@ static void DYYYSyncTable(UITableView *table) {
 }
 
 - (double)contentOffsetYForCellAtIndex:(long long)index {
-    if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
+    if (DYYYFullscreenCoreOn()) DYYYSyncTable([(UIViewController *)self tableView]);
     return %orig;
 }
 
 - (void)adjustTableViewHeightForTargetIndex:(long long)index {
-    if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
+    if (DYYYFullscreenCoreOn()) DYYYSyncTable([(UIViewController *)self tableView]);
     %orig;
-    if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
+    if (DYYYFullscreenCoreOn()) DYYYSyncTable([(UIViewController *)self tableView]);
 }
 
 

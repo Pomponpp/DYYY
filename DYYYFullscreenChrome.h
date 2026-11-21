@@ -33,37 +33,37 @@ typedef NS_ENUM(NSUInteger, DYYYCardType) {
 };
 
 /// 图文：抑制缩放（等价于视频的 videoDidShrink）。
-void DYYYChromeSuppressRichShrink(UIViewController *controller);
+void DYYYChromeSuppressRichShrink(id controller);
 
 /// 图文：可见背景渐变拉伸到底（只叠 transform）。
-void DYYYChromeStretchRichGradient(UIView *gradient);
+void DYYYChromeStretchRichGradient(id gradient);
 
 /// 图文：媒体按 Cell 居中（拦截 setTransform，保持原生缩放态）。
-CGAffineTransform DYYYChromeRichCenterTransform(UIView *view, CGAffineTransform native);
+CGAffineTransform DYYYChromeRichCenterTransform(id view, CGAffineTransform native);
 
 /// 图文：放开阻挡溢出的裁剪层。
-void DYYYChromeAllowRichOverflow(UIView *view);
+void DYYYChromeAllowRichOverflow(id view);
 
 /// 卡片：把内容容器与上层之间的底边约束收短 inset；inset 为 0 时还原。
-BOOL DYYYChromeFitCard(UIView *container, CGFloat inset, DYYYCardType type);
+BOOL DYYYChromeFitCard(id container, CGFloat inset, DYYYCardType type);
 
 /// 卡片：宿主越过原生安全底边的高度；不在已撑高的表里返回 0。
-CGFloat DYYYChromeCardInset(UIView *view);
+CGFloat DYYYChromeCardInset(id view);
 
 /// 卡片：背景条按内容底边取样并延伸（inset 为 0 时移除）。
-void DYYYChromeSyncCardBackdrop(UIView *host, CGFloat inset, DYYYCardType type);
+void DYYYChromeSyncCardBackdrop(id host, CGFloat inset, DYYYCardType type);
 
 /// 卡片：内容可能变化后安排取样（合并连续请求 + 稍后补一次）。
-void DYYYChromeRequestBackdropSample(UIView *host);
+void DYYYChromeRequestBackdropSample(id host);
 
 /// 直播预览：把挂在容器高度上的 chrome 抬回原位（只叠 transform）。
-void DYYYChromeLiftLiveChrome(UIView *container);
+void DYYYChromeLiftLiveChrome(id container);
 
 /// 视频：容器内非贴底的压暗渐变跟着撑满（只叠 transform）。
-void DYYYChromeStretchVideoGradient(UIView *gradient);
+void DYYYChromeStretchVideoGradient(id gradient);
 
 /// 评论态顶部黑遮罩：全屏时隐藏（它是「视频缩小」态的产物）。
-void DYYYChromeHideStatusBarCover(UIViewController *interaction);
+void DYYYChromeHideStatusBarCover(id interaction);
 
 /// 关闭开关时还原全部装饰层接管。
 void DYYYChromeRestoreAll(void);
