@@ -197,55 +197,37 @@
 - (void)setCenter:(CGPoint)center {
     CGPoint old = self.center;
 
-    // ── 聊天页拖动进度条「弹起来」的修复 ────────────────────────────
+    // ── 探针：抓大位移写入的调用栈（纯观测，不改值）──────────────────
     //
-    // #138 诊断包实测（多次拖动，每次都完整出现一对）：
-    //   setCenter y 743.00 → 660.00   按下开始拖：容器整体上移 83
-    //   setCenter y 660.00 → 743.00   松手：落回
-    // 743 − 660 = 83，正是输入栏高度。
+    // 已确认（#138 诊断包，多次拖动成对出现）：
+    //   743.00 → 660.00   按下开始拖，容器上移 83
+    //   660.00 → 743.00   松手落回
+    // 83 = 输入栏高度；静止位 743（容器高 200 → 顶 643 / 底 843）。
     //
-    // 成因：聊天页有一个快捷回复输入栏（AWEIMFeedVideoQuickReplayInput
-    // ViewController）。抖音的原生逻辑是「拖动进度条时把进度条容器上移
-    // 一个输入栏高度，给输入栏腾位置；松手再移回来」。
-    // 普通视频详情页没有输入栏，所以不移动 —— 这就是只有聊天页弹的原因。
+    // 上一个探针没抓到栈有两个错误：
+    //   ① 抓栈写在 %orig 之后 —— 那时本方法的调用帧已经返回，
+    //      抓到的是调用方的调用方，全是无关帧；
+    //   ② 用 sCount % 10 == 0 抽样 —— 关键的那几条恰好不在抽样点上。
     //
-    // 修法：在写入那一刻把「上移 83」这个位移忽略掉，容器始终留在原位。
-    // 属于单次替换入参，不是「先写再纠正」，不会形成两方对写。
-    //
-    // 只在聊天页生效（容器挂在详情表里 + 全屏开着），其他页面一律放行。
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        BOOL inDetailTable = NO;
-        for (UIView *a = self.superview; a; a = a.superview) {
-            if ([a isKindOfClass:[UITableView class]]) { inDetailTable = YES; break; }
-        }
-        if (inDetailTable) {
-            // 把「静止位」记下来：容器第一次被放到详情表里时那个 y 就是它。
-            // 之后无论谁来写，只要写的是「静止位 − 一个输入栏高度」这一档，
-            // 就按静止位落地，容器肉眼不动。
-            static char kRestKey;
-            NSNumber *rest = objc_getAssociatedObject(self, &kRestKey);
-            if (!rest) {
-                // 只在容器已经有明确高度、且不在让位档上时，才认定为静止位
-                CGFloat h = CGRectGetHeight(self.bounds);
-                if (h > 1.0 && center.y > 100.0) {
-                    rest = @(center.y);
-                    objc_setAssociatedObject(self, &kRestKey, rest, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                }
+    // 这次：在 %orig 之前抓，条件改成「纵向位移 > 60pt」，每次必抓不抽样。
+    // 目标是看出哪一族的代码在发起这个 83 的位移。
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled") &&
+        fabs(old.y - center.y) > 60.0 &&
+        fabs(old.x - center.x) < 0.01) {
+
+        static NSInteger sStackCount = 0;
+        if (++sStackCount <= 20) {
+            NSArray<NSString *> *stack = [NSThread callStackSymbols];
+            NSMutableString *who = [NSMutableString string];
+            NSUInteger limit = MIN(stack.count, (NSUInteger)12);
+            for (NSUInteger i = 1; i < limit; i++) {
+                NSString *line = stack[i];
+                NSRange r = [line rangeOfString:@"["];
+                NSString *t = r.location != NSNotFound ? [line substringFromIndex:r.location] : line;
+                [who appendFormat:@"\n        %@", t];
             }
-            if (rest) {
-                CGFloat restY = rest.doubleValue;
-                CGFloat shift = restY - center.y;
-                if (shift > 60.0 && shift < 110.0 && fabs(center.x - old.x) < 0.01) {
-                    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-                        static NSInteger sBlocked = 0;
-                        if (++sBlocked <= 40) {
-                            NSLog(@"[DYYY][cblock] 拦下让位 %.1f（%.1f→%.1f 落回静止位 %.1f）",
-                                  shift, old.y, center.y, restY);
-                        }
-                    }
-                    center.y = restY;
-                }
-            }
+            NSLog(@"[DYYY][cstack] y %.2f→%.2f  delta %.2f%@",
+                  old.y, center.y, old.y - center.y, who);
         }
     }
 
@@ -257,8 +239,8 @@
     static NSInteger sCount = 0;
     if (++sCount > 300) return;
 
-    NSLog(@"[DYYY][cwrite] setCenter #%ld t=%.3f y %.2f→%.2f（orig was %.2f）",
-          (long)sCount, CFAbsoluteTimeGetCurrent(), old.y, center.y, center.y);
+    NSLog(@"[DYYY][cwrite] setCenter #%ld t=%.3f y %.2f→%.2f",
+          (long)sCount, CFAbsoluteTimeGetCurrent(), old.y, center.y);
 }
 
 - (void)setTransform:(CGAffineTransform)transform {
