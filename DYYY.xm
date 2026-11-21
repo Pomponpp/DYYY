@@ -4255,102 +4255,8 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 %end
 
-// 详情页行高：controller 侧入口接纯函数（锚 = 原生底栏差值区间）。
-// 真实 delegate 容器与数据层入口在 DYYYHooksFullscreen.xm，同一纯函数。
-%hook AWEAwemeDetailTableViewController
+// 详情页行高与表撑高已移入 DYYYFullscreenCoreHooks（7 入口同源 + 唯一写入通道）。
 
-// 41.2 实测（#129 诊断包）：baseTableViewBottomInset → 0 对内容区高度**无影响**，
-// 内容区仍是 843。说明 843 不是这个 getter 算出来的，此路作废，不再挂它
-// （返回 0 还会改掉表格 contentInset，让末页 cell 能滚到输入栏底下，是副作用）。
-// 真正的位置改由 AWEAwemeDetailTableViewCell 的 playerNotCoverBottomBarEnable
-// 回答 NO 来处理（见文件下方同名 hook），不再由该 getter 承担。
-
-// A2 布局前同步（对齐行为对照的时机）：
-// 表高必须在【原生控制器布局之前】也统一一次，否则尺寸适配器仍按旧高度
-// 算行高与滚动锚点。原来只有写入时拦截，等于布局回合开始时表还是旧高。
-// 前后各调一次，与 setFrame 通道共用同一个守卫函数（同一套判据，不会两处打架）。
-- (void)viewDidLayoutSubviews {
-    // 布局【前】：先统一表高，让尺寸适配器按同一高度算行高与滚动锚点。
-    if (DYYYGetBool(@"DYYYEnableFullScreen") && NSThread.isMainThread) {
-        UITableView *table = [self respondsToSelector:@selector(tableView)] ? [self tableView] : nil;
-        UIView *parent = table ? table.superview : nil;
-        CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-        if (table && target > 0.0) {
-            CGRect before = [DYYYFullscreenCoordinator adjustDetailTableFrame:table
-                                                                       frame:table.frame
-                                                                      target:target];
-            if (!CGRectIsNull(before)) table.frame = before;
-        }
-    }
-
-    %orig;
-
-    // 布局【后】：原生可能又写回压缩值，再补一次（与 setFrame 通道共用同一守卫）。
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return;
-    UITableView *t2 = [self respondsToSelector:@selector(tableView)] ? [self tableView] : nil;
-    if (!t2) return;
-    UIView *p2 = t2.superview;
-    CGFloat target2 = p2 ? CGRectGetHeight(p2.bounds) : 0;
-    if (target2 <= 0.0) return;
-    CGRect after = [DYYYFullscreenCoordinator adjustDetailTableFrame:t2
-                                                              frame:t2.frame
-                                                             target:target2];
-    if (!CGRectIsNull(after)) t2.frame = after;
-}
-
-- (double)fixedCellHeight {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
-        return %orig;
-    }
-    double nativeHeight = %orig;
-    // 带前提的行高回答：表没被撑高过（聊天页就是这种）→ 回答原生值。
-    // 不再需要 IM 页面特判。
-    return [DYYYFullscreenCoordinator rowHeightForTable:self.tableView native:nativeHeight];
-}
-
-- (double)cellHeightAtIndex:(long long)index {
-    return [self fixedCellHeight];
-}
-
-- (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
-        return %orig;
-    }
-    double nativeHeight = %orig;
-    return [DYYYFullscreenCoordinator rowHeightForTable:table native:nativeHeight];
-}
-
-
-// ── 41.2 行高来源探针（纯观测，不改任何返回值）─────────────────
-// 背景：41.2 上详情页出现「表按 926 滚、cell 按 843 排」的持续错位（差 2×83）。
-// 已排除：类不存在、selector 改名（两版 selector 完全一致）。
-// 剩下三个候选数据源，一次全部观测，测完即知是哪一条：
-//   ① table.rowHeight 被写死（写死后 heightForRowAtIndexPath: 根本不会被问）
-//   ② cellHeight（无参数版）
-//   ③ cellHeightAtIndex:forContainer:（带容器版）
-// 只在「诊断模式」开启时打日志；验证完成后整段删除。
-
-- (double)cellHeight {
-    double r = %orig;
-    if (DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        NSLog(@"[DYYY][rowh] cellHeight → %.1f  rowHeight=%.1f  table=%@",
-              r, [self tableView].rowHeight,
-              NSStringFromClass([[self tableView] class]));
-    }
-    return r;
-}
-
-- (double)cellHeightAtIndex:(long long)index forContainer:(id)container {
-    double r = %orig;
-    if (DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        NSLog(@"[DYYY][rowh] cellHeightAtIndex:forContainer: idx=%lld → %.1f  rowHeight=%.1f  container=%@",
-              index, r, [self tableView].rowHeight,
-              container ? NSStringFromClass([container class]) : @"nil");
-    }
-    return r;
-}
-
-%end
 
 
 // 表侧写入探针：谁把行高写成 843（含滚动估算值）。
@@ -4390,30 +4296,7 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 首页表与详情表共用同一规则：详情表继承自 AWEFeedDataSafeTableView，
 // 只挂基类即可覆盖；再挂子类会造成同一高度两处写（已证明会互相打架）。
 
-// 首页表（独立类，不继承上面的基类）走同一规则。
-%hook AWEFeedTableView
-
-- (void)setFrame:(CGRect)frame {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
-        %orig;
-        return;
-    }
-    // 与详情表同一套：撑高那一刻记录原高，作为 HUD 钉位锚点。
-    UIView *tableParent = self.superview;
-    CGFloat tableTarget = tableParent ? CGRectGetHeight(tableParent.bounds) : 0;
-    if (tableTarget > 0 && CGRectGetHeight(frame) < tableTarget - 0.5 &&
-        CGRectGetHeight(frame) >= tableTarget * 0.5) {
-        DYYYGeoRememberOriginalHeight(self, CGRectGetHeight(frame));
-    }
-    CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:frame];
-    if (CGRectIsNull(adjusted)) {
-        %orig;
-        return;
-    }
-    %orig(adjusted);
-}
-
-%end
+// 首页表的撑高已移入 DYYYFullscreenCoreHooks（与详情表共用同一守卫）。
 
 
 // #34：诊断扳手挂载——独立顶层 hook，不受「禁用设置手势」开关影响。
@@ -6785,260 +6668,6 @@ static Class tabBarButtonClass = nil;
 // 全屏"画面满"的真正来源不是把 table 撑高，而是把【播放器容器】钉满：
 //   · 写入方是 AWEDPlayerViewController_Merge（视频容器）→ 钉成 (0,0,W,H)
 //   · 写入方是 AWEPlayInteractionViewController（HUD 互动层）→ 高度钉回原高
-// 后者保证底部文案/点赞栏不随表撑高整体下移。
-// 两个规则共用同一个 UIView setFrame 拦截点，按写入方归属分派，
-// 避免多个 hook 抢同一个最热方法。
-
-static const CGFloat kDYYYGeoAspectMin = 1.70;   // 高/宽达到此比例才拉满（竖屏视频）
-static const CGFloat kDYYYGeoTolerance = 0.5;
-static const long long kDYYYAwemeTypeImage = 68;
-
-static Class DYYYGeoMergeClass(void) {
-    static Class cls;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ cls = NSClassFromString(@"AWEDPlayerViewController_Merge"); });
-    return cls;
-}
-
-// cell 满高：播放器所在 cell contentView 的高度（视频要铺满的目标）
-static CGFloat DYYYGeoFullCellHeight(UIView *view) {
-    UIView *container = view.superview;
-    for (NSUInteger depth = 0; container && depth < 6; depth++, container = container.superview) {
-        if ([container isKindOfClass:[UITableViewCell class]] ||
-            [container isKindOfClass:[UICollectionViewCell class]]) {
-            break;
-        }
-    }
-    // 找到 cell 的 contentView
-    UIView *cell = nil;
-    for (UIView *cursor = view.superview; cursor; cursor = cursor.superview) {
-        if ([cursor isKindOfClass:[UITableViewCell class]] ||
-            [cursor isKindOfClass:[UICollectionViewCell class]]) {
-            cell = cursor;
-            break;
-        }
-    }
-    if (!cell) return 0.0;
-    if ([cell isKindOfClass:[UITableViewCell class]]) {
-        UIView *content = ((UITableViewCell *)cell).contentView;
-        return content ? CGRectGetHeight(content.bounds) : 0.0;
-    }
-    return CGRectGetHeight(cell.bounds);
-}
-
-// 该视频是否应该拉满：图文、横屏、低比例竖屏都不拉（拉满会 aspect-fill 过裁）。
-static BOOL DYYYGeoCanCoverScreen(UIView *view) {
-    UIResponder *owner = view.nextResponder;
-    Class mergeClass = DYYYGeoMergeClass();
-    if (!mergeClass || ![owner isKindOfClass:mergeClass]) return NO;
-
-    AWEDPlayerViewController_Merge *merge = (AWEDPlayerViewController_Merge *)owner;
-    AWEAwemeModel *model = merge.model;
-    if ([model respondsToSelector:@selector(awemeType)] && model.awemeType == kDYYYAwemeTypeImage) return NO;
-    if ([merge respondsToSelector:@selector(hasInlandscape)] && merge.hasInlandscape) return NO;
-    if ([merge respondsToSelector:@selector(isInLandscapeFeedStatus)] && [merge isInLandscapeFeedStatus]) return NO;
-
-    AWEVideoModel *video = [model respondsToSelector:@selector(video)] ? model.video : nil;
-    double width = [video respondsToSelector:@selector(width)] ? video.width.doubleValue : 0.0;
-    double height = [video respondsToSelector:@selector(height)] ? video.height.doubleValue : 0.0;
-    return width <= 0.0 || height <= 0.0 || (height / width) >= kDYYYGeoAspectMin;
-}
-
-// 视频容器的目标 frame；返回 CGRectNull 表示放行（不干预）。
-static CGRect DYYYGeoContainerTarget(UIView *view) {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
-    // 聊天系视频页（群聊 / 朋友聊天）**不做排除**，和首页/详情/作品页同一套规则。
-    //
-    // 曾经在这里对 IM 页返回 CGRectNull（放行播放器钉位），那是为了修"拖动弹"，
-    // 但方向是反的：放行之后播放器退回内容层高 843，视频不再全屏。
-    // 行为对照的结论是「聊天页照样钉满，其余全放行」——
-    //   聊天页表高本来就是满的（实测 926，未被底栏压缩），
-    //   所以表高守卫（本文件 adjustDetailTableFrame 的 current >= target 放行）
-    //   自动把它摘出撑高作用域，也就没有"表撑高前的原高"，
-    //   HUD 钉位因拿不到锚点同样自动放行。
-    // 两道守卫天然把聊天页摘出去，不需要任何 IM 特判。
-    //
-    // 作用域只到主窗口：画中画/横屏播放器自带一整套同样层级的视图，
-    // 钉满会把小窗撑成盖住整页的全屏播放器。
-    UIWindow *window = view.window;
-    if (window && window.windowLevel != UIWindowLevelNormal) return CGRectNull;
-
-    UIView *parent = view.superview;
-    CGFloat width = CGRectGetWidth(parent.bounds);
-    CGFloat height = CGRectGetHeight(parent.bounds);
-    if (width <= 0.0 || height <= 0.0) return CGRectNull;
-
-    if (DYYYGeoCanCoverScreen(view)) {
-        CGFloat full = DYYYGeoFullCellHeight(view);
-        if (full > height) height = full;
-    }
-    return CGRectMake(0.0, 0.0, width, height);
-}
-
-// HUD 钉位：只「向下压」，绝不「向上拉」。
-//
-// 行为对照得到的规则：
-//   拿不到「表撑高前的原高」→ 直接放行；
-//   写入高度 <= 原高 → 放行（原生缩小态交给宿主）；
-//   写入高度 >  原高 → 压回原高。
-//
-// 这个方向性是关键。聊天页表高本来就是满的（926 未被压缩），
-// 所以走不到撑高分支，也就没有原高缓存 → 第一条命中 → 完全放行。
-// 抖音在这页写 760 时我们什么都不做，不存在互顶。
-//
-// 反面教材：#132 / #134 曾「无条件把互动层拉到内容层高 843」，
-// 方向正是反的 —— 抖音写 760、我们拉到 843、它再写 760，每秒几十次，
-// 肉眼就是拖动时弹跳。那条路已删除。
-//
-// 缓存只在表被真正撑高时写入（见 DYYYGeoRememberOriginalHeight 的调用点）。
-static char kDYYYGeoOriginalHeightKey;
-
-// 从 view 往上找视频表（详情表继承自 AWEFeedDataSafeTableView）。
-static UIView *DYYYGeoTableForView(UIView *view) {
-    static Class sTableClass;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ sTableClass = NSClassFromString(@"AWEFeedDataSafeTableView"); });
-    if (!sTableClass) return nil;
-    UIView *ancestor = view.superview;
-    for (NSUInteger depth = 0; ancestor && depth < 8; depth++, ancestor = ancestor.superview) {
-        if ([ancestor isKindOfClass:sTableClass]) return ancestor;
-    }
-    return nil;
-}
-
-// 表撑高时记录原高，作为 HUD 钉位的锚点。只记第一次。
-void DYYYGeoRememberOriginalHeight(UIView *table, CGFloat height) {
-    if (!table || height <= 0.0 || !isfinite(height)) return;
-    if (objc_getAssociatedObject(table, &kDYYYGeoOriginalHeightKey)) return;
-    objc_setAssociatedObject(table, &kDYYYGeoOriginalHeightKey, @(height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    // 同一个「表被撑高过」的事实，也要让行高入口知道：
-    // 行高只在表真的被撑高时才回答满高，否则回答原生值（行为对照的判据）。
-    if ([table isKindOfClass:[UITableView class]]) {
-        [DYYYFullscreenCoordinator rememberTableOriginalHeight:(UITableView *)table height:height];
-    }
-}
-
-// 返回 CGRectNull = 放行。调用方已确认写入方是 AWEPlayInteractionViewController。
-static CGRect DYYYGeoHUDAdjustFrame(UIView *view, CGRect frame) {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
-
-    UIView *table = DYYYGeoTableForView(view);
-    if (!table) return CGRectNull;
-
-    NSNumber *original = objc_getAssociatedObject(table, &kDYYYGeoOriginalHeightKey);
-    if (!original) return CGRectNull;          // 表没被撑高过 → 这页不在作用域，全放行
-
-    CGFloat pinned = original.doubleValue;
-    if (!isfinite(pinned) || pinned <= 0.0) return CGRectNull;
-    // 没超过原高 → 原生缩小态，放行。聊天页的 760 就是走这一条。
-    if (CGRectGetHeight(frame) <= pinned + kDYYYGeoTolerance) return CGRectNull;
-
-    frame.origin.y = 0.0;
-    frame.size.height = pinned;
-    return frame;
-}
-
-// 聊天系视频页：内容层 843 的根因不在写入通道，已弃用「替换 frame」这条路。
-//
-// #130 实测（诊断包 DYDebug-20261122-011448）：AWEAwemeDetailCellViewController.view
-// 仍是 843，与改动前完全一致，且没有回环、没有卡死——说明替换写入被
-// 抖音自己的布局覆盖掉了（该视图由约束驱动，下一轮 layout 直接重算回 843），
-// 纯 no-op。这条路连同 #129 的 baseTableViewBottomInset 一起作废。
-//
-// 真正的开关是 AWEAwemeDetailTableViewCell 的 playerNotCoverBottomBarEnable
-// （见文件上方同名 hook）：它回答 NO，抖音自己的调整逻辑就会把内容层铺到
-// cell 底，不需要我们写任何一个 frame。
-
-// 聊天系视频页：进度容器**必须完全放行**。
-//
-// 曾经在这里把容器底边钉回父级底边，想让进度条位置「更准」——这是进度条
-// 拖动弹跳的直接原因，已删除，不要再加回来。
-//
-// 机制（#132 诊断包实测）：
-//   抖音拖动进度条时会把进度容器整体上移一个底栏（643 → 560）给输入栏让位，
-//   这是原生交互，松手再落回 643。
-//   我们那一版判定「当前 y 与父级底边差 40~120 就改回父级底边」，
-//   而 83 正好落在这个区间 —— 于是每一帧都在拉锯：
-//     抖音改成 560 → 我们改回 643 → 抖音再改成 560 → …
-//   同样的道理，#132 里"把互动层钉成 843"也在拖动时和原生让位互顶。
-//   两个都已删除。
-//
-// 现状：这条路上 IM 页除了播放器容器（让它铺满全屏）之外，
-// 不写任何一个 frame。拖动让位交还给抖音。
-
-// ── 聊天页拖动跳动的真实写入记录（纯观测，不改任何值）─────────────
-//
-// 现象：聊天页（群聊/朋友聊天）拖动进度条时进度条上下跳；其他页不跳；
-// 关掉全屏也不跳。视频本身正常。
-//
-// 已排除（多份诊断包实测）：
-//   · 不是表格滚动 —— offset.y 单调递增，无回跳
-//   · 不是滑块自身尺寸 —— 四个版本的 (y,h) 组合完全相同
-//   · 不是互动层/容器高度 —— #135 已不再写这两层，仍然跳
-//
-// 剩下唯一没被逐帧记录过的，就是进度容器自己的 frame 写入。
-// 该类不重写 setFrame，所以每次写入都会经过这里的全局钩子。
-//
-// 这个探针记录**每一帧**（不用 0.5pt 阈值过滤，跳幅可能小于它），
-// 只写 y 和高度，带毫秒时间戳，便于看是否高频来回。
-// 打完即删，不留在发布版。
-static void DYYYLogProgressContainerWrite(UIView *view, CGRect old, CGRect now) {
-    if (fabs(old.origin.y - now.origin.y) < 0.01 &&
-        fabs(old.size.height - now.size.height) < 0.01) {
-        return;   // 完全没变，不记
-    }
-    static Class sContainerClass;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ sContainerClass = NSClassFromString(@"AWEPlayInteractionProgressContainerView"); });
-    if (!sContainerClass || ![view isKindOfClass:sContainerClass]) return;
-    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return;
-
-    // 不调 isImDetailView:（它带窗口级缓存，在 setFrame 热路径里开销偏大）。
-    // 只按「连到表 + 表是详情表」粗筛，够用于观测。
-    BOOL inDetail = NO;
-    for (UIView *a = view.superview; a && !inDetail; a = a.superview) {
-        if ([a isKindOfClass:[UITableView class]]) inDetail = YES;
-    }
-    if (!inDetail) return;
-
-    static NSInteger sCount = 0;
-    if (++sCount > 400) return;   // 总量上限，防刷屏
-
-    CFAbsoluteTime now_t = CFAbsoluteTimeGetCurrent();
-    NSLog(@"[DYYY][pwrite] #%ld t=%.3f y %.1f→%.1f  h %.1f→%.1f",
-          (long)sCount, now_t,
-          old.origin.y, now.origin.y,
-          old.size.height, now.size.height);
-}
-
-// 统一分派：只在两个已知写入方上做几何修正，其余一律放行。
-static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
-    UIResponder *owner = view.nextResponder;
-    if (!owner) return CGRectNull;
-
-    Class mergeClass = DYYYGeoMergeClass();
-    if (mergeClass && [owner isKindOfClass:mergeClass]) {
-        CGRect target = DYYYGeoContainerTarget(view);
-        if (CGRectIsNull(target)) return CGRectNull;
-        if (fabs(CGRectGetMinX(frame) - target.origin.x) <= kDYYYGeoTolerance &&
-            fabs(CGRectGetMinY(frame) - target.origin.y) <= kDYYYGeoTolerance &&
-            fabs(CGRectGetWidth(frame) - target.size.width) <= kDYYYGeoTolerance &&
-            fabs(CGRectGetHeight(frame) - target.size.height) <= kDYYYGeoTolerance) {
-            return CGRectNull;   // 已经是目标值，不必重复写
-        }
-        return target;
-    }
-
-    // 互动层（HUD）写入：只在「表被撑高过」的页面钉位，其余放行。
-    // 聊天页表高本来就是满的，永远不会走到撑高分支，所以这里拿不到锚点 → 放行。
-    static Class sInteractionClass;
-    static dispatch_once_t sInteractionOnce;
-    dispatch_once(&sInteractionOnce, ^{ sInteractionClass = NSClassFromString(@"AWEPlayInteractionViewController"); });
-    if (sInteractionClass && [owner isKindOfClass:sInteractionClass]) {
-        return DYYYGeoHUDAdjustFrame(view, frame);
-    }
-    return CGRectNull;
-}
 
 %hook UIView
 
@@ -7174,15 +6803,6 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
         DYYYLogProgressContainerWrite(self, self.frame, frame);
     }
 
-    // #70 视频几何钉位（先于毛玻璃逻辑执行）：
-    // 播放器容器钉满 / HUD 高度钉回原高。只在两个已知写入方上生效。
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-        CGRect geoAdjusted = DYYYGeoAdjustFrame(self, frame);
-        if (!CGRectIsNull(geoAdjusted)) {
-            %orig(geoAdjusted);
-            return;
-        }
-    }
 
     BOOL enableBlur = DYYYGetBool(@"DYYYEnableCommentBlur");
     BOOL enableFS = DYYYGetBool(@"DYYYEnableFullScreen");
@@ -7464,7 +7084,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 - (void)viewDidLayoutSubviews {
     %orig;
-    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
+    if (DYYYFullscreenPinContainer(self)) DYYYFullscreenNotePin(NO);
 }
 
 
@@ -7504,17 +7124,17 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 // 三个入口都走同一个幂等函数：涂色或按标记还原，不改 frame、不触发布局。
 - (void)setPlayerBackgroundView:(UIView *)backgroundView {
     %orig;
-    [DYYYFullscreenCoordinator syncPlayerBackdrop:self];
+    DYYYFullscreenSyncBackdrop(self);
 }
 
 - (void)updatePlayerBackgroundViewIfNeededWhenLandscape:(BOOL)landscape fromHomepageHot:(BOOL)fromHomepageHot {
     %orig;
-    [DYYYFullscreenCoordinator syncPlayerBackdrop:self];
+    DYYYFullscreenSyncBackdrop(self);
 }
 
 - (void)viewDidLayoutSubviews {
     %orig;
-    [DYYYFullscreenCoordinator syncPlayerBackdrop:self];
+    DYYYFullscreenSyncBackdrop(self);
 }
 
 %end
@@ -7530,7 +7150,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 - (void)viewDidLayoutSubviews {
     %orig;
-    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
+    if (DYYYFullscreenPinContainer(self)) DYYYFullscreenNotePin(NO);
 }
 
 // A1 容器补钉（第二入口，挂在 Merge 上）：
@@ -7540,7 +7160,7 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 // layoutPlayerContainer 内部同值不重写，所以这里补钉是幂等的，不会成环。
 - (void)willDisplay {
     %orig;
-    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
+    if (DYYYFullscreenPinContainer(self)) DYYYFullscreenNotePin(NO);
 }
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
@@ -9310,7 +8930,7 @@ static void findTargetViewInView(UIView *view) {
 %hook AFDPureModePageListViewController
 - (void)viewWillLayoutSubviews {
     // 先提供完整视口，再由原生更新 cell 尺寸、分页偏移和进度条。
-    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
+    if (DYYYFullscreenPinContainer(self)) DYYYFullscreenNotePin(NO);
     %orig;
 }
 %end

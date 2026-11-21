@@ -357,43 +357,11 @@ static NSInteger imDetailActiveCount = 0;
     table.frame = frame;
 }
 
-+ (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame {
-    if (!table) return CGRectNull;
-    UIView *parent = table.superview;
-    CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
-    return [self adjustDetailTableFrame:table frame:frame target:target];
-}
 
-+ (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target {
-    if (!table) return CGRectNull;
-    if (!DYYYGetBool(@"DYYYEnableFullScreen")) {
-        // 关闭后一律放行，抖音写什么就是什么。
-        return CGRectNull;
-    }
-    CGFloat current = CGRectGetHeight(frame);
-    // 容器不比来意更高 → 这张表没被底栏压缩过（搜索页/好友聊天页），不在作用域；
-    // 高度不到容器一半 → 布局早期半成品，不碰。
-    if (!isfinite(target) || !isfinite(current) || target <= 0.0
-        || current >= target - kDYYYDetailHeightTol
-        || current < target * 0.5) {
-        return CGRectNull;
-    }
-    frame.size.height = target;
-    return frame;
-}
 
 
 // 行高纯函数入口：供全部行高 hook 调用。
 // 原生值比窗口矮 1~160pt（扣底栏型压缩）→ 回答满视口；其余透传。
-+ (CGFloat)fullCellHeightForNative:(CGFloat)nativeHeight {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
-    UIWindow *window = [DYYYUtils getActiveWindow];
-    CGFloat windowH = window ? CGRectGetHeight(window.bounds) : 0.0;
-    if (!isfinite(nativeHeight) || !isfinite(windowH) || nativeHeight <= 0.0 || windowH <= 0.0) return nativeHeight;
-    CGFloat diff = windowH - nativeHeight;
-    if (diff > kDYYYRowHeightDiffMin && diff <= kDYYYRowHeightDiffMax) return windowH;
-    return nativeHeight;
-}
 
 // 带「表是否被撑高」前提的行高回答（对齐已验证实现的判据）。
 //
@@ -406,17 +374,6 @@ static NSInteger imDetailActiveCount = 0;
 // 「当前表高 > 原高 + 容差」才继续。聊天页这两条都过不去 → 行高放行。
 //
 // 所以这里补上前提：表没被撑高过 → 直接回答原生值。
-+ (CGFloat)rowHeightForTable:(UITableView *)table native:(CGFloat)nativeHeight {
-    if (!table) return nativeHeight;
-    NSNumber *original = objc_getAssociatedObject(table, @selector(rowHeightForTable:native:));
-    if (!original) return nativeHeight;
-
-    CGFloat originalH = original.doubleValue;
-    CGFloat tableH = CGRectGetHeight(table.bounds);
-    if (!isfinite(originalH) || originalH <= 0.0 || !isfinite(tableH)) return nativeHeight;
-    if (tableH <= originalH + 0.5) return nativeHeight;   // 表没真的变高 → 不在作用域
-    return [self fullCellHeightForNative:nativeHeight];
-}
 
 // 表撑高时登记原高（键与行高查询共用 @selector(rowHeightForTable:native:)）。
 + (void)rememberTableOriginalHeight:(UITableView *)table height:(CGFloat)height {
@@ -980,67 +937,6 @@ static NSInteger imDetailActiveCount = 0;
 }
 #pragma mark - 媒体容器
 
-+ (void)layoutPlayerContainer:(UIViewController *)controller {
-    Class pureListClass = NSClassFromString(@"AFDPureModePageListViewController");
-    BOOL pureModeList = pureListClass && [controller isKindOfClass:pureListClass];
-    if (![NSThread isMainThread] || (!pureModeList && ![controller respondsToSelector:@selector(contentView)])) return;
-    UIView *view = controller.viewIfLoaded;
-    if (!view.window || !view.superview) return;
-    BOOL enabled = DYYYGetBool(@"DYYYEnableFullScreen") && [self usesFullscreenLayoutForController:controller];
-    UIView *content = pureModeList ? nil : [(AWEDPlayerViewController_Merge *)controller contentView];
-    for (UIView *host in content && content != view ? @[view, content] : @[view]) {
-        DYYYFullscreenPlayerState *state = objc_getAssociatedObject(host, @selector(state:));
-        if (state.applying) continue;
-        CGRect current = host.frame;
-        if (!enabled) {
-            BOOL restore = state.mediaHost && CGRectEqualToRect(current, state.fullscreenHostFrame);
-            state.mediaHost = NO;
-            if (restore) host.frame = state.nativeHostFrame;
-            continue;
-        }
-        UIView *parent = host.superview;
-        if (!parent || CGRectIsEmpty(parent.bounds) || !CGAffineTransformIsIdentity(host.transform)) continue;
-        if (!state.mediaHost && ![self view:host spansWidthOf:parent]) continue;
-        state = [self state:host];
-        if (!state.mediaHost || state.normalWindow != view.window || !CGRectEqualToRect(state.mediaHostParentBounds, parent.bounds)) {
-            state.nativeHostFrame = current;
-            state.fullscreenHostFrame = current;
-        }
-        CGRect target = parent.bounds;
-        state.mediaHost = YES;
-        state.mediaHostParentBounds = parent.bounds;
-        state.owner = controller;
-        state.normalWindow = view.window;
-        state.fullscreenHostFrame = target;
-        // 诊断：完整记录每次撑满判定（纯打印，不改行为），用于定位滑动时
-        // 多页同时撑满/新旧页状态打架的问题。开关：设置→诊断工具→全屏诊断日志。
-        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-            UIView *diagCell = [self cellForPlayer:host owner:controller];
-            UIView *diagPager = [self pagingViewForCell:diagCell];
-            CGRect cellRect = diagCell ? [diagCell convertRect:diagCell.bounds toView:diagCell.window] : CGRectZero;
-            UIScrollView *scroll = (UIScrollView *)diagPager;
-            CGPoint center = CGPointMake(CGRectGetMidX(host.window.bounds), CGRectGetMidY(host.window.bounds));
-            NSLog(@"[DYYY][fullscreen] host=%s cell=%s pager=%s cellRect=%@ win=%@ "
-                  @"centerHit=%d tracking=%d dragging=%d decel=%d offset=%@",
-                  class_getName([host class]),
-                  diagCell ? class_getName([diagCell class]) : "nil",
-                  diagPager ? class_getName([diagPager class]) : "nil",
-                  NSStringFromCGRect(cellRect),
-                  NSStringFromCGRect(host.window.bounds),
-                  CGRectContainsPoint(cellRect, center) ? 1 : 0,
-                  scroll ? scroll.isTracking : -1,
-                  scroll ? scroll.isDragging : -1,
-                  scroll ? scroll.isDecelerating : -1,
-                  scroll ? NSStringFromCGPoint(scroll.contentOffset) : @"nil");
-        }
-        // 承载区全程全高；评论避让只改内部播放器，不补背景或等待消失回调。
-        if (!CGRectEqualToRect(current, target)) {
-            state.applying = YES;
-            host.frame = target;
-            state.applying = NO;
-        }
-    }
-}
 
 // 渲染布局完成后记录画面尺寸，供评论避让使用。
 // ===== 背景色延伸（非满屏视频的黑边）=====
@@ -1123,33 +1019,6 @@ static BOOL DYYYIsUnderRichContent(UIViewController *controller) {
 }
 
 // 主入口：涂色或还原。color 为 nil 表示本条不需要延伸（关闭全屏/无背景色）。
-+ (void)syncPlayerBackdrop:(UIViewController *)controller {
-    if (![NSThread isMainThread] || !controller) return;
-    UIView *anchor = controller.viewIfLoaded;
-    if (!anchor) return;
-
-    BOOL applied = objc_getAssociatedObject(controller, &kDYYYBackdropAppliedKey) != nil;
-    UIColor *color = nil;
-    if (DYYYGetBool(@"DYYYEnableFullScreen") && !DYYYIsUnderRichContent(controller)) {
-        color = DYYYPlayerBackdropColor(controller);
-    }
-    if (!color && !applied) return;   // 绝大多数内容没有原生背景，直接退出
-
-    UIView *canvas = color ? DYYYBackdropCanvas(anchor) : nil;
-    DYYYRestoreBackdrop(anchor, canvas);
-
-    if (!canvas) {
-        objc_setAssociatedObject(controller, &kDYYYBackdropAppliedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        return;
-    }
-    if (!objc_getAssociatedObject(canvas, &kDYYYBackdropCanvasKey)) {
-        objc_setAssociatedObject(canvas, &kDYYYBackdropCanvasKey,
-                                 canvas.backgroundColor ?: (id)[NSNull null],
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    if (![canvas.backgroundColor isEqual:color]) canvas.backgroundColor = color;
-    objc_setAssociatedObject(controller, &kDYYYBackdropAppliedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
 
 + (void)finishPlayer:(UIView *)player {
     if (![NSThread isMainThread]) return;
