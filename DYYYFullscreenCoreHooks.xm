@@ -16,7 +16,6 @@
 
 #import "DYYYFullscreenCore.h"
 #import "AwemeHeaders.h"
-#import "DYYYConfigCache.h"
 #import <objc/runtime.h>
 #import <math.h>
 
@@ -254,23 +253,11 @@ static void DYYYSyncTable(UITableView *table) {
     Class interaction = NSClassFromString(@"AWEPlayInteractionViewController");
     Class detail = NSClassFromString(@"AWEAwemeDetailTableViewController");
 
-    // 7 个行高入口全部存在才装，避免挂到一半。
-    if (detail) {
-        SEL selectors[] = {
-            @selector(setupDetailTableView),
-            @selector(viewWillLayoutSubviews),
-            @selector(fixedCellHeight),
-            @selector(cellHeightAtIndex:),
-            @selector(tableView:heightForRowAtIndexPath:),
-            @selector(contentOffsetYForCellAtIndex:),
-            @selector(adjustTableViewHeightForTargetIndex:),
-        };
-        BOOL all = YES;
-        for (size_t i = 0; i < sizeof(selectors) / sizeof(selectors[0]); i++) {
-            if (!class_getInstanceMethod(detail, selectors[i])) { all = NO; break; }
-        }
-        if (all) %init(DYYYDetailRowHeightHooks);
-    }
+    // 行高组无条件初始化：Logos 要求 %init 出现在 %ctor 顶层语句里，
+    // 嵌在 if 内会被判定为「未初始化的组」。类不存在时 %init 本身是空操作，
+    // 逐个方法的缺失由运行时的 respondsToSelector 自然兜住。
+    %init(DYYYDetailRowHeightHooks);
+    (void)detail;
     (void)merge;
     (void)interaction;
     // 诊断：把三层统计写进运行时日志，导出包里直接可读。

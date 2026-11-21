@@ -18,7 +18,6 @@
 #import "DYYYFullscreenChrome.h"
 #import "DYYYFullscreenCore.h"
 #import "AwemeHeaders.h"
-#import "DYYYConfigCache.h"
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach-o/dyld.h>
@@ -51,23 +50,40 @@
 
 // 图文媒体：原生把 transform 写成缩放态；全屏时按 Cell 重新居中。
 // Swift 嵌套类（BDMultiContentContainer.ImageContentView 等）Logos 不认带点的名字，
-// 用 %group + 运行时绑定；三个子类型共用同一套居中逻辑。
-%group DYYYRichMediaHooks
+// 且 %init 必须写在 %ctor 顶层，不能用循环批量绑定；
+// 这里改用 method_setImplementation 直接换实现，三个子类型共用同一个 IMP。
+static IMP gDYYYRichMediaTransformIMP;
 
-%hook DYYYRichMediaView
-
-- (void)setTransform:(CGAffineTransform)transform {
-    CGAffineTransform target = DYYYChromeRichCenterTransform(self, transform);
-    if (!CGAffineTransformEqualToTransform(self.transform, target)) {
-        %orig(target);
-        return;
+static void DYYYRichMediaTransformReplacement(id self, SEL _cmd, CGAffineTransform transform) {
+    if (gDYYYRichMediaTransformIMP) {
+        ((void (*)(id, SEL, CGAffineTransform))gDYYYRichMediaTransformIMP)(self, _cmd, transform);
     }
-    %orig;
+    UIView *view = (UIView *)self;
+    if (![view isKindOfClass:[UIView class]]) return;
+    CGAffineTransform target = DYYYChromeRichCenterTransform(view, transform);
+    if (!CGAffineTransformEqualToTransform(view.transform, target)) view.transform = target;
 }
 
-%end
-
-%end
+static void DYYYInstallRichMediaHooks(void) {
+    static BOOL installed = NO;
+    if (installed) return;
+    NSArray<NSString *> *names = @[
+        @"BDMultiContentContainer.ImageContentView",
+        @"BDMultiContentContainer.LivePhotoContentView",
+        @"BDMultiContentContainer.VideoContentView",
+    ];
+    BOOL any = NO;
+    for (NSString *name in names) {
+        Class cls = NSClassFromString(name);
+        if (!cls) continue;
+        Method method = class_getInstanceMethod(cls, @selector(setTransform:));
+        if (!method) continue;
+        if (!gDYYYRichMediaTransformIMP) gDYYYRichMediaTransformIMP = method_getImplementation(method);
+        method_setImplementation(method, (IMP)DYYYRichMediaTransformReplacement);
+        any = YES;
+    }
+    installed = any;
+}
 %hook AWEKnowledgeGradientView
 
 - (void)layoutSubviews {
@@ -186,32 +202,44 @@
 
 %end
 
-// 音乐卡：Swift 类，用 %init 动态绑定（类名带模块前缀）。
-%group DYYYMusicCardHooks
+// 音乐卡：Swift 类，类名带模块前缀，同样用 method_setImplementation。
+static IMP gDYYYMusicCardWillLayoutIMP;
+static IMP gDYYYMusicCardDidLayoutIMP;
 
-%hook DYYYMusicCardController
-
-- (void)viewWillLayoutSubviews {
-    %orig;
+static void DYYYMusicCardWillLayoutReplacement(id self, SEL _cmd) {
+    if (gDYYYMusicCardWillLayoutIMP) ((void (*)(id, SEL))gDYYYMusicCardWillLayoutIMP)(self, _cmd);
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [self respondsToSelector:@selector(viewIfLoaded)] ? [self viewIfLoaded] : nil;
     if (view) DYYYChromeFitCard(view, DYYYChromeCardInset(view), DYYYCardTypeMusic);
 }
 
-- (void)viewDidLayoutSubviews {
-    %orig;
+static void DYYYMusicCardDidLayoutReplacement(id self, SEL _cmd) {
+    if (gDYYYMusicCardDidLayoutIMP) ((void (*)(id, SEL))gDYYYMusicCardDidLayoutIMP)(self, _cmd);
     if (!DYYYFullscreenCoreOn()) return;
-    UIView *view = self.viewIfLoaded;
+    UIView *view = [self respondsToSelector:@selector(viewIfLoaded)] ? [self viewIfLoaded] : nil;
     if (!view) return;
     CGFloat inset = DYYYChromeCardInset(view);
     DYYYChromeFitCard(view, inset, DYYYCardTypeMusic);
     DYYYChromeSyncCardBackdrop(view.superview ?: view, inset, DYYYCardTypeMusic);
 }
 
-%end
-
-%end
-
+static void DYYYInstallMusicCardHooks(void) {
+    static BOOL installed = NO;
+    if (installed) return;
+    Class cls = NSClassFromString(@"AWEMusicStreamingSwiftImpl.MusicCardViewController");
+    if (!cls) return;
+    Method will = class_getInstanceMethod(cls, @selector(viewWillLayoutSubviews));
+    Method did = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
+    if (will) {
+        gDYYYMusicCardWillLayoutIMP = method_getImplementation(will);
+        method_setImplementation(will, (IMP)DYYYMusicCardWillLayoutReplacement);
+    }
+    if (did) {
+        gDYYYMusicCardDidLayoutIMP = method_getImplementation(did);
+        method_setImplementation(did, (IMP)DYYYMusicCardDidLayoutReplacement);
+    }
+    installed = (will || did);
+}
 #pragma mark - 长文章（第三方框架，晚于插件加载）
 
 static void DYYYArticleInstallHooks(void);
@@ -302,47 +330,10 @@ static void DYYYArticleInstallHooks(void) {
 #pragma mark - 安装
 
 %ctor {
-    // 三个 Swift 嵌套媒体视图：逐个绑定到同一个 %hook 体。
-    NSArray<NSString *> *richMediaNames = @[
-        @"BDMultiContentContainer.ImageContentView",
-        @"BDMultiContentContainer.LivePhotoContentView",
-        @"BDMultiContentContainer.VideoContentView",
-    ];
-    for (NSString *name in richMediaNames) {
-        Class cls = NSClassFromString(name);
-        if (!cls) continue;
-        if (!class_getInstanceMethod(cls, @selector(setTransform:))) continue;
-        %init(DYYYRichMediaHooks, DYYYRichMediaView = cls);
-    }
-    // 音乐卡是 Swift 类，类名带模块前缀，取不到就不装这一组。
-    Class music = NSClassFromString(@"AWEMusicStreamingSwiftImpl.MusicCardViewController");
-    if (music && class_getInstanceMethod(music, @selector(viewDidLayoutSubviews))) {
-        %init(DYYYMusicCardHooks, DYYYMusicCardController = music);
-    }
+    DYYYInstallRichMediaHooks();
+    DYYYInstallMusicCardHooks();
 
     // 文章控制器在 AWESearchFramework 里，可能还没加载。
     DYYYArticleInstallHooks();
     _dyld_register_func_for_add_image(DYYYArticleImageAdded);
-    // 诊断：装饰层各项命中统计，导出包里直接可读。
-    dispatch_async(dispatch_get_main_queue(), ^{
-        static dispatch_source_t timer;
-        if (timer) return;
-        timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-                                       dispatch_get_main_queue());
-        dispatch_source_set_timer(timer,
-                                  dispatch_time(DISPATCH_TIME_NOW, 4ull * NSEC_PER_SEC),
-                                  4ull * NSEC_PER_SEC, NSEC_PER_SEC / 2);
-        dispatch_source_set_event_handler(timer, ^{
-            if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
-            static NSUInteger lastHash = 0;
-            NSString *line = DYYYChromeStats();
-            NSUInteger hash = line.hash;
-            if (hash == lastHash) return;
-            lastHash = hash;
-            NSLog(@"[DYYY][chrome] %@", line);
-            [DYYYDiagnostics appendRuntimeLogLine:
-                [@"[DYYY][chrome] " stringByAppendingString:line]];
-        });
-        dispatch_resume(timer);
-    });
 }

@@ -24,7 +24,6 @@
 
 #import "DYYYFullscreenCore.h"
 #import "AwemeHeaders.h"
-#import "DYYYConfigCache.h"
 #import <objc/runtime.h>
 #import <math.h>
 
