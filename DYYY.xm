@@ -4259,6 +4259,20 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 真实 delegate 容器与数据层入口在 DYYYHooksFullscreen.xm，同一纯函数。
 %hook AWEAwemeDetailTableViewController
 
+// 聊天系视频页（群聊 / 朋友聊天）全屏时不再扣底栏。
+// 抖音按「屏高 − baseTableViewBottomInset」推出内容区高度：
+//   926 − 83 = 843，于是内容区/互动层/进度容器/弹幕层全部停在 843。
+// 这里只回答"底栏占多高"，不写任何 frame：
+//   返回 0 → 抖音自己算出 926 → 四层一次排对，且不会产生布局回环。
+// 其他页面（首页/详情/他人主页/图文）一律 %orig，行为不变。
+- (CGFloat)baseTableViewBottomInset {
+    if (DYYYGetBool(@"DYYYEnableFullScreen") &&
+        [DYYYFullscreenCoordinator isImDetailController:self]) {
+        return 0.0;
+    }
+    return %orig;
+}
+
 - (double)fixedCellHeight {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
         return %orig;
