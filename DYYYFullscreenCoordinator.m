@@ -537,20 +537,25 @@ static NSInteger imDetailActiveCount = 0;
         CGRect frame = view.frame;
         barRect = [self bottomBarRect:bar followingView:view controller:controller];
 
-        // 聊天系视频页（群聊 / 朋友聊天）：互动层**完全放行**，一行都不写。
+        // 聊天系视频页（群聊 / 朋友聊天）：把互动层高度钉成内容层高度（843）。
         //
-        // 这里曾经钉过「互动层 = 内容层高度」。那是拖动进度条弹跳的第二个元凶：
-        // 抖音拖动进度条时会把互动层整体让位（上移一个底栏给输入栏腾位置），
-        // 我们每帧又按内容层高度写回去 —— 两边互顶，肉眼就是弹。
-        // （第一个元凶是同类的进度容器钉位，已在 DYYY.xm 删除。）
+        // 只钉这一层，**不碰进度容器**。实测（#132 / #133 诊断包逐层对比）：
+        //   互动层 843 → 进度容器底边 843（位置正确，静止态）
+        //   互动层 760 → 进度容器底边 760（进度条卡在上方不下来）
+        // 三个版本都满足「容器底边 = 互动层底边」，所以互动层是唯一锚点，
+        // 容器会自己跟着走，不需要任何额外写入。
         //
-        // 现在 IM 页只剩播放器容器被钉满（那是全屏本身需要），
-        // 互动层与进度容器全部交给原生，拖动让位不再被打断。
+        // #132 之所以弹，原因不在这一层，而在当时同时存在的
+        // DYYYIMProgressContainerTarget（它每帧把容器 y 改回 643，
+        // 和抖音拖动让位的 560 互顶）。那个函数已在 #133 删除。
         //
-        // 返回 YES = 「已处理」，让调用方直接 return，跳过后面那段
-        // referString 扣高逻辑（referString 为 nil 时会算成满高 926，
-        // 那同样会和拖动让位互顶）。返回 NO 会继续往下走，所以不能返回 NO。
+        // 同值直接跳过，不会形成回环；只在真的矮一个底栏时才写。
         if (enabled && [self isImDetailController:controller]) {
+            CGFloat contentHeight = CGRectGetHeight(parent.bounds);
+            if (contentHeight > 0 && fabs(frame.size.height - contentHeight) > 0.25) {
+                frame.size.height = contentHeight;
+                view.frame = frame;
+            }
             return YES;
         }
 
