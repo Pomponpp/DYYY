@@ -6889,49 +6889,27 @@ static CGRect DYYYGeoContainerTarget(UIView *view) {
 // （见文件上方同名 hook）：它回答 NO，抖音自己的调整逻辑就会把内容层铺到
 // cell 底，不需要我们写任何一个 frame。
 
-// 聊天系视频页：进度容器的单点归位。
+// 聊天系视频页：进度容器**必须完全放行**。
 //
-// #128 vs #129 的实测差：
-//   content 843 / interaction 843 → 容器 frame {{0,643},{428,200}}，底边 843（正确）
-//   content 926 / interaction 843 → 容器 frame {{0,560},{428,200}}，底边 760（高 83）
-// 即抖音的容器底边 = interaction 底边 − (content − interaction)。
-// 内容层一旦铺满 926，这个减法就多扣了一个底栏，进度条整体上浮、拖起来可见跳动。
+// 曾经在这里把容器底边钉回父级底边，想让进度条位置「更准」——这是进度条
+// 拖动弹跳的直接原因，已删除，不要再加回来。
 //
-// 这里不动 interaction（撑到 926 会让抖音算成底边 926，进度条钻进输入栏下面），
-// 只在容器写入时把底边钉回父级底边（= 输入栏上沿 843）。同值即放行，不会拉锯。
-static CGRect DYYYIMProgressContainerTarget(UIView *view, CGRect frame) {
-    static Class sContainerClass;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ sContainerClass = NSClassFromString(@"AWEPlayInteractionProgressContainerView"); });
-    if (!sContainerClass || ![view isKindOfClass:sContainerClass]) return CGRectNull;
-    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
-
-    UIView *parent = view.superview;
-    if (!parent) return CGRectNull;
-    CGFloat parentHeight = CGRectGetHeight(parent.bounds);
-    CGFloat height = CGRectGetHeight(frame);
-    if (parentHeight <= 0.0 || height <= 0.0 || height >= parentHeight) return CGRectNull;
-
-    CGFloat desiredY = parentHeight - height;
-    CGFloat delta = fabs(CGRectGetMinY(frame) - desiredY);
-    if (delta <= kDYYYGeoTolerance) return CGRectNull;   // 已经在正确位置
-    if (delta < 40.0 || delta > 120.0) return CGRectNull; // 只认"差一个底栏"，动画/过渡态不碰
-    // 必须横跨父级宽度，避免命中同类的其它小容器
-    if (fabs(CGRectGetWidth(frame) - CGRectGetWidth(parent.bounds)) > kDYYYGeoTolerance) return CGRectNull;
-
-    if (![DYYYFullscreenCoordinator isImDetailView:view]) return CGRectNull;
-
-    frame.origin.y = desiredY;
-    return frame;
-}
+// 机制（#132 诊断包实测）：
+//   抖音拖动进度条时会把进度容器整体上移一个底栏（643 → 560）给输入栏让位，
+//   这是原生交互，松手再落回 643。
+//   我们那一版判定「当前 y 与父级底边差 40~120 就改回父级底边」，
+//   而 83 正好落在这个区间 —— 于是每一帧都在拉锯：
+//     抖音改成 560 → 我们改回 643 → 抖音再改成 560 → …
+//   同样的道理，#132 里"把互动层钉成 843"也在拖动时和原生让位互顶。
+//   两个都已删除。
+//
+// 现状：这条路上 IM 页除了播放器容器（让它铺满全屏）之外，
+// 不写任何一个 frame。拖动让位交还给抖音。
 
 // 统一分派：只在播放器容器写入方上做几何修正，其余一律放行。
 static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
     UIResponder *owner = view.nextResponder;
     if (!owner) return CGRectNull;
-
-    CGRect imProgress = DYYYIMProgressContainerTarget(view, frame);
-    if (!CGRectIsNull(imProgress)) return imProgress;
 
     Class mergeClass = DYYYGeoMergeClass();
     if (mergeClass && [owner isKindOfClass:mergeClass]) {
