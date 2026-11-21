@@ -271,6 +271,10 @@ static BOOL DYYYIsInHomeFeedContext(UIView *view) {
     if (!parentView) {
         return;
     }
+    // 拖动时抖音刚算完新 frame 但视图层未刷，先强制刷出最新布局再取坐标，
+    // 否则标签读到旧 frame 写错位置，下一帧被原生布局顶回——视觉上就是"跳"。
+    [parentView layoutIfNeeded];
+    [self layoutIfNeeded];
 
     NSString *scheduleStyle = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYScheduleStyle"];
     BOOL showRightRemainingTime = [scheduleStyle isEqualToString:@"进度条右侧剩余"];
