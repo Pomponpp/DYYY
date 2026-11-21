@@ -144,17 +144,94 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
 // 它原生就是"扣底栏 83"布局，拖进度条时抖音自己把进度容器上移一个底栏
 // 给输入栏让位（原生交互）。行高/表高若在这里接管，会与原生让位布局打架
 // ——表现为拖动中画面跳起一个底栏高度、出现两条底栏分界线，松手弹回。
-+ (BOOL)isIMSessionContext:(UIViewController *)controller {
-    // 判定"聊天系视频详情页"：群聊（chat）与朋友聊天（私聊/朋友会话）共用
-    // IM 容器栈——详情页挂在 IM 消息容器之下或与其同导航栈共存。
-    // 结构特征优先（refer 枚举不可靠，新会话类型随时新增）。
+// 窗口级 IM 会话判定：递归扫当前窗口可见的 VC 树，同时存在
+// "IM 容器族"与"详情表控制器"才判定为聊天系视频页。
+// 不依赖 parentViewController 链（实测页面创建早期该链未就绪，
+// 逐次实时推理会在 926/843 之间摇摆——这才是拖动"弹"的真因）。
+// 结果短暂缓存 0.4s，避免热路径每帧全树扫描。
+// 判定自证：每次判定结果变化时打一条（verdict + 命中分支 + 对象 + 子VC数）。
+// 目的：导包后一眼看出判定走的哪条路，不再靠推理补全。
+static __weak UIViewController *DYYYLastIMLoggedController;
+static NSInteger DYYYLastIMLoggedVerdict = -1;
+
+static BOOL DYYYLogIMVerdict(BOOL result, NSString *reason, UIViewController *controller) {
     if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        NSLog(@"[DYYY][imdetail] 判定 cls=%@ 子VC数=%lu",
-              NSStringFromClass([controller class]),
-              (unsigned long)controller.childViewControllers.count);
-        for (UIViewController *child in controller.childViewControllers) {
-            NSLog(@"[DYYY][imdetail]   child=%@", NSStringFromClass([child class]));
+        BOOL changed = (DYYYLastIMLoggedController != controller) ||
+                       (DYYYLastIMLoggedVerdict != (result ? 1 : 0));
+        if (changed) {
+            DYYYLastIMLoggedController = controller;
+            DYYYLastIMLoggedVerdict = result ? 1 : 0;
+            NSLog(@"[DYYY][imdetail] verdict=%d reason=%@ cls=%@ 子VC=%lu",
+                  result ? 1 : 0,
+                  reason ?: @"?",
+                  NSStringFromClass([controller class]),
+                  (unsigned long)controller.childViewControllers.count);
         }
+    }
+    return result;
+}
+
+static BOOL DYYYWindowHasIMSession(void) {
+    static CFTimeInterval cachedAt = 0;
+    static BOOL cachedResult = NO;
+    CFTimeInterval now = CACurrentMediaTime();
+    if (now - cachedAt < 0.4) return cachedResult;
+    cachedAt = now;
+
+    UIWindow *window = [DYYYUtils getActiveWindow];
+    if (!window) { cachedResult = NO; return NO; }
+
+    static NSArray *imClasses;
+    static Class detailClass;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        imClasses = @[
+            NSClassFromString(@"AWEIMMessageBaseViewController"),
+            NSClassFromString(@"AWEIMMessageTabRootViewController"),
+            NSClassFromString(@"AWEIMChatListViewController"),
+            NSClassFromString(@"IESIMInputViewController"),
+            NSClassFromString(@"AWEIMFeedVideoQuickReplayInputViewController"),
+        ].copy;
+        detailClass = NSClassFromString(@"AWEAwemeDetailTableViewController");
+    });
+
+    __block BOOL hasIM = NO;
+    __block BOOL hasDetail = NO;
+    NSMutableArray *queue = [NSMutableArray array];
+    if (window.rootViewController) [queue addObject:window.rootViewController];
+    NSMutableSet<NSValue *> *seen = [NSMutableSet set];
+    NSUInteger guard = 0;
+    while (queue.count > 0 && guard++ < 200) {
+        id item = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        if (![item isKindOfClass:[UIViewController class]]) continue;
+        UIViewController *vc = (UIViewController *)item;
+        NSValue *key = [NSValue valueWithNonretainedObject:vc];
+        if ([seen containsObject:key]) continue;
+        [seen addObject:key];
+
+        // 只统计真正挂在窗口上的 VC（Tab 切换后旧 Tab 的 view 不在 window）
+        if (vc.isViewLoaded && vc.view.window == window) {
+            for (Class cls in imClasses) if (cls && [vc isKindOfClass:cls]) { hasIM = YES; break; }
+            if (detailClass && [vc isKindOfClass:detailClass]) hasDetail = YES;
+        }
+        [queue addObjectsFromArray:vc.childViewControllers];
+        if (vc.presentedViewController) [queue addObject:vc.presentedViewController];
+        if ([vc isKindOfClass:[UINavigationController class]]) {
+            [queue addObjectsFromArray:((UINavigationController *)vc).viewControllers];
+        }
+        if (hasIM && hasDetail) break;
+    }
+    cachedResult = (hasIM && hasDetail);
+    return cachedResult;
+}
+
++ (BOOL)isIMSessionContext:(UIViewController *)controller {
+    // 判定"聊天系视频详情页"（群聊 + 朋友聊天）。
+    // 第一判据：窗口级结构快照（一次性、不依赖时序）；
+    // 其余为兜底（refer / 父链 / 兄弟），保留以防窗口判定失效。
+    if (DYYYWindowHasIMSession()) {
+        return DYYYLogIMVerdict(YES, @"window", controller);
     }
     static NSArray *imContainerClasses;
     static dispatch_once_t once;
@@ -169,12 +246,13 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
     });
     for (UIViewController *parent = controller; parent; parent = parent.parentViewController) {
         for (Class cls in imContainerClasses) {
-            if (cls && [parent isKindOfClass:cls]) return YES;
+            if (cls && [parent isKindOfClass:cls]) return DYYYLogIMVerdict(YES, @"parent", controller);
         }
-        // 子 VC 层级（快捷回复栏以子 VC 形式压在详情页底部）
+        // 子 VC / 兄弟层级：实测 IM 容器与详情页是同级兄弟（同挂一个
+        // 导航控制器下），且详情页的子 VC 仅在页面完全就绪后才出现。
         for (UIViewController *child in parent.childViewControllers) {
             for (Class cls in imContainerClasses) {
-                if (cls && [child isKindOfClass:cls]) return YES;
+                if (cls && [child isKindOfClass:cls]) return DYYYLogIMVerdict(YES, @"child/sibling", controller);
             }
         }
         // 同导航栈共存：IM 容器在导航栈里与详情页相邻（从聊天点进视频的 push 链）
@@ -182,7 +260,7 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
         if (nav) {
             for (UIViewController *stackVC in nav.viewControllers) {
                 for (Class cls in imContainerClasses) {
-                    if (cls && [stackVC isKindOfClass:cls]) return YES;
+                    if (cls && [stackVC isKindOfClass:cls]) return DYYYLogIMVerdict(YES, @"navstack", controller);
                 }
             }
         }
@@ -191,7 +269,7 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
             if (refer.length > 0) {
                 NSString *lower = [refer lowercaseString];
                 if ([lower isEqualToString:@"chat"] || [lower containsString:@"chat_room"] ||
-                    [lower hasPrefix:@"im_"]) return YES;
+                    [lower hasPrefix:@"im_"]) return DYYYLogIMVerdict(YES, @"refer", controller);
             }
         }
     }
