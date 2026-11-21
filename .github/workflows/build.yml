@@ -142,7 +142,7 @@ jobs:
           # 产出物 = .theos/obj/arm64/DYYY.dylib，直接拷出上传。
           # rootless/rootful/roothide 的 deb 打包脚本保留在 git 历史里，
           # 需要时恢复对应步骤即可。
-          make THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 ARCHS=arm64 -j$(sysctl -n hw.ncpu)
+          make THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 ARCHS=arm64 GITHUB_SHA=$GITHUB_SHA -j$(sysctl -n hw.ncpu)
           DYLIB=$(find .theos/obj -name "DYYY.dylib" -type f | head -1)
           if [ -z "$DYLIB" ]; then
             echo "dylib not found in .theos/obj" >&2

@@ -148,6 +148,14 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
     // 判定"聊天系视频详情页"：群聊（chat）与朋友聊天（私聊/朋友会话）共用
     // IM 容器栈——详情页挂在 IM 消息容器之下或与其同导航栈共存。
     // 结构特征优先（refer 枚举不可靠，新会话类型随时新增）。
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        NSLog(@"[DYYY][imdetail] 判定 cls=%@ 子VC数=%lu",
+              NSStringFromClass([controller class]),
+              (unsigned long)controller.childViewControllers.count);
+        for (UIViewController *child in controller.childViewControllers) {
+            NSLog(@"[DYYY][imdetail]   child=%@", NSStringFromClass([child class]));
+        }
+    }
     static NSArray *imContainerClasses;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
