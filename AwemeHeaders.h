@@ -541,14 +541,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWELivePreStream4LayerContainerView : UIView
 @end
 
-@interface AWEGradientView : UIView
-@end
 
 @interface AWEKnowledgeGradientView : UIView
 @end
 
-@interface AWEStoryContainerCollectionView : UICollectionView
-@end
 
 
 @interface AWEFeedTableView : UIView
