@@ -38,4 +38,8 @@
 // 自定义图标加载（主文件实现）
 UIImage *DYYYLoadCustomImage(NSString *fileName, CGSize targetSize);
 
+// 全屏几何（主文件实现）：表被撑高时记录原高，作为 HUD 钉位的锚点。
+// 只在表被真正撑高时写入一次；没被撑高的表（聊天页）不记，HUD 因此自动放行。
+void DYYYGeoRememberOriginalHeight(UIView *table, CGFloat height);
+
 #endif

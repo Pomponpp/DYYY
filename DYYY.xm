@@ -4269,12 +4269,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
         return %orig;
     }
-    // 群聊视频详情页（IM 详情）保持原生行高：拖动让位是原生交互
-    if ([DYYYFullscreenCoordinator isImDetailController:self]) {
-        return %orig;
-    }
     double nativeHeight = %orig;
-    return [DYYYFullscreenCoordinator fullCellHeightForNative:nativeHeight];
+    // 带前提的行高回答：表没被撑高过（聊天页就是这种）→ 回答原生值。
+    // 不再需要 IM 页面特判。
+    return [DYYYFullscreenCoordinator rowHeightForTable:self.tableView native:nativeHeight];
 }
 
 - (double)cellHeightAtIndex:(long long)index {
@@ -4285,11 +4283,8 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
         return %orig;
     }
-    if ([DYYYFullscreenCoordinator isImDetailController:self]) {
-        return %orig;
-    }
     double nativeHeight = %orig;
-    return [DYYYFullscreenCoordinator fullCellHeightForNative:nativeHeight];
+    return [DYYYFullscreenCoordinator rowHeightForTable:table native:nativeHeight];
 }
 
 
@@ -4324,41 +4319,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %end
 
-// ── 聊天系视频页：让播放器覆盖底栏（41.2 的真正开关）─────────────────
-// 41.2 类表里 AWEAwemeDetailTableViewCell 有这么一组：
-//   - playerNotCoverBottomBarEnable
-//   - p_adjustVideoFrameIfNeeded:
-//   - adjustVideoFrameIfNeeded / adjustVideoFrameIfNeededWithPanelType:
-//   - lastAdjustHeight
-// 名字直译就是「播放器**不**覆盖底栏 = 开」。聊天页内容层停在 843
-// （= 926 − 83）正是这个判定为 YES 的结果；抖音不为它跑任何我们认识的
-// getter（#129 的 baseTableViewBottomInset 归零实测毫无变化）。
-//
-// 这里按「只回答、不改写」直接回答 NO：
-// 抖音自己的调整逻辑就会把视频铺到 cell 底，四层一次排对，
-// 我们一行 frame 都不用写，也就不存在 #128 那种写入回环。
-%hook AWEAwemeDetailTableViewCell
-
-- (BOOL)playerNotCoverBottomBarEnable {
-    BOOL orig = %orig;
-    BOOL answer = orig;
-    if (orig && DYYYGetBool(@"DYYYEnableFullScreen") &&
-        [DYYYFullscreenCoordinator isImDetailView:self]) {
-        answer = NO;
-    }
-    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        static CFAbsoluteTime sLast = 0;
-        CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-        if (now - sLast > 1.0) {
-            sLast = now;
-            NSLog(@"[DYYY][imcover] playerNotCoverBottomBarEnable orig=%d answer=%d cls=%@",
-                  orig, answer, NSStringFromClass([self class]));
-        }
-    }
-    return answer;
-}
-
-%end
 
 // 表侧写入探针：谁把行高写成 843（含滚动估算值）。
 // 只对抖音详情表/首页表打日志，其他 UITableView 一律静默放行。
@@ -4404,6 +4364,13 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
         %orig;
         return;
+    }
+    // 与详情表同一套：撑高那一刻记录原高，作为 HUD 钉位锚点。
+    UIView *tableParent = self.superview;
+    CGFloat tableTarget = tableParent ? CGRectGetHeight(tableParent.bounds) : 0;
+    if (tableTarget > 0 && CGRectGetHeight(frame) < tableTarget - 0.5 &&
+        CGRectGetHeight(frame) >= tableTarget * 0.5) {
+        DYYYGeoRememberOriginalHeight(self, CGRectGetHeight(frame));
     }
     CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:frame];
     if (CGRectIsNull(adjusted)) {
@@ -6847,16 +6814,17 @@ static BOOL DYYYGeoCanCoverScreen(UIView *view) {
 // 视频容器的目标 frame；返回 CGRectNull 表示放行（不干预）。
 static CGRect DYYYGeoContainerTarget(UIView *view) {
     if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
-    // 聊天系视频页（群聊 / 朋友聊天）**要钉**，而且必须钉到 cell 高（926）。
+    // 聊天系视频页（群聊 / 朋友聊天）**不做排除**，和首页/详情/作品页同一套规则。
     //
-    // 该页内容层被抖音固定写成 843（= 926 − 83），但内容层 clipsToBounds = 0
-    // （诊断包 view-tree.json 实测），所以播放器写 926 时画面会真正铺到屏幕底，
-    // 不会被内容层裁掉 —— #128 的诊断包就是这样，视频是全屏的。
-    // #129 把这里对 IM 页放行（返回 CGRectNull），视频于是退回 843，不再全屏。
-    // 因此这里不做 IM 放行，让它走下面的「可覆盖全屏 → 取 cell 高」分支。
+    // 曾经在这里对 IM 页返回 CGRectNull（放行播放器钉位），那是为了修"拖动弹"，
+    // 但方向是反的：放行之后播放器退回内容层高 843，视频不再全屏。
+    // 行为对照的结论是「聊天页照样钉满，其余全放行」——
+    //   聊天页表高本来就是满的（实测 926，未被底栏压缩），
+    //   所以表高守卫（本文件 adjustDetailTableFrame 的 current >= target 放行）
+    //   自动把它摘出撑高作用域，也就没有"表撑高前的原高"，
+    //   HUD 钉位因拿不到锚点同样自动放行。
+    // 两道守卫天然把聊天页摘出去，不需要任何 IM 特判。
     //
-    // 拖动手感的成因在别处：互动层被扣成 760、进度容器跟着到 760（见
-    // DYYYFullscreenCoordinator 的 layoutNativeInteraction），不是播放器高度。
     // 作用域只到主窗口：画中画/横屏播放器自带一整套同样层级的视图，
     // 钉满会把小窗撑成盖住整页的全屏播放器。
     UIWindow *window = view.window;
@@ -6874,9 +6842,68 @@ static CGRect DYYYGeoContainerTarget(UIView *view) {
     return CGRectMake(0.0, 0.0, width, height);
 }
 
-// HUD 钉位：写入高度超过"表撑高前的原高"时钉回原高；返回 CGRectNull 放行。
-// HUD 钉位已移除：互动层按原生布局走，不再依赖"表撑高前的原高"缓存。
-// 该缓存正是 41.2 上"表 926 滚 / cell 843 排"错位链条的一环（状态丢失即失效）。
+// HUD 钉位：只「向下压」，绝不「向上拉」。
+//
+// 行为对照得到的规则：
+//   拿不到「表撑高前的原高」→ 直接放行；
+//   写入高度 <= 原高 → 放行（原生缩小态交给宿主）；
+//   写入高度 >  原高 → 压回原高。
+//
+// 这个方向性是关键。聊天页表高本来就是满的（926 未被压缩），
+// 所以走不到撑高分支，也就没有原高缓存 → 第一条命中 → 完全放行。
+// 抖音在这页写 760 时我们什么都不做，不存在互顶。
+//
+// 反面教材：#132 / #134 曾「无条件把互动层拉到内容层高 843」，
+// 方向正是反的 —— 抖音写 760、我们拉到 843、它再写 760，每秒几十次，
+// 肉眼就是拖动时弹跳。那条路已删除。
+//
+// 缓存只在表被真正撑高时写入（见 DYYYGeoRememberOriginalHeight 的调用点）。
+static char kDYYYGeoOriginalHeightKey;
+
+// 从 view 往上找视频表（详情表继承自 AWEFeedDataSafeTableView）。
+static UIView *DYYYGeoTableForView(UIView *view) {
+    static Class sTableClass;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ sTableClass = NSClassFromString(@"AWEFeedDataSafeTableView"); });
+    if (!sTableClass) return nil;
+    UIView *ancestor = view.superview;
+    for (NSUInteger depth = 0; ancestor && depth < 8; depth++, ancestor = ancestor.superview) {
+        if ([ancestor isKindOfClass:sTableClass]) return ancestor;
+    }
+    return nil;
+}
+
+// 表撑高时记录原高，作为 HUD 钉位的锚点。只记第一次。
+void DYYYGeoRememberOriginalHeight(UIView *table, CGFloat height) {
+    if (!table || height <= 0.0 || !isfinite(height)) return;
+    if (objc_getAssociatedObject(table, &kDYYYGeoOriginalHeightKey)) return;
+    objc_setAssociatedObject(table, &kDYYYGeoOriginalHeightKey, @(height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    // 同一个「表被撑高过」的事实，也要让行高入口知道：
+    // 行高只在表真的被撑高时才回答满高，否则回答原生值（行为对照的判据）。
+    if ([table isKindOfClass:[UITableView class]]) {
+        [DYYYFullscreenCoordinator rememberTableOriginalHeight:(UITableView *)table height:height];
+    }
+}
+
+// 返回 CGRectNull = 放行。调用方已确认写入方是 AWEPlayInteractionViewController。
+static CGRect DYYYGeoHUDAdjustFrame(UIView *view, CGRect frame) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
+
+    UIView *table = DYYYGeoTableForView(view);
+    if (!table) return CGRectNull;
+
+    NSNumber *original = objc_getAssociatedObject(table, &kDYYYGeoOriginalHeightKey);
+    if (!original) return CGRectNull;          // 表没被撑高过 → 这页不在作用域，全放行
+
+    CGFloat pinned = original.doubleValue;
+    if (!isfinite(pinned) || pinned <= 0.0) return CGRectNull;
+    // 没超过原高 → 原生缩小态，放行。聊天页的 760 就是走这一条。
+    if (CGRectGetHeight(frame) <= pinned + kDYYYGeoTolerance) return CGRectNull;
+
+    frame.origin.y = 0.0;
+    frame.size.height = pinned;
+    return frame;
+}
 
 // 聊天系视频页：内容层 843 的根因不在写入通道，已弃用「替换 frame」这条路。
 //
@@ -6906,7 +6933,7 @@ static CGRect DYYYGeoContainerTarget(UIView *view) {
 // 现状：这条路上 IM 页除了播放器容器（让它铺满全屏）之外，
 // 不写任何一个 frame。拖动让位交还给抖音。
 
-// 统一分派：只在播放器容器写入方上做几何修正，其余一律放行。
+// 统一分派：只在两个已知写入方上做几何修正，其余一律放行。
 static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
     UIResponder *owner = view.nextResponder;
     if (!owner) return CGRectNull;
@@ -6922,6 +6949,15 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
             return CGRectNull;   // 已经是目标值，不必重复写
         }
         return target;
+    }
+
+    // 互动层（HUD）写入：只在「表被撑高过」的页面钉位，其余放行。
+    // 聊天页表高本来就是满的，永远不会走到撑高分支，所以这里拿不到锚点 → 放行。
+    static Class sInteractionClass;
+    static dispatch_once_t sInteractionOnce;
+    dispatch_once(&sInteractionOnce, ^{ sInteractionClass = NSClassFromString(@"AWEPlayInteractionViewController"); });
+    if (sInteractionClass && [owner isKindOfClass:sInteractionClass]) {
+        return DYYYGeoHUDAdjustFrame(view, frame);
     }
     return CGRectNull;
 }

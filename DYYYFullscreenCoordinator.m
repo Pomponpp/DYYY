@@ -395,6 +395,36 @@ static NSInteger imDetailActiveCount = 0;
     return nativeHeight;
 }
 
+// 带「表是否被撑高」前提的行高回答（对齐已验证实现的判据）。
+//
+// 原版 fullCellHeightForNative: 只看「窗口高 − 原生行高」落在 1~160 就回答满高，
+// 没有任何前置条件。问题是：聊天系视频页的表**从来没有被撑高**（它本来就不受底栏
+// 压缩，实测表高 926 = 容器高），行高却被这条规则拉到 926 ——
+// 于是 cell 926 / 内容层 843 两套基准并存，这就是拖动弹跳的结构性来源。
+//
+// 行为对照的判据是：先拿「表撑高前的原高」，拿不到就直接放行；再要求
+// 「当前表高 > 原高 + 容差」才继续。聊天页这两条都过不去 → 行高放行。
+//
+// 所以这里补上前提：表没被撑高过 → 直接回答原生值。
++ (CGFloat)rowHeightForTable:(UITableView *)table native:(CGFloat)nativeHeight {
+    if (!table) return nativeHeight;
+    NSNumber *original = objc_getAssociatedObject(table, @selector(rowHeightForTable:native:));
+    if (!original) return nativeHeight;
+
+    CGFloat originalH = original.doubleValue;
+    CGFloat tableH = CGRectGetHeight(table.bounds);
+    if (!isfinite(originalH) || originalH <= 0.0 || !isfinite(tableH)) return nativeHeight;
+    if (tableH <= originalH + 0.5) return nativeHeight;   // 表没真的变高 → 不在作用域
+    return [self fullCellHeightForNative:nativeHeight];
+}
+
+// 表撑高时登记原高（键与行高查询共用 @selector(rowHeightForTable:native:)）。
++ (void)rememberTableOriginalHeight:(UITableView *)table height:(CGFloat)height {
+    if (!table || height <= 0.0 || !isfinite(height)) return;
+    if (objc_getAssociatedObject(table, @selector(rowHeightForTable:native:))) return;
+    objc_setAssociatedObject(table, @selector(rowHeightForTable:native:), @(height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 // 行高纯函数：原生行高比窗口矮一个底栏高度（或类似压缩）时，回答满视口高。
 // 无状态：不依赖任何关联对象/缓存。锚取窗口高与原生行高的差值区间，
 // 特殊行与未就绪尺寸透传。
@@ -537,28 +567,17 @@ static NSInteger imDetailActiveCount = 0;
         CGRect frame = view.frame;
         barRect = [self bottomBarRect:bar followingView:view controller:controller];
 
-        // 聊天系视频页（群聊 / 朋友聊天）：把互动层高度钉成内容层高度（843）。
+        // 互动层高度：**只按原生底栏上沿算，不做任何页面特判**。
         //
-        // 只钉这一层，**不碰进度容器**。实测（#132 / #133 诊断包逐层对比）：
-        //   互动层 843 → 进度容器底边 843（位置正确，静止态）
-        //   互动层 760 → 进度容器底边 760（进度条卡在上方不下来）
-        // 三个版本都满足「容器底边 = 互动层底边」，所以互动层是唯一锚点，
-        // 容器会自己跟着走，不需要任何额外写入。
+        // 曾经这里有一支「聊天页 → 把互动层拉到内容层高 843」的分支，
+        // 那是拖动弹跳的直接写入源：抖音写 760（= 843 − 83，原生静止值），
+        // 我们拉到 843，它下一轮又写 760 —— 每秒几十次互顶，肉眼就是弹。
         //
-        // #132 之所以弹，原因不在这一层，而在当时同时存在的
-        // DYYYIMProgressContainerTarget（它每帧把容器 y 改回 643，
-        // 和抖音拖动让位的 560 互顶）。那个函数已在 #133 删除。
-        //
-        // 同值直接跳过，不会形成回环；只在真的矮一个底栏时才写。
-        if (enabled && [self isImDetailController:controller]) {
-            CGFloat contentHeight = CGRectGetHeight(parent.bounds);
-            if (contentHeight > 0 && fabs(frame.size.height - contentHeight) > 0.25) {
-                frame.size.height = contentHeight;
-                view.frame = frame;
-            }
-            return YES;
-        }
-
+        // 行为对照里没有这种分支：HUD 的高度写入由 setFrame 拦截统一处理，
+        // 且规则是「只向下压到表撑高前的原高，拿不到原高就放行」。
+        // 聊天页的表从来没被撑高过，所以那边完全放行，什么都不写。
+        // 我们的 setFrame 拦截（DYYYGeoHUDAdjustFrame）现在也是同一套规则，
+        // 这里就不该再有第二条写入路径。
         CGFloat bottom = CGRectGetMinY([parent convertRect:barRect fromView:view.window]);
         CGFloat height = MIN(CGRectGetMaxY(parent.bounds), bottom) - frame.origin.y;
         if (height <= 0) return NO;

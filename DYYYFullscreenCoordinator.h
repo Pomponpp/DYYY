@@ -17,6 +17,11 @@
 + (void)syncFeedTableHeight:(UIViewController *)controller;
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame;
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target;
+
+// 行高回答（带「表被撑高过」前提）：表没被撑高过时返回原生值。
+// 聊天系视频页靠这条自动出圈，不需要页面特判。
++ (CGFloat)rowHeightForTable:(UITableView *)table native:(CGFloat)nativeHeight;
++ (void)rememberTableOriginalHeight:(UITableView *)table height:(CGFloat)height;
 + (CGFloat)fullCellHeightForNative:(CGFloat)nativeHeight;
 + (BOOL)isImDetailController:(UIViewController *)controller;
 // 数据层对象（非 UIView 子类）用 id 接收，内部走 nextResponder 链找 VC

@@ -353,10 +353,12 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
         %orig;
         return;
     }
-    // 群聊视频详情页（IM 详情）保持原生表高，见 isImDetailView: 注释
-    if ([DYYYFullscreenCoordinator isImDetailView:self]) {
-        %orig;
-        return;
+    // 撑高那一刻记录原高，作为 HUD 钉位的锚点；没被撑高的表（聊天页）不会记。
+    UIView *parentForHeight = self.superview;
+    CGFloat targetHeight = parentForHeight ? CGRectGetHeight(parentForHeight.bounds) : 0;
+    if (targetHeight > 0 && CGRectGetHeight(frame) < targetHeight - 0.5 &&
+        CGRectGetHeight(frame) >= targetHeight * 0.5) {
+        DYYYGeoRememberOriginalHeight(self, CGRectGetHeight(frame));
     }
     CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:frame];
     if (CGRectIsNull(adjusted)) {
@@ -369,20 +371,30 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
     %orig(adjusted);
 }
 
-// 兜底：若布局后仍矮于父视图（布局早期半成品漏网），再拉满一次。
-// 聊天系视频页（群聊/朋友聊天）必须放行：该页原生表就是"扣底栏 843"，
-// 兜底会把表拉满到 926，与原生让位布局打架——实测此路径是拖动"弹"的
-// 直接写入者（setFrame 已排除，但本兜底只按高度判断，未做会话排除）。
+// 布局后补正：只走与 setFrame 同一个守卫函数，不另开第二个写入通道。
+//
+// 原来这里直接写 `self.frame.size.height = 父视图高`，绕过了
+// adjustDetailTableFrame 的守卫，属于「多点写入」。行为对照的写法是
+// 在控制器 viewDidLayoutSubviews 前后各同步一次，且每次都经过同一个函数。
+//
+// 守卫里的 `current >= target - 容差 → 放行` 会自动把聊天页摘出去：
+// 该页表高本来就是满的（实测 926），不会被误拉满，也不需要 IM 特判。
 - (void)layoutSubviews {
     %orig;
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return;
-    if ([DYYYFullscreenCoordinator isImDetailView:self]) return;
+
     UIView *sv = self.superview;
-    if (sv && CGRectGetHeight(sv.bounds) > 0 && self.frame.size.height < CGRectGetHeight(sv.bounds) - 0.5) {
-        CGRect f = self.frame;
-        f.size.height = CGRectGetHeight(sv.bounds);
-        self.frame = f;
+    CGFloat target = sv ? CGRectGetHeight(sv.bounds) : 0;
+    if (target <= 0.0) return;
+
+    CGRect f = self.frame;
+    CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:f target:target];
+    if (CGRectIsNull(adjusted)) return;
+
+    if (CGRectGetHeight(f) < target - 0.5 && CGRectGetHeight(f) >= target * 0.5) {
+        DYYYGeoRememberOriginalHeight(self, CGRectGetHeight(f));
     }
+    self.frame = adjusted;
 }
 
 %end
@@ -399,7 +411,6 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 - (CGFloat)fixedCellHeight {
     CGFloat original = %orig;
-    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
     CGFloat adjusted = [DYYYFullscreenCoordinator fullCellHeightForNative:original];
     if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
         static BOOL loggedOnce = NO;
@@ -417,11 +428,10 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 - (CGFloat)originalTableViewHeight {
     CGFloat original = %orig;
-    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
     return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (void)setOriginalTableViewHeight:(CGFloat)height {
-    %orig([DYYYFullscreenCoordinator isImDetailView:self] ? height : [DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
 }
 
 %end
@@ -430,11 +440,10 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 - (CGFloat)originalTableViewHeight {
     CGFloat original = %orig;
-    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
     return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (void)updateOriginalTableViewHeight:(CGFloat)height {
-    %orig([DYYYFullscreenCoordinator isImDetailView:self] ? height : [DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
 }
 
 %end
@@ -444,11 +453,10 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 - (CGFloat)originalTableViewHeight {
     CGFloat original = %orig;
-    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
     return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (void)setOriginalTableViewHeight:(CGFloat)height {
-    %orig([DYYYFullscreenCoordinator isImDetailView:self] ? height : [DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
 }
 
 %end
@@ -457,16 +465,14 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 - (CGFloat)normalHeight {
     CGFloat original = %orig;
-    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
     return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (CGFloat)originalTableViewHeight {
     CGFloat original = %orig;
-    if ([DYYYFullscreenCoordinator isImDetailView:self]) return original;
     return [DYYYFullscreenCoordinator fullCellHeightForNative:original];
 }
 - (void)setOriginalTableViewHeight:(CGFloat)height {
-    %orig([DYYYFullscreenCoordinator isImDetailView:self] ? height : [DYYYFullscreenCoordinator fullCellHeightForNative:height]);
+    %orig([DYYYFullscreenCoordinator fullCellHeightForNative:height]);
 }
 
 %end
