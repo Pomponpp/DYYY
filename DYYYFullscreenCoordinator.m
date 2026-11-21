@@ -537,13 +537,26 @@ static NSInteger imDetailActiveCount = 0;
         CGRect frame = view.frame;
         barRect = [self bottomBarRect:bar followingView:view controller:controller];
 
-        // 聊天系视频页（群聊 / 朋友聊天）这里**故意保持原生**：互动层 843。
+        // 聊天系视频页（群聊 / 朋友聊天）：互动层钉到「内容层高度」，不是底栏上沿。
         //
-        // 41.2 实测：content 843 / interaction 843 时，进度容器底边 = 843（正确，
-        // 正好压在输入栏上沿）；content 926 / interaction 843 时，进度容器底边 = 760
-        // （高 83）。可见抖音的进度容器底边 = interaction 底边 − (content − interaction)。
-        // 若把 interaction 也撑到 926，抖音会算成底边 926，进度条直接钻到输入栏下面。
-        // 所以这里不动，交给 DYYY.xm 里 DYYYIMProgressContainerTarget 单点归位。
+        // 41.2 三版诊断包逐层实测（Coordinator 代码在 #130/#131 完全相同）：
+        //   #130：内容层 843 / 互动层 843 / 进度容器底边 843  ← 进度条位置正确
+        //   #131：内容层 843 / 互动层 760 / 进度容器底边 760  ← 进度条上浮 83
+        // 两版的进度容器底边都严格等于互动层底边，所以互动层就是唯一的锚。
+        // 760 = 843 − 83，是抖音在 IM 页按「输入栏」又扣了一次（输入栏不是
+        // activeBottomBar，native 的 bottom 计算在这里算错）。
+        //
+        // 直接把互动层定成父级（内容层）高度 843，进度容器自然落回 843，
+        // 与 #130 的实测值一致；不再是靠副作用的巧合。
+        // 同值不重复写、带容差，不会形成回环。
+        if (enabled && [self isImDetailController:controller]) {
+            CGFloat contentHeight = CGRectGetHeight(parent.bounds);
+            if (contentHeight > 0 && fabs(frame.size.height - contentHeight) > 0.25) {
+                frame.size.height = contentHeight;
+                view.frame = frame;
+            }
+            return YES;
+        }
 
         CGFloat bottom = CGRectGetMinY([parent convertRect:barRect fromView:view.window]);
         CGFloat height = MIN(CGRectGetMaxY(parent.bounds), bottom) - frame.origin.y;

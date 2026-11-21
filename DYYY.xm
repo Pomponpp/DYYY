@@ -6847,13 +6847,16 @@ static BOOL DYYYGeoCanCoverScreen(UIView *view) {
 // 视频容器的目标 frame；返回 CGRectNull 表示放行（不干预）。
 static CGRect DYYYGeoContainerTarget(UIView *view) {
     if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
-    // 聊天系视频页（群聊 / 朋友聊天）不钉位：
-    // 该页 cell 高度是 926（我们撑的行高），但 cell 内容区原生就是 843（扣底栏）。
-    // 本函数把播放器钉到 cell 高度 926，导致播放器(926)比所在内容区(843)高一个
-    // 底栏；拖动进度条时抖音按 926 换算手势、松手后按 843 布局——表现为
-    // "拖动中跳起一个底栏、松手弹回"。放行原生即可与手势一致。
-    // （上轮快照实证：播放器 926 / 内容区 843 / 互动层 843 / 弹幕层 843）
-    if ([DYYYFullscreenCoordinator isImDetailView:view]) return CGRectNull;
+    // 聊天系视频页（群聊 / 朋友聊天）**要钉**，而且必须钉到 cell 高（926）。
+    //
+    // 该页内容层被抖音固定写成 843（= 926 − 83），但内容层 clipsToBounds = 0
+    // （诊断包 view-tree.json 实测），所以播放器写 926 时画面会真正铺到屏幕底，
+    // 不会被内容层裁掉 —— #128 的诊断包就是这样，视频是全屏的。
+    // #129 把这里对 IM 页放行（返回 CGRectNull），视频于是退回 843，不再全屏。
+    // 因此这里不做 IM 放行，让它走下面的「可覆盖全屏 → 取 cell 高」分支。
+    //
+    // 拖动手感的成因在别处：互动层被扣成 760、进度容器跟着到 760（见
+    // DYYYFullscreenCoordinator 的 layoutNativeInteraction），不是播放器高度。
     // 作用域只到主窗口：画中画/横屏播放器自带一整套同样层级的视图，
     // 钉满会把小窗撑成盖住整页的全屏播放器。
     UIWindow *window = view.window;
