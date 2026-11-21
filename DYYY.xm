@@ -34,6 +34,8 @@
 #import "DYYYToast.h"
 #import "DYYYUtils.h"
 #import "DYYYFullscreenCoordinator.h"
+#import "DYYYFullscreenCore.h"
+#import "DYYYFullscreenChrome.h"
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "DYYYClassRegistry.h"
@@ -6796,11 +6798,6 @@ static Class tabBarButtonClass = nil;
           [self setFrame:frame];
         });
         return;
-    }
-
-    // 纯观测：记录进度容器每一次真实的 frame 写入（不改值）。
-    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        DYYYLogProgressContainerWrite(self, self.frame, frame);
     }
 
 
