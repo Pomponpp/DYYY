@@ -159,113 +159,72 @@
 
 %hook AWEPlayInteractionProgressContainerView
 
-// ── 逐帧记录容器的位置变化（纯观测，不改值）──────────────────────
+// ── 进度条拖动弹跳修复：约束不动，transform 补视觉偏移 ──────────────
 //
-// #136 结论：该容器的 setFrame 一次都没被调用（pwrite = 0），
-// 但用户实测「整条进度条连时间一起上移约一个底栏高度」。
-// 整条一起动、又不是 setFrame → 只可能是 center 或 transform。
-// 这两个入口 #136 没接，所以抓不到。
+// 已确认的事实：
+//   #138 诊断包：setCenter 在 743 ↔ 660 之间成对翻转，差值 83（输入栏高度）
+//   #140 调用栈：四条栈前 7 帧完全相同 → Auto Layout 约束求解路径
+//   即：这 83pt 不是动画代码写的，是每轮布局重新解约束算出来的。
 //
-// 这里把 center / transform / bounds 全部接上，判据 0.01，带毫秒时间戳。
-// 打完即删。
-- (void)setBounds:(CGRect)bounds {
-    CGRect old = self.bounds;
-    %orig;
-    if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
-    if (fabs(old.size.height - bounds.size.height) < 0.01) return;
-    static NSInteger sCount = 0;
-    if (++sCount > 300) return;
-    NSLog(@"[DYYY][cwrite] setBounds #%ld t=%.3f h %.2f→%.2f",
-          (long)sCount, CFAbsoluteTimeGetCurrent(), old.size.height, bounds.size.height);
-}
+// 所以改 frame / 改 center / 拦写入全部无效 —— 约束一重算就覆盖。
+// （#139 拦 setCenter 把容器钉死在 826，整条推出屏幕，进度条消失。）
+//
+// transform 不参与 auto layout，约束求解不会重置它。
+// 在布局之后用 transform 把视觉位置补回正确值，是唯一不与约束对写的手段。
+//
+// 正确位置直接算，不采样（#139 就是采样采到 826 才崩）：
+//   容器锚点居中 → 正确 center.y = 父视图高 − 容器高 / 2
+//   实测校验：843 − 200/2 = 743（与诊断包静止位一致）
+static void DYYYProgressPinVisual(UIView *container) {
+    if (![container isKindOfClass:[UIView class]]) return;
 
-- (void)setFrame:(CGRect)frame {
-    CGRect old = self.frame;
-    %orig;
-    if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
-    if (fabs(old.origin.y - frame.origin.y) < 0.01 &&
-        fabs(old.size.height - frame.size.height) < 0.01) {
+    // 关掉全屏时复位，不留残留。
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) {
+        if (!CGAffineTransformIsIdentity(container.transform)) {
+            container.transform = CGAffineTransformIdentity;
+        }
         return;
     }
-    static NSInteger sCount = 0;
-    if (++sCount > 300) return;
-    NSLog(@"[DYYY][cwrite] setFrame #%ld t=%.3f y %.2f→%.2f  h %.2f→%.2f",
-          (long)sCount, CFAbsoluteTimeGetCurrent(),
-          old.origin.y, frame.origin.y, old.size.height, frame.size.height);
-}
 
-- (void)setCenter:(CGPoint)center {
-    CGPoint old = self.center;
+    // 只在详情表里生效（聊天页/详情页），其它页面不碰。
+    BOOL inTable = NO;
+    for (UIView *a = container.superview; a; a = a.superview) {
+        if ([a isKindOfClass:[UITableView class]]) { inTable = YES; break; }
+    }
+    if (!inTable) {
+        if (!CGAffineTransformIsIdentity(container.transform)) {
+            container.transform = CGAffineTransformIdentity;
+        }
+        return;
+    }
 
-    // ── 探针：抓大位移写入的调用栈（纯观测，不改值）──────────────────
-    //
-    // 已确认（#138 诊断包，多次拖动成对出现）：
-    //   743.00 → 660.00   按下开始拖，容器上移 83
-    //   660.00 → 743.00   松手落回
-    // 83 = 输入栏高度；静止位 743（容器高 200 → 顶 643 / 底 843）。
-    //
-    // 上一个探针没抓到栈有两个错误：
-    //   ① 抓栈写在 %orig 之后 —— 那时本方法的调用帧已经返回，
-    //      抓到的是调用方的调用方，全是无关帧；
-    //   ② 用 sCount % 10 == 0 抽样 —— 关键的那几条恰好不在抽样点上。
-    //
-    // 这次：在 %orig 之前抓，条件改成「纵向位移 > 60pt」，每次必抓不抽样。
-    // 目标是看出哪一族的代码在发起这个 83 的位移。
-    if (DYYYGetBool(@"DYYYDiagEntryEnabled") &&
-        fabs(old.y - center.y) > 60.0 &&
-        fabs(old.x - center.x) < 0.01) {
+    UIView *parent = container.superview;
+    CGFloat parentH = parent ? CGRectGetHeight(parent.bounds) : 0;
+    CGFloat containerH = CGRectGetHeight(container.bounds);
+    if (parentH <= 0.0 || containerH <= 0.0) return;
 
-        static NSInteger sStackCount = 0;
-        if (++sStackCount <= 20) {
-            NSArray<NSString *> *stack = [NSThread callStackSymbols];
-            NSMutableString *who = [NSMutableString string];
-            NSUInteger limit = MIN(stack.count, (NSUInteger)12);
-            for (NSUInteger i = 1; i < limit; i++) {
-                NSString *line = stack[i];
-                NSRange r = [line rangeOfString:@"["];
-                NSString *t = r.location != NSNotFound ? [line substringFromIndex:r.location] : line;
-                [who appendFormat:@"\n        %@", t];
+    CGFloat correctCenterY = parentH - containerH / 2.0;
+    CGFloat delta = correctCenterY - container.center.y;
+
+    // 只补偿「差一个输入栏高度」这一档；初始化中间态、横屏等一律复位不动。
+    if (fabs(delta) < 1.0 || fabs(delta) > 120.0) {
+        if (!CGAffineTransformIsIdentity(container.transform)) {
+            container.transform = CGAffineTransformIdentity;
+        }
+        return;
+    }
+
+    CGAffineTransform target = CGAffineTransformMakeTranslation(0, delta);
+    if (!CGAffineTransformEqualToTransform(container.transform, target)) {
+        container.transform = target;
+        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+            static NSInteger sPinned = 0;
+            if (++sPinned <= 30) {
+                NSLog(@"[DYYY][cpin] 补偿 %.2f（当前 %.2f 应为 %.2f，父高 %.0f 容器高 %.0f）",
+                      delta, container.center.y, correctCenterY, parentH, containerH);
             }
-            NSLog(@"[DYYY][cstack] y %.2f→%.2f  delta %.2f%@",
-                  old.y, center.y, old.y - center.y, who);
         }
     }
-
-    %orig(center);
-
-    if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
-    if (fabs(old.y - center.y) < 0.01) return;
-
-    static NSInteger sCount = 0;
-    if (++sCount > 300) return;
-
-    NSLog(@"[DYYY][cwrite] setCenter #%ld t=%.3f y %.2f→%.2f",
-          (long)sCount, CFAbsoluteTimeGetCurrent(), old.y, center.y);
-}
-
-- (void)setTransform:(CGAffineTransform)transform {
-    CGAffineTransform old = self.transform;
-    %orig;
-    if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
-    if (fabs(old.ty - transform.ty) < 0.01 && fabs(old.a - transform.a) < 0.001) return;
-
-    static NSInteger sCount = 0;
-    if (++sCount > 300) return;
-
-    NSMutableString *who = [NSMutableString string];
-    if (sCount <= 40 && (sCount % 10) == 0) {
-        NSArray<NSString *> *stack = [NSThread callStackSymbols];
-        NSUInteger limit = MIN(stack.count, (NSUInteger)8);
-        for (NSUInteger i = 1; i < limit; i++) {
-            NSString *line = stack[i];
-            NSRange r = [line rangeOfString:@"["];
-            NSString *t = r.location != NSNotFound ? [line substringFromIndex:r.location] : line;
-            [who appendFormat:@"\n        %@", t];
-        }
-    }
-    NSLog(@"[DYYY][cwrite] setTransform #%ld t=%.3f ty %.2f→%.2f  scale %.3f→%.3f%@",
-          (long)sCount, CFAbsoluteTimeGetCurrent(),
-          old.ty, transform.ty, old.a, transform.a, who);
 }
 
 - (void)layoutSubviews {
@@ -273,8 +232,13 @@
     DYYYApplyFloatClearProgressStateToView(self);
 
     if (![[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYEnableFullScreen"]) {
+        if (!CGAffineTransformIsIdentity(self.transform)) {
+            self.transform = CGAffineTransformIdentity;
+        }
         return;
     }
+
+    DYYYProgressPinVisual(self);
 
     static char kDYProgressBgKey;
     NSArray *bgViews = objc_getAssociatedObject(self, &kDYProgressBgKey);
@@ -294,8 +258,14 @@
     }
 }
 
-%end
+// 第二入口：容器随 cell 平移时不会重新布局，挂入窗口时也要同步一次。
+// （行为对照里记录过这一点；只挂 layoutSubviews 会漏掉这类平移。）
+- (void)didMoveToWindow {
+    %orig;
+    DYYYProgressPinVisual(self);
+}
 
+%end
 %hook AWEPlayInteractionProgressController
 
 %new
