@@ -4265,6 +4265,39 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 真正的位置改由 AWEAwemeDetailTableViewCell 的 playerNotCoverBottomBarEnable
 // 回答 NO 来处理（见文件下方同名 hook），不再由该 getter 承担。
 
+// A2 布局前同步（对齐行为对照的时机）：
+// 表高必须在【原生控制器布局之前】也统一一次，否则尺寸适配器仍按旧高度
+// 算行高与滚动锚点。原来只有写入时拦截，等于布局回合开始时表还是旧高。
+// 前后各调一次，与 setFrame 通道共用同一个守卫函数（同一套判据，不会两处打架）。
+- (void)viewDidLayoutSubviews {
+    // 布局【前】：先统一表高，让尺寸适配器按同一高度算行高与滚动锚点。
+    if (DYYYGetBool(@"DYYYEnableFullScreen") && NSThread.isMainThread) {
+        UITableView *table = [self respondsToSelector:@selector(tableView)] ? [self tableView] : nil;
+        UIView *parent = table ? table.superview : nil;
+        CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
+        if (table && target > 0.0) {
+            CGRect before = [DYYYFullscreenCoordinator adjustDetailTableFrame:table
+                                                                       frame:table.frame
+                                                                      target:target];
+            if (!CGRectIsNull(before)) table.frame = before;
+        }
+    }
+
+    %orig;
+
+    // 布局【后】：原生可能又写回压缩值，再补一次（与 setFrame 通道共用同一守卫）。
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return;
+    UITableView *t2 = [self respondsToSelector:@selector(tableView)] ? [self tableView] : nil;
+    if (!t2) return;
+    UIView *p2 = t2.superview;
+    CGFloat target2 = p2 ? CGRectGetHeight(p2.bounds) : 0;
+    if (target2 <= 0.0) return;
+    CGRect after = [DYYYFullscreenCoordinator adjustDetailTableFrame:t2
+                                                              frame:t2.frame
+                                                             target:target2];
+    if (!CGRectIsNull(after)) t2.frame = after;
+}
+
 - (double)fixedCellHeight {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
         return %orig;
@@ -7432,8 +7465,8 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 - (void)viewDidLayoutSubviews {
     %orig;
     [DYYYFullscreenCoordinator layoutPlayerContainer:self];
-
 }
+
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
     %orig(arg0);
@@ -7456,6 +7489,36 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 
 %end
 
+%hook AWEPlayVideoViewController
+
+// B1 背景色延伸（三个入口，都是「原生动作完成后再同步」）：
+//
+//   诊断包实证：容器 926 / TTPlayerView 843 / 画面 240.8（16:9 比例 fit）
+//   → 底部差 83pt，那段空隙就是黑边。抖音只填原生那层，
+//     我们把容器钉高后露出来的祖先没人管。
+//
+//   setPlayerBackgroundView:           背景层被创建/替换那一刻
+//   updatePlayerBackgroundViewIfNeeded 原生更新背景色时（返回时已落色并挂载）
+//   viewDidLayoutSubviews             布局后兜底
+//
+// 三个入口都走同一个幂等函数：涂色或按标记还原，不改 frame、不触发布局。
+- (void)setPlayerBackgroundView:(UIView *)backgroundView {
+    %orig;
+    [DYYYFullscreenCoordinator syncPlayerBackdrop:self];
+}
+
+- (void)updatePlayerBackgroundViewIfNeededWhenLandscape:(BOOL)landscape fromHomepageHot:(BOOL)fromHomepageHot {
+    %orig;
+    [DYYYFullscreenCoordinator syncPlayerBackdrop:self];
+}
+
+- (void)viewDidLayoutSubviews {
+    %orig;
+    [DYYYFullscreenCoordinator syncPlayerBackdrop:self];
+}
+
+%end
+
 %hook AWEDPlayerViewController_Merge
 
 - (BOOL)enableHDR {
@@ -7468,7 +7531,16 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 - (void)viewDidLayoutSubviews {
     %orig;
     [DYYYFullscreenCoordinator layoutPlayerContainer:self];
+}
 
+// A1 容器补钉（第二入口，挂在 Merge 上）：
+// 复用 cell 时抖音可能「先写 frame、后绑 model」，那一帧算出的目标偏小；
+// 写完不会写第二次，而预备 cell 是 hidden 的不再布局，滑过去就是不全屏。
+// willDisplay 是 model 与视图层级都已就位、且一定早于用户看见的那一刻。
+// layoutPlayerContainer 内部同值不重写，所以这里补钉是幂等的，不会成环。
+- (void)willDisplay {
+    %orig;
+    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
 }
 
 - (void)setIsAutoPlay:(BOOL)arg0 {

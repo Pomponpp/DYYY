@@ -1043,6 +1043,114 @@ static NSInteger imDetailActiveCount = 0;
 }
 
 // 渲染布局完成后记录画面尺寸，供评论避让使用。
+// ===== 背景色延伸（非满屏视频的黑边）=====
+//
+// 诊断包实证（DYDebug-20261122-062737，首页横屏视频）：
+//   cell contentView 428x926   ← 满高
+//   外层 UIView       926      ← 我们钉满的容器
+//   TTPlayerView      843      ← 原生 player view，装视频画面
+//   TTMetalViewVP     240.8    ← 实际画面（16:9 比例 fit）
+//
+// 容器 926、内容 843，底部差 83 —— 那段空隙就是黑边来源。
+// 抖音自己会用 playerBackgroundView 的颜色去填，但它只填原生那一层；
+// 我们把容器钉高之后，露出来的那层祖先没人管。
+//
+// 做法（行为对照的机制，不是抄代码）：
+//   1. 从播放器视图往上，找第一个「高度超过它内容底边」的祖先 —— 那层才是会露出来的
+//   2. 把它的 backgroundColor 设成播放器原生背景色
+//   3. 首次接管时存下原值，关闭全屏时按标记还原
+//
+// 图文页要排除：图文 cell 里嵌套的那套播放器 alpha=0，若让它也涂色，
+// 会用黑底把图文渐变的末色盖掉（行为对照里记录过这个「偶发」现象）。
+static char kDYYYBackdropAppliedKey;
+static char kDYYYBackdropCanvasKey;
+
+// 从 anchor 往上找第一层「比内容底边更高」的祖先，最多到 cell contentView。
+static UIView *DYYYBackdropCanvas(UIView *anchor) {
+    if (!anchor) return nil;
+    static Class sContentClass;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ sContentClass = NSClassFromString(@"UITableViewCellContentView"); });
+
+    for (UIView *ancestor = anchor.superview; ancestor; ancestor = ancestor.superview) {
+        CGRect rect = [anchor convertRect:anchor.bounds toView:ancestor];
+        if (CGRectGetHeight(ancestor.bounds) > CGRectGetMaxY(rect) + 0.5) return ancestor;
+        if (sContentClass && [ancestor isKindOfClass:sContentClass]) break;
+    }
+    return nil;
+}
+
+// 按标记还原所有接管过的层（不假设是哪一层，承载层会随布局变化）。
+static void DYYYRestoreBackdrop(UIView *anchor, UIView *except) {
+    if (!anchor) return;
+    UIView *ancestor = anchor.superview;
+    for (NSUInteger i = 0; ancestor && i < 12; i++, ancestor = ancestor.superview) {
+        if (ancestor == except) continue;
+        id baseline = objc_getAssociatedObject(ancestor, &kDYYYBackdropCanvasKey);
+        if (!baseline) continue;
+        ancestor.backgroundColor = (baseline == [NSNull null]) ? nil : (UIColor *)baseline;
+        objc_setAssociatedObject(ancestor, &kDYYYBackdropCanvasKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+
+// 取播放器原生背景色：优先走原生访问入口，缺入口时退回控制器属性。
+// 只认「已挂载且可见」的背景层，避免拿到还没落位的空壳。
+static UIColor *DYYYPlayerBackdropColor(UIViewController *controller) {
+    if (!controller) return nil;
+    UIView *backdrop = nil;
+    if ([controller respondsToSelector:NSSelectorFromString(@"getPlayerBackgroundView")]) {
+        backdrop = [controller performSelector:NSSelectorFromString(@"getPlayerBackgroundView")];
+    }
+    if (![backdrop isKindOfClass:[UIView class]] &&
+        [controller respondsToSelector:NSSelectorFromString(@"playerBackgroundView")]) {
+        backdrop = [controller performSelector:NSSelectorFromString(@"playerBackgroundView")];
+    }
+    if (![backdrop isKindOfClass:[UIView class]]) return nil;
+    if (!backdrop.superview || backdrop.hidden) return nil;
+    return backdrop.backgroundColor;
+}
+
+// 图文页排除：父链上有 RichContentContainerViewController 就不接管。
+static BOOL DYYYIsUnderRichContent(UIViewController *controller) {
+    static Class sRichClass;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ sRichClass = NSClassFromString(@"RichContentContainerViewController"); });
+    if (!sRichClass) return NO;
+    for (NSUInteger i = 0; controller && i < 12; i++, controller = controller.parentViewController) {
+        if ([controller isKindOfClass:sRichClass]) return YES;
+    }
+    return NO;
+}
+
+// 主入口：涂色或还原。color 为 nil 表示本条不需要延伸（关闭全屏/无背景色）。
++ (void)syncPlayerBackdrop:(UIViewController *)controller {
+    if (![NSThread isMainThread] || !controller) return;
+    UIView *anchor = controller.viewIfLoaded;
+    if (!anchor) return;
+
+    BOOL applied = objc_getAssociatedObject(controller, &kDYYYBackdropAppliedKey) != nil;
+    UIColor *color = nil;
+    if (DYYYGetBool(@"DYYYEnableFullScreen") && !DYYYIsUnderRichContent(controller)) {
+        color = DYYYPlayerBackdropColor(controller);
+    }
+    if (!color && !applied) return;   // 绝大多数内容没有原生背景，直接退出
+
+    UIView *canvas = color ? DYYYBackdropCanvas(anchor) : nil;
+    DYYYRestoreBackdrop(anchor, canvas);
+
+    if (!canvas) {
+        objc_setAssociatedObject(controller, &kDYYYBackdropAppliedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return;
+    }
+    if (!objc_getAssociatedObject(canvas, &kDYYYBackdropCanvasKey)) {
+        objc_setAssociatedObject(canvas, &kDYYYBackdropCanvasKey,
+                                 canvas.backgroundColor ?: (id)[NSNull null],
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (![canvas.backgroundColor isEqual:color]) canvas.backgroundColor = color;
+    objc_setAssociatedObject(controller, &kDYYYBackdropAppliedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 + (void)finishPlayer:(UIView *)player {
     if (![NSThread isMainThread]) return;
     DYYYFullscreenPlayerState *state = [self state:player];

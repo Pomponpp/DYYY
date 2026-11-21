@@ -21,6 +21,10 @@
 // 行高回答（带「表被撑高过」前提）：表没被撑高过时返回原生值。
 // 聊天系视频页靠这条自动出圈，不需要页面特判。
 + (CGFloat)rowHeightForTable:(UITableView *)table native:(CGFloat)nativeHeight;
+
+// 背景色延伸：非满屏视频（横屏/低比例）容器被钉高后，
+// 把露出来的那层祖先涂成播放器原生背景色，消除底部黑边。
++ (void)syncPlayerBackdrop:(UIViewController *)controller;
 + (void)rememberTableOriginalHeight:(UITableView *)table height:(CGFloat)height;
 + (CGFloat)fullCellHeightForNative:(CGFloat)nativeHeight;
 + (BOOL)isImDetailController:(UIViewController *)controller;
