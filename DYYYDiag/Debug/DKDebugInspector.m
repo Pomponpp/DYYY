@@ -5,10 +5,9 @@
 //  全局扳手：独立高层级 window 承载调试按钮，点选页面元素后复用
 //  DKDebugCapture / DKDebugExport 生成导出包。
 //
-//  来源：本目录（DYYYDiag/）的采集骨架与 FLEX 类 dump 参考开源社区实现，
-//  DYYY 接入了自有运行流水、状态指纹、compat 三件套（audit /
-//  class-list / target-methods），并把浮窗与日志统一为「诊断模式」。
-//  详见 CREDITS.md。
+//  采集骨架与类结构 dump：与同类实现做过行为对照，
+//  结论写在 CREDITS.md。DYYY 接入了自有运行流水、状态指纹、compat 三件套
+//  （audit / class-list / target-methods），并把浮窗与日志统一为「诊断模式」。
 //
 
 #import "DKDebugInspector.h"
@@ -78,7 +77,27 @@
 static DKDebugOverlayWindow *DKDebugWindow;
 static DKDebugOverlayViewController *DKDebugController;
 static BOOL DKDebugInstalled;
+// 导出占用标记 + 起始时刻。
+//
+// 只用一个 BOOL 是历史遗留的坑：任何一条异常路径没走到复位
+// （分享面板被打断、切 App、导出线程被系统回收），这个标记就永久是 YES，
+// 之后每次点导出都弹「已有导出正在进行」，只能重启抖音。
+// 加时间戳后超时自动放行，任何残留都不会把功能锁死。
 static BOOL DKDebugExportBusy;
+static CFAbsoluteTime DKDebugExportBusyAt;
+static const CFTimeInterval kDKExportBusyTimeout = 90.0;
+
+static BOOL DKExportIsBusy(void) {
+    if (!DKDebugExportBusy) return NO;
+    if (CFAbsoluteTimeGetCurrent() - DKDebugExportBusyAt < kDKExportBusyTimeout) return YES;
+    DKDebugExportBusy = NO;   // 超时残留，强制放行
+    return NO;
+}
+
+static void DKExportSetBusy(BOOL busy) {
+    DKDebugExportBusy = busy;
+    DKDebugExportBusyAt = busy ? CFAbsoluteTimeGetCurrent() : 0;
+}
 
 #pragma mark - UI 工具
 
@@ -86,13 +105,43 @@ static BOOL DKIsDebugOverlayWindow(UIWindow *window) {
     return [DKNameOfObject(window) hasPrefix:@"DKDebug"];
 }
 
+// 一切模态 UI 的唯一宿主。
+//
+// 这是「导出后整个界面被蒙住、只能点扳手」和「卡在分享页」的共同根因：
+// 浮层 window 的 windowLevel 是 UIWindowLevelAlert + 100000，
+// 从浮层控制器 present 出来的 alert / 分享面板都活在这个高位窗口里。
+// 于是 share sheet 被自己的宿主窗口压在下面（看不见、点不到），
+// alert 又让 capturesOverlayTouches 返回 YES，浮层整屏吞掉触摸。
+//
+// 规矩：诊断浮层只负责显示扳手，永远不承载任何 present。
+// 所有 alert / 分享 / 进度都必须从 App 自己的窗口控制器弹出。
+static UIViewController *DKUIContextHost(void) {
+    UIWindow *target = DKDebugTargetWindow();
+    UIViewController *root = target.rootViewController;
+    if (!root) return DKDebugController;
+
+    UIViewController *top = root;
+    for (NSUInteger depth = 0; top && depth < 16; depth++) {
+        UIViewController *presented = top.presentedViewController;
+        if (!presented || presented.isBeingDismissed) break;
+        top = presented;
+    }
+    // 万一路径上撞到我们自己的浮层（旧版本残留的调用），退回窗口根控制器。
+    if ([top isKindOfClass:DKDebugOverlayViewController.class] || !top) return root;
+    if (!top.viewIfLoaded.window) return root;
+    return top;
+}
+
 static void DKPresentError(UIViewController *presenter, NSString *message) {
+    (void)presenter;
     dispatch_async(dispatch_get_main_queue(), ^{
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"导出失败"
                                                                        message:message ?: @"未知错误"
                                                                 preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
-        [presenter presentViewController:alert animated:YES completion:nil];
+        UIViewController *host = DKUIContextHost();
+        if (!host || host.presentedViewController) return;
+        [host presentViewController:alert animated:YES completion:nil];
     });
 }
 
@@ -146,27 +195,12 @@ static void DKFinalizeExportAndRecover(DKDebugExportResult *result) {
                    });
 }
 
-static UIViewController *DKHostControllerForPresentation(UIViewController *fallback) {    UIWindow *target = DKDebugTargetWindow();
-    UIViewController *root = target.rootViewController;
-    if (!root) return fallback;
-
-    UIViewController *top = root;
-    while (top.presentedViewController &&
-           !top.presentedViewController.isBeingDismissed) {
-        top = top.presentedViewController;
-    }
-
-    // 若当前顶层就是我们自己的浮层控制器，退回窗口根控制器
-    if ([top isKindOfClass:DKDebugOverlayViewController.class]) {
-        return root;
-    }
-    return top ?: root;
-}
-
 static void DKFinishExport(DKDebugExportResult *result, UIViewController *presenter, UIView *sourceView) {
+    (void)presenter;
+    (void)sourceView;
     if (!result || !result.zipURL) {
         DKDebugCleanupExport(result);
-        DKPresentError(presenter, @"ZIP 文件不存在");
+        DKPresentError(nil, @"ZIP 文件不存在");
         return;
     }
 
@@ -179,15 +213,12 @@ static void DKFinishExport(DKDebugExportResult *result, UIViewController *presen
     [alert addAction:[UIAlertAction actionWithTitle:@"分享"
                                              style:UIAlertActionStyleDefault
                                            handler:^(__unused UIAlertAction *action) {
-                                             // 关键：分享面板必须从抖音自己的控制器弹出。
-                                             //
-                                             // 之前是从浮层控制器（DKDebugController）present，
-                                             // 而浮层 window 的 canBecomeKeyWindow 返回 NO，
-                                             // 拿不到键盘焦点 → UIActivityViewController 卡死，
-                                             // 既分享不出去也关不掉。
-                                             //
-                                             // 改为找一个属于 App 主窗口的控制器来 present。
-                                             UIViewController *host = DKHostControllerForPresentation(presenter);
+                                             // 分享面板必须从 App 自己的控制器弹出，理由见 DKUIContextHost。
+                                             UIViewController *host = DKUIContextHost();
+                                             if (!host) {
+                                                 DKFinalizeExportAndRecover(result);
+                                                 return;
+                                             }
                                              UIActivityViewController *activity =
                                                  [[UIActivityViewController alloc] initWithActivityItems:@[ result.zipURL ]
                                                                                    applicationActivities:nil];
@@ -195,12 +226,29 @@ static void DKFinishExport(DKDebugExportResult *result, UIViewController *presen
                                                  activity.popoverPresentationController.sourceView = host.view;
                                                  activity.popoverPresentationController.sourceRect = host.view.bounds;
                                              }
+                                             __block BOOL recovered = NO;
+                                             void (^recoverOnce)(void) = ^{
+                                               if (recovered) return;
+                                               recovered = YES;
+                                               DKFinalizeExportAndRecover(result);
+                                             };
                                              activity.completionWithItemsHandler =
                                                  ^(__unused UIActivityType type, __unused BOOL completed,
                                                    __unused NSArray *items, __unused NSError *error) {
-                                                   DKFinalizeExportAndRecover(result);
+                                                   recoverOnce();
                                                  };
                                              [host presentViewController:activity animated:YES completion:nil];
+                                             // 兜底：completionWithItemsHandler 在「交给别的 App」路径上
+                                             // 常常不回调（微信/输入法中转），不兜底就会一直卡在分享页。
+                                             // 3 秒后若分享面板已不在窗口上，直接收尾复位。
+                                             dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                                                          (int64_t)(3.0 * NSEC_PER_SEC)),
+                                                            dispatch_get_main_queue(), ^{
+                                                              if (activity.presentingViewController == nil ||
+                                                                  activity.view.window == nil) {
+                                                                  recoverOnce();
+                                                              }
+                                                            });
                                            }]];
 
     [alert addAction:[UIAlertAction actionWithTitle:@"完成"
@@ -209,7 +257,21 @@ static void DKFinishExport(DKDebugExportResult *result, UIViewController *presen
                                              DKFinalizeExportAndRecover(result);
                                            }]];
 
-    [presenter presentViewController:alert animated:YES completion:nil];
+    // 关键：alert 也从 App 窗口弹，不从浮层弹。
+    // 从浮层弹时 capturesOverlayTouches 会返回 YES，浮层整屏吞触摸，
+    // 表现就是「点导出后界面蒙住、只有扳手能点」。
+    UIViewController *host = DKUIContextHost();
+    if (!host) {
+        DKDebugCleanupExport(result);
+        return;
+    }
+    if (host.presentedViewController && !host.presentedViewController.isBeingDismissed) {
+        [host dismissViewControllerAnimated:NO completion:^{
+          [host presentViewController:alert animated:YES completion:nil];
+        }];
+        return;
+    }
+    [host presentViewController:alert animated:YES completion:nil];
 }
 
 static void DKSetProgress(UIAlertController *alert, NSString *text) {
@@ -221,9 +283,8 @@ static void DKSetProgress(UIAlertController *alert, NSString *text) {
 static void DKCreateExportInBackground(DKDebugExportContext *context,
                                        DKDebugExportMode mode,
                                        UIAlertController *progressAlert) {
-    UIViewController *presenter = context.presenter ?: DKDebugController;
-    if (!presenter) {
-        DKDebugExportBusy = NO;
+    if (!DKUIContextHost()) {
+        DKExportSetBusy(NO);
         return;
     }
 
@@ -233,12 +294,12 @@ static void DKCreateExportInBackground(DKDebugExportContext *context,
             DKSetProgress(progressAlert, text);
         }, &exportError);
         dispatch_async(dispatch_get_main_queue(), ^{
-            DKDebugExportBusy = NO;
+            DKExportSetBusy(NO);
             [progressAlert dismissViewControllerAnimated:YES completion:^{
                 if (result) {
-                    DKFinishExport(result, presenter, context.sourceView ?: presenter.view);
+                    DKFinishExport(result, nil, nil);
                 } else {
-                    DKPresentError(presenter, DKExportErrorMessage(exportError, @"没有生成 ZIP 文件"));
+                    DKPresentError(nil, DKExportErrorMessage(exportError, @"没有生成 ZIP 文件"));
                 }
             }];
         });
@@ -285,13 +346,13 @@ static NSString *DKDebugPageIdentity(void) {
 }
 
 static void DKStartExport(DKDebugExportContext *context, DKDebugExportMode mode) {
-    UIViewController *presenter = context.presenter ?: DKDebugController;
-    if (!presenter) return;
-    if (DKDebugExportBusy) {
-        DKPresentError(presenter, @"已有调试采集或导出正在进行");
+    if (DKExportIsBusy()) {
+        DKPresentError(nil, @"已有调试采集或导出正在进行");
         return;
     }
-    DKDebugExportBusy = YES;
+    UIViewController *host = DKUIContextHost();
+    if (!host) return;
+    DKExportSetBusy(YES);
 
     // 快照锚点：流水里打一行，让 view-tree / 截图 / 日志三者时间点可对齐。
     [DKDYYYBridge appendRuntimeLogLine:@"⭐ 快照（本次导出的页面结构与截图对应这一刻）"];
@@ -315,7 +376,7 @@ static void DKStartExport(DKDebugExportContext *context, DKDebugExportMode mode)
     UIAlertController *progressAlert = [UIAlertController alertControllerWithTitle:@"DYYY"
                                                                            message:@"准备导出..."
                                                                     preferredStyle:UIAlertControllerStyleAlert];
-    [presenter presentViewController:progressAlert animated:YES completion:^{
+    [host presentViewController:progressAlert animated:YES completion:^{
         DKCreateExportInBackground(context, mode, progressAlert);
     }];
 }
@@ -553,8 +614,8 @@ static void DKEnsureDebugWindow(void) {
 
     // 调试浮层始终置顶、无需选元素：直接快照整页（selectedView=nil 即整窗）。
     DKDebugExportContext *context = DKDebugCaptureContext(targetWindow, CGPointZero, nil);
-    context.presenter = self;
-    context.sourceView = self.wrenchButton;
+    context.presenter = nil;
+    context.sourceView = nil;
     DKStartExport(context, DKDebugExportModePage);
 }
 
@@ -608,7 +669,7 @@ static void DKRecoverOverlayStateIfNeeded(void) {
     }
 
     // 导出流程没有正常收尾时，busy 标记会一直卡住，这里无条件放行。
-    DKDebugExportBusy = NO;
+    DKExportSetBusy(NO);
 }
 
 void DKDebugInspectorRefreshOverlay(void) {

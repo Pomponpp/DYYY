@@ -536,6 +536,12 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEAwemeDetailTableViewCell : UIView
+// 41.2：YES = 播放器不许盖住底栏（内容层被压成「屏高 − 底栏」）。
+// 聊天系视频页正是这个判定为 YES，所以视频停在 843。
+- (BOOL)playerNotCoverBottomBarEnable;
+- (void)p_adjustVideoFrameIfNeeded:(id)reason;
+- (void)adjustVideoFrameIfNeeded;
+- (void)adjustVideoFrameIfNeededWithPanelType:(unsigned long long)panelType;
 @end
 
 @interface IESLiveFeedDrawerEntranceView : UIView

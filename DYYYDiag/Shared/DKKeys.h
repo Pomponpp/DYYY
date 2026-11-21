@@ -492,9 +492,9 @@ static NSString *const DKKeyAdjustRangeExtended = @"DYYYAdjustRangeExtended";
 
 #pragma mark - 功能组：快捷入口
 
-// 个人主页功能区末尾的 参考实现 设置入口（开关，只作用于自己的主页）。
+// 个人主页功能区末尾的 DYYY 设置入口（开关，只作用于自己的主页）。
 static NSString *const DKKeyProfileSettingsEntry     = @"DYYYProfileSettingsEntry";
-// 入口文字（单选，整数）：0「参考实现」/ 1「插件设置」。
+// 入口文字（单选，整数）：0「插件设置」/ 1「DYYY 设置」。
 static NSString *const DKKeyProfileSettingsEntryName = @"DYYYProfileSettingsEntryName";
 
 #pragma mark - 功能组：调试工具
