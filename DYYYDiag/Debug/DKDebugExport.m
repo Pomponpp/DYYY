@@ -152,7 +152,7 @@ static NSString *DKReadme(DKDebugExportContext *context, DKDebugExportMode mode)
     NSMutableString *text = [NSMutableString string];
     [text appendString:@"DYYY Debug Export\n"];
     [text appendFormat:@"Generated: %@\n", context.metadata[@"generatedAt"] ?: @""];
-    [text appendFormat:@"DYYY: %@\n", DK_VERSION];
+    [text appendFormat:@"DYYY: %@ (build %@ %s)\n", DK_VERSION, DK_BUILD_COMMIT, ""];
     [text appendFormat:@"Bundle: %@\n", context.metadata[@"bundleIdentifier"] ?: @""];
     [text appendFormat:@"App: %@ %@ (%@)\n",
      context.metadata[@"bundleName"] ?: @"", context.metadata[@"appVersion"] ?: @"",

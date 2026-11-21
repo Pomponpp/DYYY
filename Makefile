@@ -58,6 +58,14 @@ export THEOS_STRICT_LOGOS=0
 export ERROR_ON_WARNINGS=0
 export LOGOS_DEFAULT_GENERATOR=internal
 
+# 构建标识注入：诊断包用于区分"哪次构建"
+# CI 里 GIT_COMMIT / GITHUB_REF_NAME 由 Actions 提供；本地构建为 dev/local
+DYYY_BUILD_COMMIT ?= $(if $(GITHUB_SHA),$(shell echo $(GITHUB_SHA) | cut -c1-7),dev)
+DYYY_BUILD_BRANCH ?= $(if $(GITHUB_REF_NAME),$(GITHUB_REF_NAME),local)
+DYYY_BUILD_TIME ?= $(shell date -u +"%Y-%m-%d %H:%M")
+export DYYY_BUILD_COMMIT DYYY_BUILD_BRANCH DYYY_BUILD_TIME
+ADDITIONAL_CFLAGS += -DDYYY_BUILD_COMMIT=\"$(DYYY_BUILD_COMMIT)\" -DDYYY_BUILD_BRANCH=\"$(DYYY_BUILD_BRANCH)\" -DDYYY_BUILD_TIME=\"$(DYYY_BUILD_TIME)\"
+
 include $(THEOS_MAKE_PATH)/tweak.mk
 
 ifeq ($(shell whoami),huami)

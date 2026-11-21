@@ -23,6 +23,7 @@
 + (BOOL)isImDetailView:(id)view;
 + (void)setImDetailActive:(BOOL)active;
 + (BOOL)imDetailActive;
++ (BOOL)imDetailActiveOrNavTop;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;
 + (BOOL)isImageContentController:(UIViewController *)controller;

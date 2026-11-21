@@ -432,6 +432,9 @@ static NSDictionary *DKDebugMetadata(UIWindow *targetWindow, CGPoint point) {
     return @{
         @"generatedAt": DKObjectDesc(NSDate.date),
         @"dyyyVersion": DK_VERSION,
+        @"buildCommit": DK_BUILD_COMMIT,
+        @"buildBranch": DK_BUILD_BRANCH,
+        @"buildTime": DK_BUILD_TIME,
         @"bundleIdentifier": NSBundle.mainBundle.bundleIdentifier ?: @"",
         @"bundleName": NSBundle.mainBundle.infoDictionary[@"CFBundleName"] ?: @"",
         @"appVersion": NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"] ?: @"",

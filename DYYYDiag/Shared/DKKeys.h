@@ -9,6 +9,18 @@
 #ifndef DK_VERSION
 #define DK_VERSION @"2.2-9"
 #endif
+
+// 构建标识：CI 注入（build.yml 传 GIT_COMMIT / BUILD_TIME），本地构建为 dev。
+// 诊断包必须带出，用于区分"哪次构建"——版本争议的终结手段。
+#ifndef DK_BUILD_COMMIT
+#define DK_BUILD_COMMIT @"dev"
+#endif
+#ifndef DK_BUILD_TIME
+#define DK_BUILD_TIME @"dev"
+#endif
+#ifndef DK_BUILD_BRANCH
+#define DK_BUILD_BRANCH @"local"
+#endif
 #define DKKeys_h
 
 #import <Foundation/Foundation.h>

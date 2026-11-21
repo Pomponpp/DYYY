@@ -144,19 +144,40 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
 // 它原生就是"扣底栏 83"布局，拖进度条时抖音自己把进度容器上移一个底栏
 // 给输入栏让位（原生交互）。行高/表高若在这里接管，会与原生让位布局打架
 // ——表现为拖动中画面跳起一个底栏高度、出现两条底栏分界线，松手弹回。
-+ (BOOL)isImDetailController:(UIViewController *)controller {
-    static Class quickReplayClass;
++ (BOOL)isIMSessionContext:(UIViewController *)controller {
+    // 判定"聊天系视频详情页"：群聊（chat）与朋友聊天（私聊/朋友会话）共用
+    // IM 容器栈——详情页挂在 IM 消息容器之下或与其同导航栈共存。
+    // 结构特征优先（refer 枚举不可靠，新会话类型随时新增）。
+    static NSArray *imContainerClasses;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ quickReplayClass = NSClassFromString(@"AWEIMFeedVideoQuickReplayInputViewController"); });
+    dispatch_once(&once, ^{
+        imContainerClasses = @[
+            NSClassFromString(@"AWEIMMessageBaseViewController"),
+            NSClassFromString(@"AWEIMMessageTabRootViewController"),
+            NSClassFromString(@"AWEIMChatListViewController"),
+            NSClassFromString(@"IESIMInputViewController"),
+            NSClassFromString(@"AWEIMFeedVideoQuickReplayInputViewController"),
+        ].copy;
+    });
     for (UIViewController *parent = controller; parent; parent = parent.parentViewController) {
-        // 特征 1：父链本身就是群聊快捷回复输入栏
-        if (quickReplayClass && [parent isKindOfClass:quickReplayClass]) return YES;
-        // 特征 2：子 VC 里有群聊快捷回复输入栏（快照实测：它以子 VC 形式
-        // 压在 y=843 位置；viewWillAppear 阶段 addChild 已完成）
-        for (UIViewController *child in parent.childViewControllers) {
-            if (quickReplayClass && [child isKindOfClass:quickReplayClass]) return YES;
+        for (Class cls in imContainerClasses) {
+            if (cls && [parent isKindOfClass:cls]) return YES;
         }
-        // 特征 3：聊天来源的 refer
+        // 子 VC 层级（快捷回复栏以子 VC 形式压在详情页底部）
+        for (UIViewController *child in parent.childViewControllers) {
+            for (Class cls in imContainerClasses) {
+                if (cls && [child isKindOfClass:cls]) return YES;
+            }
+        }
+        // 同导航栈共存：IM 容器在导航栈里与详情页相邻（从聊天点进视频的 push 链）
+        UINavigationController *nav = parent.navigationController;
+        if (nav) {
+            for (UIViewController *stackVC in nav.viewControllers) {
+                for (Class cls in imContainerClasses) {
+                    if (cls && [stackVC isKindOfClass:cls]) return YES;
+                }
+            }
+        }
         if ([parent respondsToSelector:@selector(referString)]) {
             NSString *refer = [(AWEPlayInteractionViewController *)parent referString];
             if (refer.length > 0) {
@@ -169,12 +190,16 @@ static const CGFloat kDYYYRowHeightDiffMax = 160.0;
     return NO;
 }
 
++ (BOOL)isImDetailController:(UIViewController *)controller {
+    return [self isIMSessionContext:controller];
+}
+
 + (BOOL)isImDetailView:(id)view {
     // 数据层对象（DataLayer/DataController 等非视图）不在 responder 链上，
     // 无法反查 VC——改读全局标记：IM 详情页生命周期 hook 维护（imDetailActive）。
-    if (![view isKindOfClass:[UIView class]]) return [self imDetailActive];
+    if (![view isKindOfClass:[UIView class]]) return [self imDetailActiveOrNavTop];
     UIViewController *controller = [DYYYUtils firstAvailableViewControllerFromView:view];
-    return controller ? [self isImDetailController:controller] : [self imDetailActive];
+    return controller ? [self isImDetailController:controller] : [self imDetailActiveOrNavTop];
 }
 
 // IM 详情页活跃标记：由 DYYY.xm 的 IMDetail 生命周期 hook 维护。
@@ -189,6 +214,39 @@ static NSInteger imDetailActiveCount = 0;
 }
 + (BOOL)imDetailActive {
     return imDetailActiveCount > 0;
+}
+
+// 导航栈实时检测：当前导航栈顶是详情控制器，且其子控制器含群聊快捷回复栏。
+// 与生命周期标记互补——数据层/委托容器对象的调用时机可能早于 viewWillAppear
+// （标记尚未置位，行高已被 UIKit 缓存进行尺寸），导航栈快照则任何时候都稳定。
++ (BOOL)isImDetailNavTop {
+    UIViewController *top = [DYYYUtils topView];
+    if (![top isKindOfClass:[UIViewController class]]) return NO;
+    if (![self isImDetailController:top]) return NO;
+    // 向下钻取导航/Tab 内容，找到实际的详情控制器（topView 可能返回容器）
+    return YES;
+}
+
++ (BOOL)imDetailActiveOrNavTop {
+    if ([self imDetailActive]) return YES;
+    UIViewController *vc = [DYYYUtils topView];
+    int depth = 0;
+    while (vc && depth++ < 10) {
+        if ([self isImDetailController:vc]) return YES;
+        UIViewController *next = nil;
+        if ([vc isKindOfClass:[UINavigationController class]]) {
+            next = ((UINavigationController *)vc).topViewController;
+        } else if (vc.presentedViewController) {
+            next = vc.presentedViewController;
+        } else {
+            for (UIViewController *child in vc.childViewControllers) {
+                if (child.viewIfLoaded.window) { next = child; break; }
+            }
+        }
+        if (!next || next == vc) break;
+        vc = next;
+    }
+    return NO;
 }
 
 
