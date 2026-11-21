@@ -570,3 +570,44 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
     %orig;
 }
 %end
+
+// ===== 聊天系视频页：内容层撑满（补上从未被撑过的那一层）=====
+// 背景：抖音把 cell 内容区按"表高 − 底栏(83)"算成 843，而 cell 本身是 926。
+//       同一 cell 内两种高度基准并存，造成
+//         ① 视频只占上面 843，底部空 83（不全屏化）
+//         ② 进度条手势按 926 换算、松手按 843 布局（拖动中跳起后弹回）
+// 修复：只把这一层撑到父视图高度，使 cell / 内容区 / 播放器 / 互动层同高。
+//       输入栏（83pt）位置不变，继续浮在视频上方。
+// 作用域：全屏开启 + 聊天系视频页（群聊 / 朋友聊天），其余页面完全不动。
+%hook AWEAwemeDetailCellViewController
+
+- (void)viewDidLayoutSubviews {
+    %orig;
+
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return;
+    if (![DYYYFullscreenCoordinator isImDetailController:self]) return;
+
+    UIView *contentView = self.view;
+    UIView *parent = contentView.superview;
+    if (!parent) return;
+    // 父视图可能还没拿到最终高度（布局早期），留待下一次布局再处理。
+    CGFloat target = CGRectGetHeight(parent.bounds);
+    if (!isfinite(target) || target <= 1.0) return;
+    if (fabs(CGRectGetHeight(contentView.frame) - target) <= 0.5) return;
+    // 只在"被底栏压缩"这一种形态上接管：差值落在 (1, 底栏上限] 区间，
+    // 半屏 / 小窗 / 异常尺寸一律放行原生。
+    CGFloat diff = target - CGRectGetHeight(contentView.frame);
+    if (diff <= 0.5 || diff > 160.0) return;
+
+    CGFloat oldHeight = CGRectGetHeight(contentView.frame);
+    CGRect frame = contentView.frame;
+    frame.size.height = target;
+    contentView.frame = frame;
+
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        NSLog(@"[DYYY][cellcontent] 撑满 %.1f → %.1f (parent=%@)",
+              oldHeight, target, NSStringFromClass([parent class]));
+    }
+}
+
+%end

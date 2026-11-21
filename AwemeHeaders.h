@@ -1379,6 +1379,12 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, strong) id roomAisle;
 - (BOOL)prefersStatusBarHidden;
 @end
+// 详情页 cell 内的内容控制器：它的 view 就是"视频内容区"那一层。
+// 全屏时该层仍被抖音按"表高 − 底栏"算成 843（聊天系视频页），
+// 导致视频不铺满、且与 cell 的 926 形成两种高度基准。
+@interface AWEAwemeDetailCellViewController : UIViewController
+@end
+
 @interface AWEAwemeDetailTableViewController : UIViewController
 - (BOOL)prefersStatusBarHidden;
 - (CGFloat)baseTableViewBottomInset;
