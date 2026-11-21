@@ -148,7 +148,6 @@ static void DYYYSyncTable(UITableView *table) {
 
 // 每个入口都先「准备表」（撑高 + 记原高），再按同一纯函数回答行高，
 // 保证建行 / 落点 / 翻页看到同一个高度。
-%group DYYYDetailRowHeightHooks
 
 %hook AWEAwemeDetailTableViewController
 
@@ -197,7 +196,6 @@ static void DYYYSyncTable(UITableView *table) {
     if (DYYYFullscreenCoreOn()) DYYYSyncTable(self.tableView);
 }
 
-%end
 
 %end
 
@@ -253,11 +251,7 @@ static void DYYYSyncTable(UITableView *table) {
     Class interaction = NSClassFromString(@"AWEPlayInteractionViewController");
     Class detail = NSClassFromString(@"AWEAwemeDetailTableViewController");
 
-    // 行高组无条件初始化：Logos 要求 %init 出现在 %ctor 顶层语句里，
-    // 嵌在 if 内会被判定为「未初始化的组」。类不存在时 %init 本身是空操作，
-    // 逐个方法的缺失由运行时的 respondsToSelector 自然兜住。
-    %init(DYYYDetailRowHeightHooks);
-    (void)detail;
+
     (void)merge;
     (void)interaction;
     // 诊断：把三层统计写进运行时日志，导出包里直接可读。
