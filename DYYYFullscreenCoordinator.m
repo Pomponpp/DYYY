@@ -536,6 +536,15 @@ static NSInteger imDetailActiveCount = 0;
         if (legacy) return NO;
         CGRect frame = view.frame;
         barRect = [self bottomBarRect:bar followingView:view controller:controller];
+
+        // 聊天系视频页（群聊 / 朋友聊天）这里**故意保持原生**：互动层 843。
+        //
+        // 41.2 实测：content 843 / interaction 843 时，进度容器底边 = 843（正确，
+        // 正好压在输入栏上沿）；content 926 / interaction 843 时，进度容器底边 = 760
+        // （高 83）。可见抖音的进度容器底边 = interaction 底边 − (content − interaction)。
+        // 若把 interaction 也撑到 926，抖音会算成底边 926，进度条直接钻到输入栏下面。
+        // 所以这里不动，交给 DYYY.xm 里 DYYYIMProgressContainerTarget 单点归位。
+
         CGFloat bottom = CGRectGetMinY([parent convertRect:barRect fromView:view.window]);
         CGFloat height = MIN(CGRectGetMaxY(parent.bounds), bottom) - frame.origin.y;
         if (height <= 0) return NO;

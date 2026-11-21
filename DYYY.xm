@@ -4259,19 +4259,11 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 真实 delegate 容器与数据层入口在 DYYYHooksFullscreen.xm，同一纯函数。
 %hook AWEAwemeDetailTableViewController
 
-// 聊天系视频页（群聊 / 朋友聊天）全屏时不再扣底栏。
-// 抖音按「屏高 − baseTableViewBottomInset」推出内容区高度：
-//   926 − 83 = 843，于是内容区/互动层/进度容器/弹幕层全部停在 843。
-// 这里只回答"底栏占多高"，不写任何 frame：
-//   返回 0 → 抖音自己算出 926 → 四层一次排对，且不会产生布局回环。
-// 其他页面（首页/详情/他人主页/图文）一律 %orig，行为不变。
-- (CGFloat)baseTableViewBottomInset {
-    if (DYYYGetBool(@"DYYYEnableFullScreen") &&
-        [DYYYFullscreenCoordinator isImDetailController:self]) {
-        return 0.0;
-    }
-    return %orig;
-}
+// 41.2 实测（#129 诊断包）：baseTableViewBottomInset → 0 对内容区高度**无影响**，
+// 内容区仍是 843。说明 843 不是这个 getter 算出来的，此路作废，不再挂它
+// （返回 0 还会改掉表格 contentInset，让末页 cell 能滚到输入栏底下，是副作用）。
+// 真正的位置改由下方 setFrame: 分派处理（DYYYIMDetailContentTarget /
+// DYYYIMProgressContainerTarget），不再由该 getter 承担。
 
 - (double)fixedCellHeight {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
@@ -6847,10 +6839,102 @@ static CGRect DYYYGeoContainerTarget(UIView *view) {
 // HUD 钉位已移除：互动层按原生布局走，不再依赖"表撑高前的原高"缓存。
 // 该缓存正是 41.2 上"表 926 滚 / cell 843 排"错位链条的一环（状态丢失即失效）。
 
+// 聊天系视频页（群聊 / 朋友聊天）内容区铺满。
+//
+// 41.2 实测（#129 诊断包）：cell = 926、cell.contentView = 926，
+// 唯独内容层 AWEAwemeDetailCellViewController.view 被写成 843（= 926 − 83）。
+// 视频、弹幕、进度条都挂在它下面，于是全部停在 843。
+// 抖音不是按 baseTableViewBottomInset 算的（上轮 hook 返回 0，实测无任何变化）。
+//
+// 修法按 DYKiller 架构一「表高唯一写入通道」：
+// 不额外写第二遍 frame，只在**这次写入时**把高度换成父级高度。
+// 替换后的值等于父级高，下一次同样的写入就是同值 no-op，不会反向触发布局
+// （#128 的 0x8BADF00D 回环来自"布局完成后再写一遍"，与本路不同）。
+static CGRect DYYYIMDetailContentTarget(UIView *view, CGRect frame) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
+
+    UIView *parent = view.superview;
+    if (!parent) return CGRectNull;
+    CGFloat parentWidth = CGRectGetWidth(parent.bounds);
+    CGFloat parentHeight = CGRectGetHeight(parent.bounds);
+    if (parentWidth <= 0.0 || parentHeight <= 0.0) return CGRectNull;
+
+    // 已经是父级高度 → 放行（同值写入，不重复干预）
+    if (fabs(CGRectGetHeight(frame) - parentHeight) <= kDYYYGeoTolerance) return CGRectNull;
+    // 只处理"比父级矮一个底栏"的原生写法；画中画、半屏、图集等一律不碰
+    if (CGRectGetHeight(frame) > parentHeight) return CGRectNull;
+    if (parentHeight - CGRectGetHeight(frame) > 120.0) return CGRectNull;
+    if (fabs(CGRectGetWidth(frame) - parentWidth) > kDYYYGeoTolerance) return CGRectNull;
+
+    UIResponder *owner = view.nextResponder;
+    static Class sCellVCClass;
+    static dispatch_once_t sCellVCOnce;
+    dispatch_once(&sCellVCOnce, ^{ sCellVCClass = NSClassFromString(@"AWEAwemeDetailCellViewController"); });
+    if (!sCellVCClass || ![owner isKindOfClass:sCellVCClass]) return CGRectNull;
+    if (![DYYYFullscreenCoordinator isImDetailController:(UIViewController *)owner]) return CGRectNull;
+
+    // 失控保险：正常情况每个 cell 只替换一次（抖音写完 843 我们换成 926，
+    // 之后同值写入不再触发重排）。只有"替换 → 触发重排 → 抖音又写 843"的
+    // 病态环才会持续累加，这里 200 次/秒封顶，超过就当帧放行原生值。
+    static CFAbsoluteTime sLastSubstitute = 0;
+    static NSInteger sSubstituteCount = 0;
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    if (now - sLastSubstitute > 1.0) {
+        sLastSubstitute = now;
+        sSubstituteCount = 0;
+    }
+    if (++sSubstituteCount > 200) return CGRectNull;
+
+    frame.size = CGSizeMake(parentWidth, parentHeight);
+    return frame;
+}
+
+// 聊天系视频页：进度容器的单点归位。
+//
+// #128 vs #129 的实测差：
+//   content 843 / interaction 843 → 容器 frame {{0,643},{428,200}}，底边 843（正确）
+//   content 926 / interaction 843 → 容器 frame {{0,560},{428,200}}，底边 760（高 83）
+// 即抖音的容器底边 = interaction 底边 − (content − interaction)。
+// 内容层一旦铺满 926，这个减法就多扣了一个底栏，进度条整体上浮、拖起来可见跳动。
+//
+// 这里不动 interaction（撑到 926 会让抖音算成底边 926，进度条钻进输入栏下面），
+// 只在容器写入时把底边钉回父级底边（= 输入栏上沿 843）。同值即放行，不会拉锯。
+static CGRect DYYYIMProgressContainerTarget(UIView *view, CGRect frame) {
+    static Class sContainerClass;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ sContainerClass = NSClassFromString(@"AWEPlayInteractionProgressContainerView"); });
+    if (!sContainerClass || ![view isKindOfClass:sContainerClass]) return CGRectNull;
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
+
+    UIView *parent = view.superview;
+    if (!parent) return CGRectNull;
+    CGFloat parentHeight = CGRectGetHeight(parent.bounds);
+    CGFloat height = CGRectGetHeight(frame);
+    if (parentHeight <= 0.0 || height <= 0.0 || height >= parentHeight) return CGRectNull;
+
+    CGFloat desiredY = parentHeight - height;
+    CGFloat delta = fabs(CGRectGetMinY(frame) - desiredY);
+    if (delta <= kDYYYGeoTolerance) return CGRectNull;   // 已经在正确位置
+    if (delta < 40.0 || delta > 120.0) return CGRectNull; // 只认"差一个底栏"，动画/过渡态不碰
+    // 必须横跨父级宽度，避免命中同类的其它小容器
+    if (fabs(CGRectGetWidth(frame) - CGRectGetWidth(parent.bounds)) > kDYYYGeoTolerance) return CGRectNull;
+
+    if (![DYYYFullscreenCoordinator isImDetailView:view]) return CGRectNull;
+
+    frame.origin.y = desiredY;
+    return frame;
+}
+
 // 统一分派：只在播放器容器写入方上做几何修正，其余一律放行。
 static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
     UIResponder *owner = view.nextResponder;
     if (!owner) return CGRectNull;
+
+    CGRect imContent = DYYYIMDetailContentTarget(view, frame);
+    if (!CGRectIsNull(imContent)) return imContent;
+
+    CGRect imProgress = DYYYIMProgressContainerTarget(view, frame);
+    if (!CGRectIsNull(imProgress)) return imProgress;
 
     Class mergeClass = DYYYGeoMergeClass();
     if (mergeClass && [owner isKindOfClass:mergeClass]) {
