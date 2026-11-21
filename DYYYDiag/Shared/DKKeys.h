@@ -10,8 +10,16 @@
 #define DK_VERSION @"2.2-9"
 #endif
 
-// 构建标识：CI 注入（build.yml 传 GIT_COMMIT / BUILD_TIME），本地构建为 dev。
-// 诊断包必须带出，用于区分"哪次构建"——版本争议的终结手段。
+// 构建标识：CI 在编译前生成 DYYYBuildStamp.h（见 build.yml），
+// 本地构建无该文件则为 dev/local。诊断包必须带出，
+// 用于区分"哪次构建"——版本争议的终结手段。
+#if __has_include("DYYYBuildStamp.h")
+#import "DYYYBuildStamp.h"
+#elif __has_include("../DYYYBuildStamp.h")
+#import "../DYYYBuildStamp.h"
+#elif __has_include("../../DYYYBuildStamp.h")
+#import "../../DYYYBuildStamp.h"
+#endif
 #ifndef DK_BUILD_COMMIT
 #define DK_BUILD_COMMIT @"dev"
 #endif

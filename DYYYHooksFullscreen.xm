@@ -370,9 +370,13 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 }
 
 // 兜底：若布局后仍矮于父视图（布局早期半成品漏网），再拉满一次。
+// 聊天系视频页（群聊/朋友聊天）必须放行：该页原生表就是"扣底栏 843"，
+// 兜底会把表拉满到 926，与原生让位布局打架——实测此路径是拖动"弹"的
+// 直接写入者（setFrame 已排除，但本兜底只按高度判断，未做会话排除）。
 - (void)layoutSubviews {
     %orig;
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return;
+    if ([DYYYFullscreenCoordinator isImDetailView:self]) return;
     UIView *sv = self.superview;
     if (sv && CGRectGetHeight(sv.bounds) > 0 && self.frame.size.height < CGRectGetHeight(sv.bounds) - 0.5) {
         CGRect f = self.frame;
