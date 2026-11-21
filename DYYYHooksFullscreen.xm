@@ -158,6 +158,91 @@
 %end
 
 %hook AWEPlayInteractionProgressContainerView
+
+// ── 逐帧记录容器的位置变化（纯观测，不改值）──────────────────────
+//
+// #136 结论：该容器的 setFrame 一次都没被调用（pwrite = 0），
+// 但用户实测「整条进度条连时间一起上移约一个底栏高度」。
+// 整条一起动、又不是 setFrame → 只可能是 center 或 transform。
+// 这两个入口 #136 没接，所以抓不到。
+//
+// 这里把 center / transform / bounds 全部接上，判据 0.01，带毫秒时间戳。
+// 打完即删。
+- (void)setBounds:(CGRect)bounds {
+    CGRect old = self.bounds;
+    %orig;
+    if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
+    if (fabs(old.size.height - bounds.size.height) < 0.01) return;
+    static NSInteger sCount = 0;
+    if (++sCount > 300) return;
+    NSLog(@"[DYYY][cwrite] setBounds #%ld t=%.3f h %.2f→%.2f",
+          (long)sCount, CFAbsoluteTimeGetCurrent(), old.size.height, bounds.size.height);
+}
+
+- (void)setFrame:(CGRect)frame {
+    CGRect old = self.frame;
+    %orig;
+    if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
+    if (fabs(old.origin.y - frame.origin.y) < 0.01 &&
+        fabs(old.size.height - frame.size.height) < 0.01) {
+        return;
+    }
+    static NSInteger sCount = 0;
+    if (++sCount > 300) return;
+    NSLog(@"[DYYY][cwrite] setFrame #%ld t=%.3f y %.2f→%.2f  h %.2f→%.2f",
+          (long)sCount, CFAbsoluteTimeGetCurrent(),
+          old.origin.y, frame.origin.y, old.size.height, frame.size.height);
+}
+
+- (void)setCenter:(CGPoint)center {
+    CGPoint old = self.center;
+    %orig;
+    if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
+    if (fabs(old.y - center.y) < 0.01) return;
+
+    static NSInteger sCount = 0;
+    if (++sCount > 300) return;
+
+    NSMutableString *who = [NSMutableString string];
+    if (sCount <= 40 && (sCount % 10) == 0) {
+        NSArray<NSString *> *stack = [NSThread callStackSymbols];
+        NSUInteger limit = MIN(stack.count, (NSUInteger)8);
+        for (NSUInteger i = 1; i < limit; i++) {
+            NSString *line = stack[i];
+            NSRange r = [line rangeOfString:@"["];
+            NSString *t = r.location != NSNotFound ? [line substringFromIndex:r.location] : line;
+            [who appendFormat:@"\n        %@", t];
+        }
+    }
+    NSLog(@"[DYYY][cwrite] setCenter #%ld t=%.3f y %.2f→%.2f%@",
+          (long)sCount, CFAbsoluteTimeGetCurrent(), old.y, center.y, who);
+}
+
+- (void)setTransform:(CGAffineTransform)transform {
+    CGAffineTransform old = self.transform;
+    %orig;
+    if (!DYYYGetBool(@"DYYYDiagEntryEnabled")) return;
+    if (fabs(old.ty - transform.ty) < 0.01 && fabs(old.a - transform.a) < 0.001) return;
+
+    static NSInteger sCount = 0;
+    if (++sCount > 300) return;
+
+    NSMutableString *who = [NSMutableString string];
+    if (sCount <= 40 && (sCount % 10) == 0) {
+        NSArray<NSString *> *stack = [NSThread callStackSymbols];
+        NSUInteger limit = MIN(stack.count, (NSUInteger)8);
+        for (NSUInteger i = 1; i < limit; i++) {
+            NSString *line = stack[i];
+            NSRange r = [line rangeOfString:@"["];
+            NSString *t = r.location != NSNotFound ? [line substringFromIndex:r.location] : line;
+            [who appendFormat:@"\n        %@", t];
+        }
+    }
+    NSLog(@"[DYYY][cwrite] setTransform #%ld t=%.3f ty %.2f→%.2f  scale %.3f→%.3f%@",
+          (long)sCount, CFAbsoluteTimeGetCurrent(),
+          old.ty, transform.ty, old.a, transform.a, who);
+}
+
 - (void)layoutSubviews {
     %orig;
     DYYYApplyFloatClearProgressStateToView(self);
