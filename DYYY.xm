@@ -6933,6 +6933,51 @@ static CGRect DYYYGeoHUDAdjustFrame(UIView *view, CGRect frame) {
 // 现状：这条路上 IM 页除了播放器容器（让它铺满全屏）之外，
 // 不写任何一个 frame。拖动让位交还给抖音。
 
+// ── 聊天页拖动跳动的真实写入记录（纯观测，不改任何值）─────────────
+//
+// 现象：聊天页（群聊/朋友聊天）拖动进度条时进度条上下跳；其他页不跳；
+// 关掉全屏也不跳。视频本身正常。
+//
+// 已排除（多份诊断包实测）：
+//   · 不是表格滚动 —— offset.y 单调递增，无回跳
+//   · 不是滑块自身尺寸 —— 四个版本的 (y,h) 组合完全相同
+//   · 不是互动层/容器高度 —— #135 已不再写这两层，仍然跳
+//
+// 剩下唯一没被逐帧记录过的，就是进度容器自己的 frame 写入。
+// 该类不重写 setFrame，所以每次写入都会经过这里的全局钩子。
+//
+// 这个探针记录**每一帧**（不用 0.5pt 阈值过滤，跳幅可能小于它），
+// 只写 y 和高度，带毫秒时间戳，便于看是否高频来回。
+// 打完即删，不留在发布版。
+static void DYYYLogProgressContainerWrite(UIView *view, CGRect old, CGRect now) {
+    if (fabs(old.origin.y - now.origin.y) < 0.01 &&
+        fabs(old.size.height - now.size.height) < 0.01) {
+        return;   // 完全没变，不记
+    }
+    static Class sContainerClass;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ sContainerClass = NSClassFromString(@"AWEPlayInteractionProgressContainerView"); });
+    if (!sContainerClass || ![view isKindOfClass:sContainerClass]) return;
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return;
+
+    // 不调 isImDetailView:（它带窗口级缓存，在 setFrame 热路径里开销偏大）。
+    // 只按「连到表 + 表是详情表」粗筛，够用于观测。
+    BOOL inDetail = NO;
+    for (UIView *a = view.superview; a && !inDetail; a = a.superview) {
+        if ([a isKindOfClass:[UITableView class]]) inDetail = YES;
+    }
+    if (!inDetail) return;
+
+    static NSInteger sCount = 0;
+    if (++sCount > 400) return;   // 总量上限，防刷屏
+
+    CFAbsoluteTime now_t = CFAbsoluteTimeGetCurrent();
+    NSLog(@"[DYYY][pwrite] #%ld t=%.3f y %.1f→%.1f  h %.1f→%.1f",
+          (long)sCount, now_t,
+          old.origin.y, now.origin.y,
+          old.size.height, now.size.height);
+}
+
 // 统一分派：只在两个已知写入方上做几何修正，其余一律放行。
 static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
     UIResponder *owner = view.nextResponder;
@@ -7089,6 +7134,11 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
           [self setFrame:frame];
         });
         return;
+    }
+
+    // 纯观测：记录进度容器每一次真实的 frame 写入（不改值）。
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        DYYYLogProgressContainerWrite(self, self.frame, frame);
     }
 
     // #70 视频几何钉位（先于毛玻璃逻辑执行）：
