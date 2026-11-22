@@ -32,18 +32,7 @@ static const NSUInteger kDYYYDiagMaxExportFiles = 8000;
 #define DYYYDiagBuildBranch_STR "local"
 #define DYYYDiagBuildTime_STR "dev"
 #endif
-#ifndef DYYYDiagVersion
-#define DYYYDiagVersion @"2.2-9"
-#endif
-#ifndef DYYYDiagBuildCommit
-#define DYYYDiagBuildCommit @"dev"
-#endif
-#ifndef DYYYDiagBuildBranch
-#define DYYYDiagBuildBranch @"local"
-#endif
-#ifndef DYYYDiagBuildTime
-#define DYYYDiagBuildTime @"dev"
-#endif
+
 
 NSString * const DYYYDiagVersion = DYYYDiagStr(DYYYDiagVersion_STR);
 NSString * const DYYYDiagBuildCommit = DYYYDiagStr(DYYYDiagBuildCommit_STR);
