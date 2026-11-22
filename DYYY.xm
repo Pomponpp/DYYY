@@ -7320,7 +7320,16 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
 - (void)viewDidLayoutSubviews {
     %orig;
     [DYYYFullscreenCoordinator layoutPlayerContainer:self];
+}
 
+// 补钉（第二入口）：复用 cell 时抖音可能先写 frame、后绑 model，
+// 那一帧算出的容器目标偏小，写完后不再写第二次；预备 cell 是 hidden 的
+// 也不再触发布局，滑过去就成了 843 的不全屏 cell。
+// willDisplay 时 model 与视图层级都已就位，补一次即可。
+// layoutPlayerContainer 内部同值不写，因此幂等、不会成环。
+- (void)willDisplay {
+    %orig;
+    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
 }
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
