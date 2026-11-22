@@ -244,6 +244,15 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     // 对齐已验证实现：表已撑高时把整页行高答成满视口；特殊行与未就绪尺寸透传。
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !table) return nativeHeight;
     NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        static NSInteger sRowCalls = 0;
+        if (++sRowCalls <= 20) {
+            NSLog(@"[DYYY][rowq] #%ld native=%.1f 表高=%.1f original=%@ 详情=%@",
+                  (long)sRowCalls, nativeHeight, CGRectGetHeight(table.bounds),
+                  original ? [NSString stringWithFormat:@"%.1f", original.doubleValue] : @"无",
+                  [self isDetailTable:table] ? @"是" : @"否");
+        }
+    }
     NSNumber *pinned = objc_getAssociatedObject(table, @selector(alignExistingCellsIfNeeded:target:));
     CGFloat tableH = CGRectGetHeight(table.bounds);
     CGFloat target = pinned ? MAX(pinned.doubleValue, tableH) : tableH;
@@ -273,15 +282,22 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     return target;
 }
 
-// 这张表是否属于详情页（含好友聊天/作品/喜欢等进入 AWEAwemeDetailTableViewController 的场景）。
+// 这张表是否属于详情页。
+// 建行（含 window=nil 的离屏预取）时表还没入树，沿 responder 链拿不到 VC，
+// 所以直接看表的类名：详情页用的是 AWEAwemeDetailTableView。
 + (BOOL)isDetailTable:(UITableView *)table {
-    UIViewController *vc = [self controllerForTable:table];
-    static Class sDetail;
+    static Class sDetailTable;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ sDetail = NSClassFromString(@"AWEAwemeDetailTableViewController"); });
-    if (!sDetail) return NO;
+    dispatch_once(&once, ^{ sDetailTable = NSClassFromString(@"AWEAwemeDetailTableView"); });
+    if (sDetailTable && [table isKindOfClass:sDetailTable]) return YES;
+    // 兜底：能沿父链找到详情控制器也算。
+    UIViewController *vc = [self controllerForTable:table];
+    static Class sDetailVC;
+    static dispatch_once_t once2;
+    dispatch_once(&once2, ^{ sDetailVC = NSClassFromString(@"AWEAwemeDetailTableViewController"); });
+    if (!sDetailVC) return NO;
     for (NSUInteger depth = 0; vc && depth < 8; depth++, vc = vc.parentViewController) {
-        if ([vc isKindOfClass:sDetail]) return YES;
+        if ([vc isKindOfClass:sDetailVC]) return YES;
     }
     return NO;
 }
