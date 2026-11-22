@@ -23,6 +23,7 @@
 @property (nonatomic, strong) NSData *screenshotPNG;
 @property (nonatomic, copy) NSString *summary;
 @property (nonatomic, strong) NSArray<NSString *> *pageClassNames;
+@property (nonatomic, copy) NSString *probeText;
 @property (nonatomic, weak) UIView *sourceView;
 @property (nonatomic, weak) UIViewController *presenter;
 @end
