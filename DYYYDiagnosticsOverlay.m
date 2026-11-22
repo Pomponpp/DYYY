@@ -362,7 +362,8 @@ static void DYYYDiagStartExport(DYYYDiagnosticsContext *context) {
     // 探针读 UIKit，必须在主线程生成后塞进上下文；后台任务只做序列化与压缩。
     // 探针文本含：状态指纹 + 当前页面标识 + 运行流水全文。
     {
-        NSString *runtime = [NSString stringWithContentsOfFile:[DYYYDiagnostics flushRuntimeLogToFile], [DYYYDiagnostics runtimeLogPath]
+        [DYYYDiagnostics flushRuntimeLogToFile];
+        NSString *runtime = [NSString stringWithContentsOfFile:[DYYYDiagnostics runtimeLogPath]
                                                       encoding:NSUTF8StringEncoding error:nil];
         if (!runtime) runtime = @"";
         NSString *fp = [NSString stringWithFormat:@"全屏=%d 毛玻璃=%d 设备=%@ 系统=%@ 抖音=%@",
