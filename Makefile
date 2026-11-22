@@ -36,13 +36,13 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = DYYY
 
-DYYY_FILES = DYYYConfigCache.m DYYYClassRegistry.m DYYYDiagnostics.m DYYYFullscreenCoordinator.m DYYYCommentBlurCoordinator.m DYYYFullscreenGeometry.m DYYY.xm DYYYHooksFullscreen.xm DYYYHooksTabBar.xm DYYYHooksComment.xm DYYYHooksProfile.xm DYYYHooksFeed.xm DYYYHooksMedia.xm DYYYHooksLive.xm DYYYHooksSettings.xm DYYYHooksGlobal.xm DYYYFloatClearButton.xm DYYYFloatSpeedButton.m DYYYSettings.xm DYYYABTestHook.xm DYYYLongPressPanel.xm DYYYSettingsHelper.m DYYYImagePickerDelegate.m DYYYBackupPickerDelegate.m DYYYSettingViewController.m DYYYBottomAlertView.m DYYYCustomInputView.m DYYYOptionsSelectionView.m DYYYIconOptionsDialogView.m DYYYAboutDialogView.m DYYYKeywordListView.m DYYYFilterSettingsView.m DYYYConfirmCloseView.m DYYYToast.m DYYYManager.m DYYYUtils.m CityManager.m AWMSafeDispatchTimer.m
+DYYY_FILES = DYYYConfigCache.m DYYYClassRegistry.m DYYYFullscreenCoordinator.m DYYYCommentBlurCoordinator.m DYYYFullscreenGeometry.m DYYY.xm DYYYHooksFullscreen.xm DYYYHooksTabBar.xm DYYYHooksComment.xm DYYYHooksProfile.xm DYYYHooksFeed.xm DYYYHooksMedia.xm DYYYHooksLive.xm DYYYHooksSettings.xm DYYYHooksGlobal.xm DYYYFloatClearButton.xm DYYYFloatSpeedButton.m DYYYSettings.xm DYYYABTestHook.xm DYYYLongPressPanel.xm DYYYSettingsHelper.m DYYYImagePickerDelegate.m DYYYBackupPickerDelegate.m DYYYSettingViewController.m DYYYBottomAlertView.m DYYYCustomInputView.m DYYYOptionsSelectionView.m DYYYIconOptionsDialogView.m DYYYAboutDialogView.m DYYYKeywordListView.m DYYYFilterSettingsView.m DYYYConfirmCloseView.m DYYYToast.m DYYYManager.m DYYYUtils.m CityManager.m AWMSafeDispatchTimer.m
 DYYY_FILES += DYYYDownloadScheduler.m
 DYYY_FILES += DYYYCommentPlaybackCoordinator.m DYYYCommentPlaybackHooks.xm
 DYYY_FILES += DYYYFloatingButtonCoordinator.m
 DYYY_FILES += DYYYLoginBypassManager.m DYYYLoginRepairHooks.m DYYYPrivacyRecordUploadGuard.m DYYYHideMessageAndMinePageHooks.m DYYYExactInteractionCountHooks.m DYYYRuntimeHookInstaller.m DYYYFeatureUI.m DYYYLoginBypassHooks.xm DYYYPrivacyHooks.xm DYYYFeatureHooks.xm
 # 本地修复：进度条黑线（独立文件，同步上游时只需保留本行）
-DYYY_FILES += DYYYProgressUnderlineFix.xm DYYYDiagnostics.m DYYYDiagnosticsCore.m DYYYDiagnosticsCapture.m DYYYDiagnosticsExport.m DYYYDiagnosticsOverlay.m DYYYDiagnosticsCompat.m
+DYYY_FILES += DYYYProgressUnderlineFix.xm DYYYDiagnosticsCore.m DYYYDiagnosticsCapture.m DYYYDiagnosticsExport.m DYYYDiagnosticsOverlay.m DYYYDiagnosticsCompat.m
 # 运行时探针：定位 40.9 头像保存新链路（测完可在设置页关闭）
 # 只升级抓真 bug 的两项：返回类型不匹配、隐式函数声明。
 # 不加 -Werror=objc-method-access：Logos 的 %new 跨文件天然缺可见声明，
