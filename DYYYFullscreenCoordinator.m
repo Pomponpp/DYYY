@@ -216,6 +216,10 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
             NSLog(@"[DYYY][table] 记原高=%.1f 目标=%.1f", current, target);
         }
     }
+    // 稳定满高：建行（含 window=nil 的离屏预取）可能早于表被撑高，
+    // 那一刻读实时表高只会得到 843。这里记下撑高目标，行高改用此值。
+    objc_setAssociatedObject(table, @selector(alignExistingCellsIfNeeded:target:), @(target),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     frame.size.height = target;
     return frame;
 }
@@ -240,7 +244,11 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     // 对齐已验证实现：表已撑高时把整页行高答成满视口；特殊行与未就绪尺寸透传。
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !table) return nativeHeight;
     NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
-    CGFloat target = CGRectGetHeight(table.bounds);
+    // 优先用撑高时记下的稳定满高：建行可能发生在表被撑高之前（离屏预取），
+    // 那一刻 table.bounds 还是 843，用实时值会把行高答成 843 并被 UIKit 缓存。
+    NSNumber *pinned = objc_getAssociatedObject(table, @selector(alignExistingCellsIfNeeded:target:));
+    CGFloat target = pinned ? pinned.doubleValue : CGRectGetHeight(table.bounds);
+    if (pinned) target = MAX(target, CGRectGetHeight(table.bounds));
     if (!original || !isfinite(nativeHeight) || !isfinite(target)
         || nativeHeight <= 0.0 || target <= original.doubleValue + kDYYYDetailHeightTol) {
         return nativeHeight;
