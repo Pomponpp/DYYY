@@ -4284,6 +4284,10 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 每个入口都先 prepare 撑高表，再放行原生——建行、落点、分页看到同一个表高。
 // 翻页入口在 %orig 前后各准备一次（落点在 %orig 内算定，前后都需同源）。
 - (void)setupDetailTableView {
+    // 撑高必须在建行之前：cell 高度按当时的表高确定，建成后不会因表变高重算。
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
     %orig;
     if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];

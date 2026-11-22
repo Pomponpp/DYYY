@@ -170,6 +170,75 @@ static NSDictionary *DYYYDiagLayerInfo(CALayer *layer) {
     };
 }
 
+#pragma mark - 布局约束摘要
+
+// 把一条约束翻译成可读文本：
+//   UILabel.left == superview.left + 12  (p=1000, active)
+// firstItem/secondItem 可能是 view 自己、父视图或兄弟视图，统一用类名+地址尾号表示。
+static NSString *DYYYDiagConstraintText(NSLayoutConstraint *c, UIView *self_) {
+    if (!c) return @"";
+    NSString *first = c.firstItem ? [NSString stringWithFormat:@"%@<%p>",
+                                     DYYYDiagClassName(c.firstItem), c.firstItem] : @"nil";
+    NSString *second = c.secondItem ? [NSString stringWithFormat:@"%@<%p>",
+                                      DYYYDiagClassName(c.secondItem), c.secondItem] : @"nil";
+    // 把参与方简写成 self / super / sibling，便于阅读
+    if (c.firstItem == self_) first = @"self";
+    if (c.secondItem == self_) second = @"self";
+    if (c.firstItem == self_.superview) first = @"super";
+    if (c.secondItem == self_.superview) second = @"super";
+
+    NSString *(^attrName)(NSLayoutAttribute) = ^NSString *(NSLayoutAttribute a) {
+        switch (a) {
+            case NSLayoutAttributeLeft: return @"left";
+            case NSLayoutAttributeRight: return @"right";
+            case NSLayoutAttributeTop: return @"top";
+            case NSLayoutAttributeBottom: return @"bottom";
+            case NSLayoutAttributeLeading: return @"leading";
+            case NSLayoutAttributeTrailing: return @"trailing";
+            case NSLayoutAttributeWidth: return @"width";
+            case NSLayoutAttributeHeight: return @"height";
+            case NSLayoutAttributeCenterX: return @"centerX";
+            case NSLayoutAttributeCenterY: return @"centerY";
+            case NSLayoutAttributeLastBaseline: return @"lastBaseline";
+            case NSLayoutAttributeFirstBaseline: return @"firstBaseline";
+            case NSLayoutAttributeNotAnAttribute: return @"notAnAttribute";
+            default: return @"attr";
+        }
+    };
+    NSString *rel = @"==";
+    if (c.relation == NSLayoutRelationGreaterThanOrEqual) rel = @">=";
+    else if (c.relation == NSLayoutRelationLessThanOrEqual) rel = @"<=";
+    NSMutableString *text = [NSMutableString string];
+    [text appendFormat:@"%@.%@ %@ ", first, attrName(c.firstAttribute), rel];
+    if (c.secondItem) {
+        [text appendFormat:@"%@.%@", second, attrName(c.secondAttribute)];
+    }
+    if (fabs(c.multiplier - 1.0) > 1e-6) {
+        [text appendFormat:@" * %.3f", c.multiplier];
+    }
+    if (fabs(c.constant) > 1e-6) {
+        [text appendFormat:@" %+.1f", c.constant];
+    }
+    [text appendFormat:@"  (p=%.0f%@)", c.priority, c.active ? @", active" : @""];
+    return text;
+}
+
+// 收集与本 view 相关的约束：自身 + 父视图上涉及本 view 的。
+// dumpAll=N 时最多取 limit 条，超出只回条数（避免诊断包暴涨）。
+static NSArray<NSString *> *DYYYDiagConstraintsForView(UIView *view, NSUInteger limit, NSUInteger *totalOut) {
+    if (!view) return @[];
+    NSMutableArray<NSLayoutConstraint *> *all = [NSMutableArray array];
+    for (NSLayoutConstraint *c in view.constraints) [all addObject:c];
+    for (NSLayoutConstraint *c in view.superview.constraints) {
+        if (c.firstItem == view || c.secondItem == view) [all addObject:c];
+    }
+    if (totalOut) *totalOut = all.count;
+    NSMutableArray<NSString *> *out = [NSMutableArray array];
+    for (NSUInteger i = 0; i < all.count && i < limit; i++) {
+        [out addObject:DYYYDiagConstraintText(all[i], view)];
+    }
+    return out;
+}
 static NSMutableDictionary *DYYYDiagBaseViewInfo(UIView *view, NSUInteger depth) {
     UIViewController *nearestVC = DYYYDiagViewControllerForView(view);
     NSMutableDictionary *info = [@{
@@ -199,8 +268,33 @@ static NSMutableDictionary *DYYYDiagBaseViewInfo(UIView *view, NSUInteger depth)
             @"address": DYYYDiagStringFromPointer((__bridge const void *)nearestVC)
         } : @{},
         @"layer": DYYYDiagLayerInfo(view.layer),
-        @"subviewCount": @(view.subviews.count)
+        @"subviewCount": @(view.subviews.count),
+        // 布局三件套：安全区、是否用约束布局、自身想要的尺寸
+        @"safeAreaInsets": @{
+            @"top": @(view.safeAreaInsets.top),
+            @"left": @(view.safeAreaInsets.left),
+            @"bottom": @(view.safeAreaInsets.bottom),
+            @"right": @(view.safeAreaInsets.right)
+        },
+        @"translatesAutoresizingMaskIntoConstraints": @(view.translatesAutoresizingMaskIntoConstraints),
+        @"intrinsicContentSize": DYYYDiagSizeDict(view.intrinsicContentSize)
     } mutableCopy];
+
+    // 垂直方向的两个优先级：被压扁时靠它们判断是谁让步了。
+    info[@"verticalHugging"] = @([view contentHuggingPriorityForAxis:UILayoutConstraintAxisVertical]);
+    info[@"verticalCompressionResistance"] =
+        @([view contentCompressionResistancePriorityForAxis:UILayoutConstraintAxisVertical]);
+
+    // 约束列表：只在这个 view 自己有约束、或父视图约束涉及它时才展开。
+    // 上限 12 条，超出只记总数——避免整棵树的约束把诊断包撑爆。
+    {
+        NSUInteger total = 0;
+        NSArray<NSString *> *texts = DYYYDiagConstraintsForView(view, 12, &total);
+        if (total > 0) {
+            info[@"constraintCount"] = @(total);
+            info[@"constraints"] = texts;
+        }
+    }
 
     if ([view isKindOfClass:[UILabel class]]) {
         UILabel *label = (UILabel *)view;
@@ -282,7 +376,9 @@ static void DYYYDiagAppendViewTreeText(UIView *view, NSUInteger depth, NSMutable
     NSMutableString *indent = [NSMutableString string];
     for (NSUInteger i = 0; i < depth; i++) [indent appendString:@"  "];
     UIViewController *vc = DYYYDiagViewControllerForView(view);
-    [out appendFormat:@"%@%@ %@ frame=%@ bounds=%@ vc=%@ %@ hidden=%d alpha=%.3f clips=%d user=%d layer=%@\n",
+    NSUInteger cTotal = 0;
+    DYYYDiagConstraintsForView(view, 0, &cTotal);
+    [out appendFormat:@"%@%@ %@ frame=%@ bounds=%@ vc=%@ %@ hidden=%d alpha=%.3f clips=%d user=%d layer=%@ safe(t=%.0f,b=%.0f) transAuto=%d 约束=%lu\n",
      indent,
      DYYYDiagClassName(view),
      DYYYDiagStringFromPointer((__bridge const void *)view),
@@ -294,7 +390,11 @@ static void DYYYDiagAppendViewTreeText(UIView *view, NSUInteger depth, NSMutable
      view.alpha,
      view.clipsToBounds,
      view.userInteractionEnabled,
-     DYYYDiagClassName(view.layer)];
+     DYYYDiagClassName(view.layer),
+     view.safeAreaInsets.top,
+     view.safeAreaInsets.bottom,
+     view.translatesAutoresizingMaskIntoConstraints ? 1 : 0,
+     (unsigned long)cTotal];
     for (UIView *subview in view.subviews) DYYYDiagAppendViewTreeText(subview, depth + 1, out);
 }
 
