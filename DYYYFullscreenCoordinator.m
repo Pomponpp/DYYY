@@ -244,12 +244,25 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     // 对齐已验证实现：表已撑高时把整页行高答成满视口；特殊行与未就绪尺寸透传。
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !table) return nativeHeight;
     NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
-    // 优先用撑高时记下的稳定满高：建行可能发生在表被撑高之前（离屏预取），
-    // 那一刻 table.bounds 还是 843，用实时值会把行高答成 843 并被 UIKit 缓存。
     NSNumber *pinned = objc_getAssociatedObject(table, @selector(alignExistingCellsIfNeeded:target:));
-    CGFloat target = pinned ? pinned.doubleValue : CGRectGetHeight(table.bounds);
-    if (pinned) target = MAX(target, CGRectGetHeight(table.bounds));
-    if (!original || !isfinite(nativeHeight) || !isfinite(target)
+    CGFloat tableH = CGRectGetHeight(table.bounds);
+    CGFloat target = pinned ? MAX(pinned.doubleValue, tableH) : tableH;
+
+    // 首次建行早于撑高：那一刻 original/pinned 都还没有，表也还是 843。
+    // 详情页全屏下 cell 高度就等于窗口高度，直接用它，避免行高被缓存成 843。
+    if (!original) {
+        if ([self isDetailTable:table] && nativeHeight > 0.0) {
+            CGFloat windowH = table.window ? CGRectGetHeight(table.window.bounds)
+                                           : CGRectGetHeight([UIScreen mainScreen].bounds);
+            if (windowH > nativeHeight + kDYYYDetailHeightTol
+                && nativeHeight >= windowH * 0.5) {
+                return windowH;
+            }
+        }
+        return nativeHeight;
+    }
+
+    if (!isfinite(nativeHeight) || !isfinite(target)
         || nativeHeight <= 0.0 || target <= original.doubleValue + kDYYYDetailHeightTol) {
         return nativeHeight;
     }
@@ -260,6 +273,18 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     return target;
 }
 
+// 这张表是否属于详情页（含好友聊天/作品/喜欢等进入 AWEAwemeDetailTableViewController 的场景）。
++ (BOOL)isDetailTable:(UITableView *)table {
+    UIViewController *vc = [self controllerForTable:table];
+    static Class sDetail;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ sDetail = NSClassFromString(@"AWEAwemeDetailTableViewController"); });
+    if (!sDetail) return NO;
+    for (NSUInteger depth = 0; vc && depth < 8; depth++, vc = vc.parentViewController) {
+        if ([vc isKindOfClass:sDetail]) return YES;
+    }
+    return NO;
+}
 + (UIViewController *)controllerForTable:(UITableView *)table {
     UIResponder *responder = table;
     for (int depth = 0; responder && depth < 40; depth++, responder = responder.nextResponder) {

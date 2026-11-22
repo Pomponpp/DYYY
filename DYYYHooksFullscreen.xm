@@ -322,6 +322,31 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 }
 %end
 
+
+// 清黑线：互动层的进度容器里有一层深色垫层（drag/播放时出现）。
+// 只挂这个类（首页/详情页视频的进度容器），只扫直接子视图、只认严格 UIView、
+// 只按亮度判定，不动位置也不碰状态——不带清屏状态，避免干扰进度条原生让位。
+%hook AWEPlayInteractionProgressContainerView
+
+- (void)layoutSubviews {
+    %orig;
+
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYEnableFullScreen"]) {
+        return;
+    }
+
+    for (UIView *subview in self.subviews) {
+        if (![subview isMemberOfClass:[UIView class]]) continue;
+        UIColor *bg = subview.backgroundColor;
+        if (!bg) continue;
+        CGFloat h = 0, s = 0, v = 0, a = 0;
+        if ([bg getHue:&h saturation:&s brightness:&v alpha:&a] && v < 0.2) {
+            subview.backgroundColor = [UIColor clearColor];
+        }
+    }
+}
+
+%end
 %hook AWEFeedDataSafeTableView
 
 - (void)setFrame:(CGRect)frame {
