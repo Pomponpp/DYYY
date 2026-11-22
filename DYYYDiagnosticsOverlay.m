@@ -11,6 +11,9 @@
 //
 
 #import "DYYYDiagnosticsOverlay.h"
+#import "DYYYDiagnosticsCore.h"
+#import "DYYYDiagnosticsCapture.h"
+#import "DYYYDiagnosticsExport.h"
 
 
 

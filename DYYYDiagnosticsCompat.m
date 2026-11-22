@@ -10,6 +10,7 @@
 #import "DYYYDiagnosticsCompat.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <zlib.h>
+#import <objc/runtime.h>
 
 static NSString *DYYYDiagCString(const char *value) {
     if (!value) return @"";
