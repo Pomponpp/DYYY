@@ -157,34 +157,10 @@
 
 %end
 
-%hook AWEPlayInteractionProgressContainerView
-- (void)layoutSubviews {
-    %orig;
-    DYYYApplyFloatClearProgressStateToView(self);
-
-    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYEnableFullScreen"]) {
-        return;
-    }
-
-    static char kDYProgressBgKey;
-    NSArray *bgViews = objc_getAssociatedObject(self, &kDYProgressBgKey);
-    if (!bgViews) {
-        NSMutableArray *tmp = [NSMutableArray array];
-        for (UIView *subview in self.subviews) {
-            if ([subview class] == [UIView class]) {
-                [tmp addObject:subview];
-            }
-        }
-        bgViews = [tmp copy];
-        objc_setAssociatedObject(self, &kDYProgressBgKey, bgViews, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-
-    for (UIView *v in bgViews) {
-        v.backgroundColor = [UIColor clearColor];
-    }
-}
-
-%end
+// 对齐测试对象：聊天页/详情页的进度容器交给抖音原生管理（它不 hook 这个类）。
+// 原先在这里反复改子视图背景/状态，干扰了进度条原生让位，造成拖动上移回落（弹）。
+// 清黑线由 DYYYProgressUnderlineFix.xm 独立负责；
+// 清屏隐藏进度由 DYYYFloatClearButton 的周期定时器负责，均不依赖此 hook。
 
 %hook AWEPlayInteractionProgressController
 
@@ -448,69 +424,4 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
     [DYYYFullscreenCoordinator beginCommentInWindow:[DYYYUtils getActiveWindow]];
     %orig;
 }
-%end
-
-
-#pragma mark - 诊断探针：精准调节浮层为何不亮（#145，抓完即删）
-
-// 现象：拖动进度条时进度条上移（官方「精准调节进度中」交互），
-// 但浮层（缩略图 + 时间 + 播放按钮）不显示，只剩上移回落像弹跳。
-// 视图树实证（#144 包）：AWEProgressPreviewSlider 的祖先链里有一个
-// 裸 UIView 容器 hidden=1 alpha=0，拖动时应被抖音点亮为 hidden=0 alpha=1。
-// 本探针抓：拖动时是谁（抖音 or 我们的 hook）在写这个容器的 hidden/alpha。
-// 只诊断不改行为，受 DYYYDiagEntryEnabled 控制。
-
-static char kDYYYDiagPreviewRootKey;
-
-// 判断某 UIView 是否是「预览浮层根容器」：它的子树里含 AWEProgressPreviewSlider，
-// 且自身是一个直接的裸 UIView（抖音用这种容器承载浮层）。
-static BOOL DYYYDiagIsPreviewRoot(UIView *view) {
-    if (!view || ![view isKindOfClass:[UIView class]]) return NO;
-    if (object_getClass(view) != [UIView class]) return NO;   // 只要裸 UIView
-    static Class sPreviewClass;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ sPreviewClass = NSClassFromString(@"AWEProgressPreviewSlider"); });
-    if (!sPreviewClass) return NO;
-    // 只查两层子树，浮层容器不深
-    for (UIView *sub in view.subviews) {
-        if ([sub isKindOfClass:sPreviewClass]) return YES;
-        for (UIView *sub2 in sub.subviews) {
-            if ([sub2 isKindOfClass:sPreviewClass]) return YES;
-        }
-    }
-    return NO;
-}
-
-static void DYYYDiagLogPreviewStack(NSString *what) {
-    NSArray<NSString *> *stack = [NSThread callStackSymbols];
-    NSUInteger limit = MIN(stack.count, (NSUInteger)14);
-    NSMutableString *out = [NSMutableString string];
-    [out appendFormat:@"[DYYY][pv] %@", what];
-    for (NSUInteger i = 1; i < limit; i++) {
-        NSRange r = [stack[i] rangeOfString:@"["];
-        NSString *tail = r.location != NSNotFound ? [stack[i] substringFromIndex:r.location] : stack[i];
-        [out appendFormat:@"\n    %@", tail];
-    }
-    NSLog(@"%@", out);
-    [DYYYDiagnostics appendRuntimeLogLine:out];
-}
-
-%hook UIView
-
-- (void)setHidden:(BOOL)hidden {
-    BOOL diag = DYYYGetBool(@"DYYYDiagEntryEnabled");
-    if (diag && DYYYDiagIsPreviewRoot(self) && self.hidden != hidden) {
-        DYYYDiagLogPreviewStack([NSString stringWithFormat:@"浮层根 setHidden %d→%d", self.hidden ? 1 : 0, hidden ? 1 : 0]);
-    }
-    %orig;
-}
-
-- (void)setAlpha:(CGFloat)alpha {
-    BOOL diag = DYYYGetBool(@"DYYYDiagEntryEnabled");
-    if (diag && DYYYDiagIsPreviewRoot(self) && fabs(self.alpha - alpha) > 0.01) {
-        DYYYDiagLogPreviewStack([NSString stringWithFormat:@"浮层根 setAlpha %.2f→%.2f", self.alpha, alpha]);
-    }
-    %orig;
-}
-
 %end
