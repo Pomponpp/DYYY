@@ -14,6 +14,7 @@
 #import "DYYYToast.h"
 #import <CoreGraphics/CoreGraphics.h>
 
+NSString * const DYYYDiagExportWorkingDirectoryKey = @"DYYYDiagExportWorkingDirectory";
 static NSString *const DYYYDiagExportErrorDomain = @"com.dyyy.diagnostics-export";
 static const NSUInteger kDYYYDiagMaxExportFiles = 8000;
 
