@@ -334,7 +334,10 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     // 输入栏底色统一：全屏开就不分页面（视频在某一页铺满，底栏底色
     // 就在那一页让开），避免各页面深浅不一致。旧实现限定"仅详情页"，
     // 导致推荐页/喜欢页/收藏页的输入栏深浅不一。
-    [self layoutBottomBar:view controller:controller enabled:DYYYGetBool(@"DYYYEnableFullScreen")];
+    // 两开关独立、一家人：全屏开 → 全屏的透明自动覆盖输入栏；
+    // 「隐藏底栏背景」开 → 独立生效，不依赖全屏。任一开即透明。
+    BOOL enabled = DYYYGetBool(@"DYYYHideBottomBg") || DYYYGetBool(@"DYYYEnableFullScreen");
+    [self layoutBottomBar:view controller:controller enabled:enabled];
 }
 + (CGFloat)bottomOccupiedHeightForView:(UIView *)view {
     UIWindow *window = view.window;
@@ -463,6 +466,25 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     // 消息页/搜索页等不受影响。
     if (!playback && DYYYGetBool(@"DYYYEnableFullScreen") && [self tabBarHostsProfilePage:bar]) {
         playback = YES;
+    }
+    // 直播预览页（AWELiveNewPreStreamViewController）没有播放互动层（无 HUD），
+    // 进不了上面的 interactions 判定 → playback 恒为 NO → 底栏不透明。
+    // 但直播预览同样是视频铺满的页面，底栏压在画面上，应与播放页一致透明。
+    // 类名经 41.2 视图树实证（诊断包 view-tree: vc=AWELiveNewPreStreamViewController）。
+    if (!playback && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        static Class sLivePreStream;
+        static dispatch_once_t onceLive;
+        dispatch_once(&onceLive, ^{ sLivePreStream = NSClassFromString(@"AWELiveNewPreStreamViewController"); });
+        if (sLivePreStream) {
+            UITabBarController *tabForLive = nil;
+            UIViewController *rootLive = bar.window.rootViewController;
+            if ([rootLive isKindOfClass:[UITabBarController class]]) tabForLive = (UITabBarController *)rootLive;
+            UIViewController *topLive = tabForLive.selectedViewController;
+            if ([topLive isKindOfClass:[UINavigationController class]]) topLive = ((UINavigationController *)topLive).topViewController;
+            for (UIViewController *cursor = topLive; cursor; cursor = cursor.parentViewController) {
+                if ([cursor isKindOfClass:sLivePreStream]) { playback = YES; break; }
+            }
+        }
     }
     BOOL enabled = DYYYGetBool(@"DYYYHideBottomBg") || (DYYYGetBool(@"DYYYEnableFullScreen") && playback);
     [self layoutBottomBar:bar controller:nil enabled:enabled];
