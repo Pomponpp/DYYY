@@ -8,6 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import "DYYYDiagnosticsCapture.h"
+#import "DYYYDiagnosticsCore.h"
 
 /// ZIP 生成失败时，工作目录会被保留，路径放在 error.userInfo 的这个键上。
 extern NSString *const DYYYDiagExportWorkingDirectoryKey;

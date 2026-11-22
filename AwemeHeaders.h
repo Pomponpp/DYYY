@@ -45,21 +45,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @class AWEPlayInteractionContext;
 
 // DYYY 诊断：运行日志导出到"文件" + 可读自检报告面板
-@interface DYYYDiagnostics : NSObject
-// 运行日志文件路径。读取前必须先调 flushRuntimeLogToFile。
-+ (NSString *)runtimeLogPath;
-// 追加一行运行日志（内存环形缓冲，零文件 I/O）。
-+ (void)appendRuntimeLogLine:(NSString *)line;
-// 把内存缓冲一次性落盘到 runtimeLogPath。
-+ (void)flushRuntimeLogToFile;
-+ (NSString *)exportedLogPathWithName:(NSString *)name;
-+ (void)installUncaughtExceptionHandler;
-+ (void)cleanupStaleLogs;
-+ (void)clearRuntimeLogFromViewController:(UIViewController *)presenter;
-+ (void)exportRuntimeLogFromViewController:(UIViewController *)presenter;
-+ (void)exportDiagnosticsBundleFromViewController:(UIViewController *)presenter;
-+ (void)showAuditReportFromViewController:(UIViewController *)presenter;
-@end
 @class _TtC33AWECommentPanelContainerSwiftImpl31CommentViewControllerStateModel;
 
 @interface UIView (DYYYGlobalAlpha)

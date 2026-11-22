@@ -21,7 +21,7 @@ static const NSUInteger kDYYYDiagMaxExportFiles = 8000;
 #if __has_include("DYYYBuildStamp.h")
 #import "DYYYBuildStamp.h"
 #define DYYYDiagStr(x) DYYYDiagStr2(x)
-#define DYYYDiagStr2(x) @#x
+#define DYYYDiagStr2(x) @"" x
 #define DYYYDiagVersion_STR DYYY_BUILD_VERSION
 #define DYYYDiagBuildCommit_STR DYYY_BUILD_COMMIT
 #define DYYYDiagBuildBranch_STR DYYY_BUILD_BRANCH
@@ -45,10 +45,10 @@ static const NSUInteger kDYYYDiagMaxExportFiles = 8000;
 #define DYYYDiagBuildTime @"dev"
 #endif
 
-NSString * const DYYYDiagVersion = @ DYYYDiagStr(DYYYDiagVersion_STR);
-NSString * const DYYYDiagBuildCommit = @ DYYYDiagStr(DYYYDiagBuildCommit_STR);
-NSString * const DYYYDiagBuildBranch = @ DYYYDiagStr(DYYYDiagBuildBranch_STR);
-NSString * const DYYYDiagBuildTime = @ DYYYDiagStr(DYYYDiagBuildTime_STR);
+NSString * const DYYYDiagVersion = DYYYDiagStr(DYYYDiagVersion_STR);
+NSString * const DYYYDiagBuildCommit = DYYYDiagStr(DYYYDiagBuildCommit_STR);
+NSString * const DYYYDiagBuildBranch = DYYYDiagStr(DYYYDiagBuildBranch_STR);
+NSString * const DYYYDiagBuildTime = DYYYDiagStr(DYYYDiagBuildTime_STR);
 
 #pragma mark - 写入汇集器
 
@@ -413,7 +413,9 @@ void DYYYDiagnosticsExportBundle(UIViewController *presenter) {
             for (NSString *f in [fm contentsOfDirectoryAtPath:zipDir error:nil]) {
                 NSString *from = [zipDir stringByAppendingPathComponent:f];
                 NSString *to = [dir stringByAppendingPathComponent:f];
-                if ([fm fileExistsAtPath:from] && ![fm isDirectoryAtPath:from]) {
+                BOOL isDir = NO;
+                [fm fileExistsAtPath:from isDirectory:&isDir];
+                if ([fm fileExistsAtPath:from] && !isDir) {
                     [fm copyItemAtPath:from toPath:to error:nil];
                 }
             }
