@@ -42,10 +42,7 @@ DYYY_FILES += DYYYCommentPlaybackCoordinator.m DYYYCommentPlaybackHooks.xm
 DYYY_FILES += DYYYFloatingButtonCoordinator.m
 DYYY_FILES += DYYYLoginBypassManager.m DYYYLoginRepairHooks.m DYYYPrivacyRecordUploadGuard.m DYYYHideMessageAndMinePageHooks.m DYYYExactInteractionCountHooks.m DYYYRuntimeHookInstaller.m DYYYFeatureUI.m DYYYLoginBypassHooks.xm DYYYPrivacyHooks.xm DYYYFeatureHooks.xm
 # 本地修复：进度条黑线（独立文件，同步上游时只需保留本行）
-# 视频全屏核心（按行为对照三层重写：几何拦截 / 表撑高 / 容器补钉）
-DYYY_FILES += DYYYFullscreenCore.m DYYYFullscreenCoreHooks.xm
-DYYY_FILES += DYYYFullscreenChrome.m DYYYFullscreenChromeHooks.xm
-DYYY_FILES += DYYYProgressUnderlineFix.xm DYYYDiagnostics.m DYYYDiag/Debug/DKDebugInspector.m DYYYDiag/Debug/DKDebugCapture.m DYYYDiag/Debug/DKDebugExport.m DYYYDiag/FLEX/DKZipWriter.m DYYYDiag/FLEX/DKClassDump.m DYYYDiag/Shared/DKUtils.m DYYYDiag/DKShim.m DYYYDiag/DKDYYYBridge.m
+DYYY_FILES += DYYYProgressUnderlineFix.xm DYYYDiagnostics.m DYYYDiagnosticsCore.m DYYYDiagnosticsCapture.m DYYYDiagnosticsExport.m DYYYDiagnosticsOverlay.m DYYYDiagnosticsCompat.m
 # 运行时探针：定位 40.9 头像保存新链路（测完可在设置页关闭）
 # 只升级抓真 bug 的两项：返回类型不匹配、隐式函数声明。
 # 不加 -Werror=objc-method-access：Logos 的 %new 跨文件天然缺可见声明，

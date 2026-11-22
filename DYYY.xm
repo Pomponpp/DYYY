@@ -34,12 +34,10 @@
 #import "DYYYToast.h"
 #import "DYYYUtils.h"
 #import "DYYYFullscreenCoordinator.h"
-#import "DYYYFullscreenCore.h"
-#import "DYYYFullscreenChrome.h"
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "DYYYClassRegistry.h"
-#import "DYYYDiag/Debug/DKDebugInspector.h"
+#import "DYYYDiagnosticsOverlay.h"
 
 static CGFloat gStartY = 0.0;
 static CGFloat gStartVal = 0.0;
@@ -4225,19 +4223,16 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 // 主页状态栏
 %hook AWEAwemeDetailTableViewController
-// IM 详情页（群聊视频）活跃标记：数据层/delegate 容器 hook 透过
-// isImDetailView: 读它做排除（数据层不在 responder 链，无法反查 VC）。
-- (void)viewWillAppear:(BOOL)animated {
-    %orig;
-    if ([DYYYFullscreenCoordinator isImDetailController:self]) {
-        [DYYYFullscreenCoordinator setImDetailActive:YES];
+- (void)viewDidLayoutSubviews {
+    // 对齐已验证实现：只在布局【前后】各同步一次表高。
+    // 不碰 inset、不做 beginUpdates/endUpdates、不分页状态——
+    // 表高只有一个来源，避免两套体系各摆一次造成位移。
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
-}
-
-- (void)viewDidDisappear:(BOOL)animated {
     %orig;
-    if ([DYYYFullscreenCoordinator isImDetailController:self]) {
-        [DYYYFullscreenCoordinator setImDetailActive:NO];
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
 
@@ -4257,37 +4252,68 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 %end
 
-// 详情页行高与表撑高已移入 DYYYFullscreenCoreHooks（7 入口同源 + 唯一写入通道）。
+// 热点状态栏
+// 重构全屏·招③行高查询：行高只"回答"表视口高，不改写 cell（只答不改）。
+// 生效条件：实验档 
+%hook AWEAwemeDetailTableViewController
 
+- (double)fixedCellHeight {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        return %orig;
+    }
+    // #31 闭环：先准备表（记原高/撑回满视口），再按同源规则回答。
+    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    double nativeHeight = %orig;
+    return [DYYYFullscreenCoordinator detailRowHeight:[self tableView] nativeHeight:nativeHeight];
+}
 
+- (double)cellHeightAtIndex:(long long)index {
+    return [self fixedCellHeight];
+}
 
-// 表侧写入探针：谁把行高写成 843（含滚动估算值）。
-// 只对抖音详情表/首页表打日志，其他 UITableView 一律静默放行。
-%hook UITableView
+- (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        return %orig;
+    }
+    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    double nativeHeight = %orig;
+    return [DYYYFullscreenCoordinator detailRowHeight:table nativeHeight:nativeHeight];
+}
 
-- (void)setRowHeight:(CGFloat)rowHeight {
+// 详情页建行/落点/翻页入口（对齐已验证实现的同源纪律）：
+// 每个入口都先 prepare 撑高表，再放行原生——建行、落点、分页看到同一个表高。
+// 翻页入口在 %orig 前后各准备一次（落点在 %orig 内算定，前后都需同源）。
+- (void)setupDetailTableView {
     %orig;
-    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        NSString *cls = NSStringFromClass([self class]);
-        if ([cls containsString:@"AWEAwemeDetailTableView"] ||
-            [cls containsString:@"AWEFeedTableView"] ||
-            [cls containsString:@"AWEFeedDataSafeTableView"]) {
-            NSLog(@"[DYYY][rowh] setRowHeight=%.1f on %@ → 实际 %.1f",
-                  rowHeight, cls, self.rowHeight);
-        }
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
 
-- (void)setEstimatedRowHeight:(CGFloat)estimatedRowHeight {
+- (void)viewWillLayoutSubviews {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
     %orig;
-    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        NSString *cls = NSStringFromClass([self class]);
-        if ([cls containsString:@"AWEAwemeDetailTableView"] ||
-            [cls containsString:@"AWEFeedTableView"] ||
-            [cls containsString:@"AWEFeedDataSafeTableView"]) {
-            NSLog(@"[DYYY][rowh] setEstimatedRowHeight=%.1f on %@",
-                  estimatedRowHeight, cls);
-        }
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+}
+
+- (double)contentOffsetYForCellAtIndex:(long long)index {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+    return %orig;
+}
+
+- (void)adjustTableViewHeightForTargetIndex:(long long)index {
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
+    }
+    %orig;
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
 }
 
@@ -4298,7 +4324,23 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 // 首页表与详情表共用同一规则：详情表继承自 AWEFeedDataSafeTableView，
 // 只挂基类即可覆盖；再挂子类会造成同一高度两处写（已证明会互相打架）。
 
-// 首页表的撑高已移入 DYYYFullscreenCoreHooks（与详情表共用同一守卫）。
+// 首页表（独立类，不继承上面的基类）走同一规则。
+%hook AWEFeedTableView
+
+- (void)setFrame:(CGRect)frame {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        %orig;
+        return;
+    }
+    CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:frame];
+    if (CGRectIsNull(adjusted)) {
+        %orig;
+        return;
+    }
+    %orig(adjusted);
+}
+
+%end
 
 
 // #34：诊断扳手挂载——独立顶层 hook，不受「禁用设置手势」开关影响。
@@ -6670,6 +6712,157 @@ static Class tabBarButtonClass = nil;
 // 全屏"画面满"的真正来源不是把 table 撑高，而是把【播放器容器】钉满：
 //   · 写入方是 AWEDPlayerViewController_Merge（视频容器）→ 钉成 (0,0,W,H)
 //   · 写入方是 AWEPlayInteractionViewController（HUD 互动层）→ 高度钉回原高
+// 后者保证底部文案/点赞栏不随表撑高整体下移。
+// 两个规则共用同一个 UIView setFrame 拦截点，按写入方归属分派，
+// 避免多个 hook 抢同一个最热方法。
+
+static const CGFloat kDYYYGeoAspectMin = 1.70;   // 高/宽达到此比例才拉满（竖屏视频）
+static const CGFloat kDYYYGeoTolerance = 0.5;
+static const long long kDYYYAwemeTypeImage = 68;
+static char kDYYYGeoOriginalHeightKey;
+
+static Class DYYYGeoMergeClass(void) {
+    static Class cls;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cls = NSClassFromString(@"AWEDPlayerViewController_Merge"); });
+    return cls;
+}
+
+static Class DYYYGeoInteractionClass(void) {
+    static Class cls;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cls = NSClassFromString(@"AWEPlayInteractionViewController"); });
+    return cls;
+}
+
+// 该视图往上第 8 层以内是否在视频表里；不在返回 nil。
+// 用于 HUD 钉位：只有"表被撑高过"的页面才钉，其余页面 HUD 跟着原生走。
+static UIView *DYYYGeoTableForView(UIView *view) {
+    Class tableClass = NSClassFromString(@"AWEFeedDataSafeTableView");
+    if (!tableClass) return nil;
+    UIView *ancestor = view.superview;
+    for (NSUInteger depth = 0; ancestor && depth < 8; depth++, ancestor = ancestor.superview) {
+        if ([ancestor isKindOfClass:tableClass]) return ancestor;
+    }
+    return nil;
+}
+
+// cell 满高：播放器所在 cell contentView 的高度（视频要铺满的目标）
+static CGFloat DYYYGeoFullCellHeight(UIView *view) {
+    UIView *container = view.superview;
+    for (NSUInteger depth = 0; container && depth < 6; depth++, container = container.superview) {
+        if ([container isKindOfClass:[UITableViewCell class]] ||
+            [container isKindOfClass:[UICollectionViewCell class]]) {
+            break;
+        }
+    }
+    // 找到 cell 的 contentView
+    UIView *cell = nil;
+    for (UIView *cursor = view.superview; cursor; cursor = cursor.superview) {
+        if ([cursor isKindOfClass:[UITableViewCell class]] ||
+            [cursor isKindOfClass:[UICollectionViewCell class]]) {
+            cell = cursor;
+            break;
+        }
+    }
+    if (!cell) return 0.0;
+    if ([cell isKindOfClass:[UITableViewCell class]]) {
+        UIView *content = ((UITableViewCell *)cell).contentView;
+        return content ? CGRectGetHeight(content.bounds) : 0.0;
+    }
+    return CGRectGetHeight(cell.bounds);
+}
+
+// 该视频是否应该拉满：图文、横屏、低比例竖屏都不拉（拉满会 aspect-fill 过裁）。
+static BOOL DYYYGeoCanCoverScreen(UIView *view) {
+    UIResponder *owner = view.nextResponder;
+    Class mergeClass = DYYYGeoMergeClass();
+    if (!mergeClass || ![owner isKindOfClass:mergeClass]) return NO;
+
+    AWEDPlayerViewController_Merge *merge = (AWEDPlayerViewController_Merge *)owner;
+    AWEAwemeModel *model = merge.model;
+    if ([model respondsToSelector:@selector(awemeType)] && model.awemeType == kDYYYAwemeTypeImage) return NO;
+    if ([merge respondsToSelector:@selector(hasInlandscape)] && merge.hasInlandscape) return NO;
+    if ([merge respondsToSelector:@selector(isInLandscapeFeedStatus)] && [merge isInLandscapeFeedStatus]) return NO;
+
+    AWEVideoModel *video = [model respondsToSelector:@selector(video)] ? model.video : nil;
+    double width = [video respondsToSelector:@selector(width)] ? video.width.doubleValue : 0.0;
+    double height = [video respondsToSelector:@selector(height)] ? video.height.doubleValue : 0.0;
+    return width <= 0.0 || height <= 0.0 || (height / width) >= kDYYYGeoAspectMin;
+}
+
+// 视频容器的目标 frame；返回 CGRectNull 表示放行（不干预）。
+static CGRect DYYYGeoContainerTarget(UIView *view) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
+    // 作用域只到主窗口：画中画/横屏播放器自带一整套同样层级的视图，
+    // 钉满会把小窗撑成盖住整页的全屏播放器。
+    UIWindow *window = view.window;
+    if (window && window.windowLevel != UIWindowLevelNormal) return CGRectNull;
+
+    UIView *parent = view.superview;
+    CGFloat width = CGRectGetWidth(parent.bounds);
+    CGFloat height = CGRectGetHeight(parent.bounds);
+    if (width <= 0.0 || height <= 0.0) return CGRectNull;
+
+    if (DYYYGeoCanCoverScreen(view)) {
+        CGFloat full = DYYYGeoFullCellHeight(view);
+        if (full > height) height = full;
+    }
+    return CGRectMake(0.0, 0.0, width, height);
+}
+
+// HUD 钉位：写入高度超过"表撑高前的原高"时钉回原高；返回 CGRectNull 放行。
+static CGRect DYYYGeoHUDAdjustFrame(UIView *view, CGRect frame) {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) return CGRectNull;
+    UIView *table = DYYYGeoTableForView(view);
+    if (!table) return CGRectNull;
+    NSNumber *original = objc_getAssociatedObject(table, &kDYYYGeoOriginalHeightKey);
+    if (!original) return CGRectNull;
+
+    CGFloat pinned = original.doubleValue;
+    if (!isfinite(pinned) || pinned <= 0.0) return CGRectNull;
+    // 没超过原高 → 原生缩小态，放行
+    if (CGRectGetHeight(frame) <= pinned + kDYYYGeoTolerance) return CGRectNull;
+
+    frame.origin.y = 0.0;
+    frame.size.height = pinned;
+    return frame;
+}
+
+// 撑高 table 时顺带记录原高（HUD 钉位的依据）。
+static void DYYYGeoRememberOriginalHeight(UIView *table, CGFloat height) {
+    if (!table || height <= 0.0 || !isfinite(height)) return;
+    if (objc_getAssociatedObject(table, &kDYYYGeoOriginalHeightKey)) return;
+    objc_setAssociatedObject(table, &kDYYYGeoOriginalHeightKey, @(height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+// 统一分派：只在两个已知写入方上做几何修正，其余一律放行。
+static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
+    UIResponder *owner = view.nextResponder;
+    if (!owner) return CGRectNull;
+
+    Class mergeClass = DYYYGeoMergeClass();
+    if (mergeClass && [owner isKindOfClass:mergeClass]) {
+        CGRect target = DYYYGeoContainerTarget(view);
+        if (CGRectIsNull(target)) return CGRectNull;
+        if (fabs(CGRectGetMinX(frame) - target.origin.x) <= kDYYYGeoTolerance &&
+            fabs(CGRectGetMinY(frame) - target.origin.y) <= kDYYYGeoTolerance &&
+            fabs(CGRectGetWidth(frame) - target.size.width) <= kDYYYGeoTolerance &&
+            fabs(CGRectGetHeight(frame) - target.size.height) <= kDYYYGeoTolerance) {
+            return CGRectNull;   // 已经是目标值，不必重复写
+        }
+        return target;
+    }
+
+    Class interactionClass = DYYYGeoInteractionClass();
+    if (interactionClass && [owner isKindOfClass:interactionClass]) {
+        // 表撑高时记原高（HUD 后续按它钉位）
+        UIView *table = DYYYGeoTableForView(view);
+        if (table) DYYYGeoRememberOriginalHeight(table, CGRectGetHeight(frame));
+        return DYYYGeoHUDAdjustFrame(view, frame);
+    }
+    return CGRectNull;
+}
 
 %hook UIView
 
@@ -6800,6 +6993,15 @@ static Class tabBarButtonClass = nil;
         return;
     }
 
+    // #70 视频几何钉位（先于毛玻璃逻辑执行）：
+    // 播放器容器钉满 / HUD 高度钉回原高。只在两个已知写入方上生效。
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        CGRect geoAdjusted = DYYYGeoAdjustFrame(self, frame);
+        if (!CGRectIsNull(geoAdjusted)) {
+            %orig(geoAdjusted);
+            return;
+        }
+    }
 
     BOOL enableBlur = DYYYGetBool(@"DYYYEnableCommentBlur");
     BOOL enableFS = DYYYGetBool(@"DYYYEnableFullScreen");
@@ -7081,9 +7283,9 @@ static Class tabBarButtonClass = nil;
 
 - (void)viewDidLayoutSubviews {
     %orig;
-    if (DYYYFullscreenPinContainer(self)) DYYYFullscreenNotePin(NO);
-}
+    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
 
+}
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
     %orig(arg0);
@@ -7106,36 +7308,6 @@ static Class tabBarButtonClass = nil;
 
 %end
 
-%hook AWEPlayVideoViewController
-
-// B1 背景色延伸（三个入口，都是「原生动作完成后再同步」）：
-//
-//   诊断包实证：容器 926 / TTPlayerView 843 / 画面 240.8（16:9 比例 fit）
-//   → 底部差 83pt，那段空隙就是黑边。抖音只填原生那层，
-//     我们把容器钉高后露出来的祖先没人管。
-//
-//   setPlayerBackgroundView:           背景层被创建/替换那一刻
-//   updatePlayerBackgroundViewIfNeeded 原生更新背景色时（返回时已落色并挂载）
-//   viewDidLayoutSubviews             布局后兜底
-//
-// 三个入口都走同一个幂等函数：涂色或按标记还原，不改 frame、不触发布局。
-- (void)setPlayerBackgroundView:(UIView *)backgroundView {
-    %orig;
-    DYYYFullscreenSyncBackdrop(self);
-}
-
-- (void)updatePlayerBackgroundViewIfNeededWhenLandscape:(BOOL)landscape fromHomepageHot:(BOOL)fromHomepageHot {
-    %orig;
-    DYYYFullscreenSyncBackdrop(self);
-}
-
-- (void)viewDidLayoutSubviews {
-    %orig;
-    DYYYFullscreenSyncBackdrop(self);
-}
-
-%end
-
 %hook AWEDPlayerViewController_Merge
 
 - (BOOL)enableHDR {
@@ -7147,17 +7319,8 @@ static Class tabBarButtonClass = nil;
 
 - (void)viewDidLayoutSubviews {
     %orig;
-    if (DYYYFullscreenPinContainer(self)) DYYYFullscreenNotePin(NO);
-}
+    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
 
-// A1 容器补钉（第二入口，挂在 Merge 上）：
-// 复用 cell 时抖音可能「先写 frame、后绑 model」，那一帧算出的目标偏小；
-// 写完不会写第二次，而预备 cell 是 hidden 的不再布局，滑过去就是不全屏。
-// willDisplay 是 model 与视图层级都已就位、且一定早于用户看见的那一刻。
-// layoutPlayerContainer 内部同值不重写，所以这里补钉是幂等的，不会成环。
-- (void)willDisplay {
-    %orig;
-    if (DYYYFullscreenPinContainer(self)) DYYYFullscreenNotePin(NO);
 }
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
@@ -8927,7 +9090,7 @@ static void findTargetViewInView(UIView *view) {
 %hook AFDPureModePageListViewController
 - (void)viewWillLayoutSubviews {
     // 先提供完整视口，再由原生更新 cell 尺寸、分页偏移和进度条。
-    if (DYYYFullscreenPinContainer(self)) DYYYFullscreenNotePin(NO);
+    [DYYYFullscreenCoordinator layoutPlayerContainer:self];
     %orig;
 }
 %end
@@ -9876,8 +10039,14 @@ static void findTargetViewInView(UIView *view) {
 %group BDMultiContentImageViewGroup
 %hook BDMultiContentContainer_ImageContentView
 
-// 图文避让已随「评论避让视频」功能移除：图文/实况在全屏下由撑表 +
-// 行高纯函数天然覆盖，不再做评论面板的 transform 适配。
+- (void)setTransform:(CGAffineTransform)transform {
+    %orig([DYYYFullscreenCoordinator transformForImageView:self proposed:transform]);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    [DYYYFullscreenCoordinator layoutImageView:self];
+}
 
 %end
 %end
@@ -10117,7 +10286,7 @@ static void findTargetViewInView(UIView *view) {
 
 %ctor {
     // 诊断浮层：启动早期一次性安装（hidden 待命），不抢焦点、不参与转场
-    DKDebugInspectorInstall();
+    DYYYDiagnosticsOverlayInstall();
     [DYYYDiagnostics installUncaughtExceptionHandler];
     // 41.1 优化：启动自检关键 hook 类存在性，改版失效时日志直接给出缺失类清单。
     // 注意：%ctor 执行时抖音自己的 ObjC 类可能尚未全部注册（dyld 尚未完成其初始化），
@@ -10133,8 +10302,9 @@ static void findTargetViewInView(UIView *view) {
                      NSLog(@"[DYYY][compat] %@", health);
                      // 状态自证日志：导出的日志首段即可确认实验档是否生效，
                      // 避免"拨了开关但代码没干活"与"没拨开关"两种情况混淆。
-                     NSLog(@"[DYYY][fullscreen] 启动状态：全屏=%d 毛玻璃=%d",
+                     NSLog(@"[DYYY][fullscreen] 启动状态：全屏=%d 评论避让视频=%d 毛玻璃=%d",
                            DYYYGetBool(@"DYYYEnableFullScreen") ? 1 : 0,
+                           DYYYGetBool(@"DYYYCommentAvoidVideo") ? 1 : 0,
                            DYYYGetBool(@"DYYYEnableCommentBlur") ? 1 : 0);
                    });
 

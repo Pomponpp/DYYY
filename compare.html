@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>进度条 / 时间属地 · 完整对照</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:#0d1117;color:#c9d1d9;line-height:1.55;padding:20px}
+.wrap{max-width:1600px;margin:0 auto}
+h1{font-size:23px;color:#f0f6fc;margin-bottom:5px}
+.h2{font-size:17px;color:#f0f6fc;margin:28px 0 10px;padding-left:10px;
+  border-left:3px solid #58a6ff;font-weight:600}
+.sub{color:#8b949e;font-size:13px;margin-bottom:18px}
+
+table{width:100%;border-collapse:collapse;background:#161b22;
+  border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:16px}
+th{background:#1c2128;color:#8b949e;font-weight:600;font-size:12px;
+  letter-spacing:.5px;padding:10px 13px;text-align:left;border-bottom:2px solid #30363d}
+td{padding:10px 13px;font-size:13px;border-bottom:1px solid #21262d;vertical-align:top}
+tr:last-child td{border-bottom:none}
+th:nth-child(1){width:140px}
+th:nth-child(2){width:80px}
+th:nth-child(3),th:nth-child(4){width:calc((100% - 220px)/2)}
+
+.fn{color:#f0f6fc;font-weight:600;font-size:13.5px}
+.fk{color:#6e7681;font-size:11px;font-family:ui-monospace,Consolas,monospace;display:block;margin-top:2px}
+.b{font-size:11px;padding:2px 8px;border-radius:11px;font-weight:600;display:inline-block;white-space:nowrap}
+.ok{background:rgba(63,185,80,.15);color:#3fb950;border:1px solid rgba(63,185,80,.35)}
+.part{background:rgba(210,153,34,.15);color:#d29922;border:1px solid rgba(210,153,34,.35)}
+.no{background:rgba(248,81,80,.15);color:#f85149;border:1px solid rgba(248,81,80,.35)}
+code{background:#21262d;padding:1px 5px;border-radius:3px;font-size:11.5px;
+  color:#79c0ff;font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+.dim{color:#8b949e;font-size:12px}
+.g{color:#3fb950;font-weight:600}.r{color:#f85149;font-weight:600}.m{color:#d29922;font-weight:600}
+
+.tag{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:9px;
+  margin-right:4px;font-weight:600}
+.t-we{background:#1f6feb33;color:#58a6ff;border:1px solid #1f6feb66}
+.t-them{background:#8b5cf633;color:#a371f7;border:1px solid #8b5cf666}
+
+.note{background:#161b22;border:1px solid #d2992240;border-radius:8px;
+  padding:13px 16px;font-size:13px;margin-bottom:18px}
+.note b{color:#d29922}
+
+.winner{padding:12px 15px;background:#0d1117;border-top:1px solid #30363d;
+  font-size:13px;border-radius:0 0 8px 8px;margin:-17px 0 16px;border:1px solid #30363d;border-top:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>进度条 / 时间属地 · 完整功能对照</h1>
+<div class="sub">逐项核对两边源码 · 不省略任何开关 · <span id="ts"></span></div>
+
+<div class="note">
+<b>先说清：</b>这个页面覆盖你截图里的 <b>全部 11 个开关</b>（进度 5 个 + 时间属地 6 个）。
+上一版我只写了「常显没有」就收手，那是查一半。这一版每个开关都写了<b>我们的实现方式</b>与<b>它的实现方式</b>。
+</div>
+
+<!-- ============ 一、进度条 ============ -->
+<div class="h2">一、进度条 —— 5 个开关逐项对比</div>
+<table>
+<tr><th>开关</th><th>状态</th><th><span class="tag t-them">测试对象</span>实现</th><th><span class="tag t-we">我们</span>实现</th></tr>
+
+<tr>
+<td><span class="fn">显示进度时长</span><span class="fk">强制常显 + 时长</span></td>
+<td><span class="b ok">都有</span></td>
+<td>拆成 <b>2 个独立开关</b>：<br>
+    · 「进度条常显」<code>DKKeyProgressAlwaysVisible</code><br>
+    · 「显示视频时长」<code>DKKeyProgressTimeStyle</code>（6 档）<br>
+    <span class="dim">常显：hook <code>AWEDProgressHidePluginContainer</code> 的<b>判定</b>，返回 NO</span></td>
+<td><b>1 个开关合并</b><code>DYYYShowScheduleDisplay</code><br>
+    <span class="dim">hook <code>AWEFeedProgressSlider.setAlpha:</code>，<code>%orig(1.0)</code> 强制不透明</span><br>
+    <span class="r">只在首页生效</span>（见下）</td>
+</tr>
+
+<tr>
+<td><span class="fn">生效范围</span><span class="fk">关键差异</span></td>
+<td><span class="b no">我们窄</span></td>
+<td><b>所有页面</b><br>
+    <span class="dim">判定层拦截，不限页面</span></td>
+<td><span class="r">只有首页 feed</span><br>
+    <code>DYYYIsInHomeFeedContext</code> 白名单只认<br>
+    <code>AWEFeedRootViewController</code> / <code>AWEFeedTableViewController</code><br>
+    <span class="dim">→ 聊天页、详情页、他人主页<b>都不生效</b></span></td>
+</tr>
+
+<tr>
+<td><span class="fn">即时刷新</span><span class="fk">开关切换</span></td>
+<td><span class="b part">它有</span></td>
+<td>登记状态机弱引用表<br>
+    切换后调 <code>reapplyCurrentStateAppearance</code><br>
+    <span class="dim">当前视频立刻生效</span></td>
+<td><span class="r">没有</span><br>
+    <span class="dim">要等下一次 layout 才生效</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">进度时长样式</span><span class="fk">选项数</span></td>
+<td><span class="b ok">我们更多</span></td>
+<td><b>6 档</b>（<code>DKProgressTime.xm:61</code>）<br>
+    关闭 / 两端 / 右端·上 / 右端·下 / 两端·上 / 两端·下</td>
+<td><b class="g">5 档</b>（<code>DYYYSettings.xm:1025</code>）<br>
+    两侧上下 / 左侧剩余 / 左侧完整 / 右侧剩余 / 右侧完整<br>
+    <span class="dim">我们的「剩余」= 它没有的概念（倒计时）</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">样式实现方式</span><span class="fk">根本差异</span></td>
+<td><span class="b part">它做得深</span></td>
+<td>改 <code>AWEDProgressLayoutFeedStrategy.progressSliderLeftRightArea</code><br>
+    <span class="dim">→ <b>进度条真的让出宽度</b>，文字与条在同一行不重叠</span><br>
+    章节点跟随 <code>shouldFollowSliderWidthForChapterPoints</code></td>
+<td>在 slider 的父视图上<b>另建 UILabel</b>（tag 10001 / 10002）<br>
+    <span class="dim">→ 文字<b>叠在进度条上</b>，进度条宽度不变</span><br>
+    <span class="m">已做 <code>[parentView layoutIfNeeded]</code> 防跳</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">拖动时表现</span></td>
+<td><span class="b ok">都有</span></td>
+<td>让给抖音大号读数<br>
+    <span class="dim">拖动时原生 FloatingTimeView 接管显示</span></td>
+<td>同样让给原生<br>
+    <span class="dim"><code>DYYYApplyFloatClearProgressStateToView</code> 不干扰</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">进度标签颜色</span><span class="fk">DYYYProgressLabelColor</span></td>
+<td><span class="b part">形式不同</span></td>
+<td>时间与地区各自配色（在「发布时间与地区」页内）<br>
+    固定色 / Hex / 渐变 / 随机 / 彩虹</td>
+<td><b class="g">有独立入口</b>「进度标签颜色」<br>
+    <code>DYYYProgressLabelColor</code> + 随机渐变<br>
+    <span class="dim">时间与地区共用一套色板</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">进度纵轴位置</span><span class="fk">DYYYTimelineVerticalPosition</span></td>
+<td><span class="b no">它无此项</span></td>
+<td>无独立纵轴偏移设置<br>
+    <span class="dim">它的「进度条上移」<code>DKKeyProgressOffset</code> 是数字滑杆，只对 feed 策略生效</span></td>
+<td><b class="g">有独立入口</b>「进度纵轴位置」<br>
+    文本输入，默认 <code>-12.5</code><br>
+    <span class="dim">作用于 <code>dyyy_scheduleVerticalOffset</code></span></td>
+</tr>
+
+<tr>
+<td><span class="fn">隐藏视频进度</span><span class="fk">DYYYHideVideoProgress</span></td>
+<td><span class="b ok">等价</span></td>
+<td>无独立项<br>
+    <span class="dim">它的「进度条常显」关掉 + 原生行为即隐藏</span></td>
+<td><b>有独立开关</b><br>
+    <code>DYYYHideVideoProgress</code> 配合常显使用<br>
+    <span class="dim">常显开 + 本项开 → alpha 0</span></td>
+</tr>
+</table>
+
+<div class="winner">
+<b>结论：</b>进度条这 5 项，<b class="g">我们不缺功能，有些还更多</b>（5 档样式 vs 6 档但含"剩余"概念、纵轴独立入口、标签颜色独立入口）。
+<b class="r">真正的缺陷只有一个：生效范围只在首页</b>，聊天页/详情页不生效。
+另一个结构性差异：<b>它是"改进度条宽度让位"，我们是"文字叠上去"</b> —— 所以样式多了会重叠。
+</div>
+
+<!-- ============ 二、时间属地 ============ -->
+<div class="h2">二、时间属地 —— 6 个开关逐项对比</div>
+<table>
+<tr><th>开关</th><th>状态</th><th><span class="tag t-them">测试对象</span>实现</th><th><span class="tag t-we">我们</span>实现</th></tr>
+
+<tr>
+<td><span class="fn">时间属地显示</span><span class="fk">DYYYEnableArea</span></td>
+<td><span class="b ok">都有</span></td>
+<td>「发布时间与地区 › 显示内容 › 发布地区」<br>
+    <span class="dim">接管 <code>AWEPlayInteractionTimestampElement</code> 的 <code>layoutElementView</code>，<b>能写自己一行时不调 %orig</b></span></td>
+<td>「时间属地显示」<code>DYYYEnableArea</code><br>
+    <span class="dim">hook <b>同一个类</b>的 <code>timestampLabel</code>，取 label 后<b>追加文字</b></span></td>
+</tr>
+
+<tr>
+<td><span class="fn">显示内容</span></td>
+<td><span class="b no">我们缺时间</span></td>
+<td>一行 =「<b>时间  地区</b>」<br>
+    文案下方<b>独立一行</b>，参与原生排布与收拢</td>
+<td>只追加地区：<code>IP属地：湖南 岳阳</code><br>
+    <span class="r">播放页不显示发布时间</span><br>
+    <span class="dim">我们的时间只在评论区/详情有</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">国外解析账号</span><span class="fk">DYYYGeonamesUsername</span></td>
+<td><span class="b ok">都有</span></td>
+<td><code>DKKeyGeoNamesUsername</code> + 注册链接 + 启用开关<br>
+    三件套齐全</td>
+<td><code>DYYYGeonamesUsername</code><br>
+    <code>CityManager.m</code> GeoNames 查询 + <code>NSCache</code><br>
+    <span class="dim">有错误码区分（参数无效/未配账号/编码失败）</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">属地标签颜色</span><span class="fk">DYYYLabelColor</span></td>
+<td><span class="b part">它更细</span></td>
+<td>时间与地区<b>分别</b>配置：各自 固定色/Hex/渐变/随机/彩虹</td>
+<td><b>一套</b> <code>DYYYLabelColor</code><br>
+    <span class="dim">时间与地区共用，不能分开</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">属地随机渐变</span><span class="fk">DYYYEnableRandomGradient</span></td>
+<td><span class="b ok">都有</span></td>
+<td>随机 / 旋转彩虹，<b>按作品生成一次</b></td>
+<td><code>DYYYEnableRandomGradient</code><br>
+    <span class="dim">开关打开后覆盖属地标签颜色</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">属地上移距离</span><span class="fk">DYYYIPLabelVerticalOffset</span></td>
+<td><span class="b no">它无此项</span></td>
+<td>无<br>
+    <span class="dim">它靠加大宽度约束往右延伸，不做纵向移动</span></td>
+<td><b class="g">有独立入口</b>「属地上移距离」<br>
+    <code>DYYYIPLabelVerticalOffset</code><br>
+    <span class="dim">写成 <code>label.transform = MakeTranslation(0, -offset)</code></span></td>
+</tr>
+
+<tr>
+<td><span class="fn">宽度自适应</span></td>
+<td><span class="b no">我们没有</span></td>
+<td>文字更长时<b>加大标签宽度约束</b>向右延伸<br>
+    右界避开右侧互动区，仍放不下按原生截断</td>
+<td><span class="r">无</span><br>
+    <span class="dim">追加文字受原生 label 宽度限制，长地名会截断</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">主页封面叠字</span></td>
+<td><span class="b no">我们没有</span></td>
+<td>有：三列封面在点赞上方显示<br>双列卡片并成两行，与点赞同行</td>
+<td><span class="r">没有</span></td>
+</tr>
+
+<tr>
+<td><span class="fn">国外地名刷新粒度</span></td>
+<td><span class="b part">它更细</span></td>
+<td>查到后<b>只刷新该地名 ID 的元素</b></td>
+<td>整块 label 重写</td>
+</tr>
+</table>
+
+<div class="winner">
+<b>结论：</b>时间属地这 6 项，<b class="g">我们有 4 项完全具备</b>（属地显示、国外解析账号、随机渐变、上移距离——最后一项它没有）。
+<b class="r">缺的是 3 项</b>：播放页不显示发布时间、标签宽度不自适应、主页封面没有。配色粒度不如它细。
+</div>
+
+<!-- ============ 三、汇总表 ============ -->
+<div class="h2">三、汇总：谁强在哪</div>
+<table>
+<tr><th>功能</th><th>对比</th><th><span class="tag t-them">测试对象</span>优势</th><th><span class="tag t-we">我们</span>优势</th></tr>
+
+<tr><td><span class="fn">常显范围</span></td><td><span class="b no">它强</span></td>
+<td>全页面生效（判定层拦截）</td><td>只有首页</td></tr>
+
+<tr><td><span class="fn">样式让位</span></td><td><span class="b no">它强</span></td>
+<td>改进度条宽度，文字不重叠</td><td>文字叠加，多了会撞</td></tr>
+
+<tr><td><span class="fn">样式概念</span></td><td><span class="b ok">我们强</span></td>
+<td>6 档，无"剩余"概念</td><td>5 档，含「左侧剩余/右侧剩余」倒计时</td></tr>
+
+<tr><td><span class="fn">纵轴微调</span></td><td><span class="b ok">我们强</span></td>
+<td>只有「上移」数字滑杆，仅 feed</td><td>独立「进度纵轴位置」+「属地上移距离」</td></tr>
+
+<tr><td><span class="fn">配色粒度</span></td><td><span class="b no">它强</span></td>
+<td>时间、地区分别配</td><td>共用一个色板</td></tr>
+
+<tr><td><span class="fn">发布时间</span></td><td><span class="b no">它强</span></td>
+<td>播放页显示具体时间</td><td>只有地区</td></tr>
+
+<tr><td><span class="fn">封面叠字</span></td><td><span class="b no">它强</span></td>
+<td>主页三列/双列都有</td><td>没有</td></tr>
+
+<tr><td><span class="fn">防跳处理</span></td><td><span class="b ok">我们强</span></td>
+<td>注释未提</td><td><code>layoutIfNeeded</code> 强制刷布局再取坐标</td></tr>
+
+<tr><td><span class="fn">错误处理</span></td><td><span class="b ok">我们强</span></td>
+<td>注释未提</td><td>GeoNames 三种错误码区分</td></tr>
+</table>
+
+<!-- ============ 四、真正的缺口 ============ -->
+<div class="h2">四、真正要改的（按优先级）</div>
+<table>
+<tr><th>#</th><th>问题</th><th>影响</th><th>改法</th></tr>
+<tr><td>1</td><td><span class="fn">常显只在首页</span></td>
+<td>聊天页/详情页短视频看不到进度条</td>
+<td>把 <code>DYYYIsInHomeFeedContext</code> 白名单扩大，或改成判定层拦截（学它的 <code>AWEDProgressHidePluginContainer</code>）</td></tr>
+<tr><td>2</td><td><span class="fn">样式文字叠加</span></td>
+<td>选右侧样式时文字压在进度条上</td>
+<td>改 <code>progressSliderLeftRightArea</code> 让进度条收短（学它）</td></tr>
+<tr><td>3</td><td><span class="fn">无即时刷新</span></td>
+<td>开关切换要等下一次 layout</td>
+<td>登记状态机，切换后调 <code>reapplyCurrentStateAppearance</code></td></tr>
+<tr><td>4</td><td><span class="fn">播放页无发布时间</span></td>
+<td>只能看地区，看不到具体日期</td>
+<td>接管 <code>layoutElementView</code> 而非 <code>timestampLabel</code></td></tr>
+<tr><td>5</td><td><span class="fn">标签宽度不自适应</span></td>
+<td>长地名被截断</td>
+<td>动态加大宽度约束</td></tr>
+</table>
+
+</div>
+<script>
+document.getElementById('ts').textContent = new Date().toLocaleString('zh-CN',{hour12:false});
+</script>
+</body>
+</html>

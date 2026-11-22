@@ -35,7 +35,7 @@
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "DYYYClassRegistry.h"
-#import "DYYYDiag/Debug/DKDebugInspector.h"
+#import "DYYYDiagnosticsOverlay.h"
 
 %hook AWEPlayInteractionUserAvatarElement
 - (void)onFollowViewClicked:(UITapGestureRecognizer *)gesture {
@@ -158,87 +158,13 @@
 %end
 
 %hook AWEPlayInteractionProgressContainerView
-
-// ── 进度条拖动弹跳修复：约束不动，transform 补视觉偏移 ──────────────
-//
-// 已确认的事实：
-//   #138 诊断包：setCenter 在 743 ↔ 660 之间成对翻转，差值 83（输入栏高度）
-//   #140 调用栈：四条栈前 7 帧完全相同 → Auto Layout 约束求解路径
-//   即：这 83pt 不是动画代码写的，是每轮布局重新解约束算出来的。
-//
-// 所以改 frame / 改 center / 拦写入全部无效 —— 约束一重算就覆盖。
-// （#139 拦 setCenter 把容器钉死在 826，整条推出屏幕，进度条消失。）
-//
-// transform 不参与 auto layout，约束求解不会重置它。
-// 在布局之后用 transform 把视觉位置补回正确值，是唯一不与约束对写的手段。
-//
-// 正确位置直接算，不采样（#139 就是采样采到 826 才崩）：
-//   容器锚点居中 → 正确 center.y = 父视图高 − 容器高 / 2
-//   实测校验：843 − 200/2 = 743（与诊断包静止位一致）
-static void DYYYProgressPinVisual(UIView *container) {
-    if (![container isKindOfClass:[UIView class]]) return;
-
-    // 关掉全屏时复位，不留残留。
-    if (!DYYYGetBool(@"DYYYEnableFullScreen")) {
-        if (!CGAffineTransformIsIdentity(container.transform)) {
-            container.transform = CGAffineTransformIdentity;
-        }
-        return;
-    }
-
-    // 只在详情表里生效（聊天页/详情页），其它页面不碰。
-    BOOL inTable = NO;
-    for (UIView *a = container.superview; a; a = a.superview) {
-        if ([a isKindOfClass:[UITableView class]]) { inTable = YES; break; }
-    }
-    if (!inTable) {
-        if (!CGAffineTransformIsIdentity(container.transform)) {
-            container.transform = CGAffineTransformIdentity;
-        }
-        return;
-    }
-
-    UIView *parent = container.superview;
-    CGFloat parentH = parent ? CGRectGetHeight(parent.bounds) : 0;
-    CGFloat containerH = CGRectGetHeight(container.bounds);
-    if (parentH <= 0.0 || containerH <= 0.0) return;
-
-    CGFloat correctCenterY = parentH - containerH / 2.0;
-    CGFloat delta = correctCenterY - container.center.y;
-
-    // 只补偿「差一个输入栏高度」这一档；初始化中间态、横屏等一律复位不动。
-    if (fabs(delta) < 1.0 || fabs(delta) > 120.0) {
-        if (!CGAffineTransformIsIdentity(container.transform)) {
-            container.transform = CGAffineTransformIdentity;
-        }
-        return;
-    }
-
-    CGAffineTransform target = CGAffineTransformMakeTranslation(0, delta);
-    if (!CGAffineTransformEqualToTransform(container.transform, target)) {
-        container.transform = target;
-        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-            static NSInteger sPinned = 0;
-            if (++sPinned <= 30) {
-                NSLog(@"[DYYY][cpin] 补偿 %.2f（当前 %.2f 应为 %.2f，父高 %.0f 容器高 %.0f）",
-                      delta, container.center.y, correctCenterY, parentH, containerH);
-            }
-        }
-    }
-}
-
 - (void)layoutSubviews {
     %orig;
     DYYYApplyFloatClearProgressStateToView(self);
 
     if (![[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYEnableFullScreen"]) {
-        if (!CGAffineTransformIsIdentity(self.transform)) {
-            self.transform = CGAffineTransformIdentity;
-        }
         return;
     }
-
-    DYYYProgressPinVisual(self);
 
     static char kDYProgressBgKey;
     NSArray *bgViews = objc_getAssociatedObject(self, &kDYProgressBgKey);
@@ -258,14 +184,8 @@ static void DYYYProgressPinVisual(UIView *container) {
     }
 }
 
-// 第二入口：容器随 cell 平移时不会重新布局，挂入窗口时也要同步一次。
-// （行为对照里记录过这一点；只挂 layoutSubviews 会漏掉这类平移。）
-- (void)didMoveToWindow {
-    %orig;
-    DYYYProgressPinVisual(self);
-}
-
 %end
+
 %hook AWEPlayInteractionProgressController
 
 %new
@@ -426,8 +346,25 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 }
 %end
 
-// 表撑高与详情页行高已移入 DYYYFullscreenCoreHooks（唯一写入通道）。
+%hook AWEFeedDataSafeTableView
 
+- (void)setFrame:(CGRect)frame {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
+        %orig;
+        return;
+    }
+    CGRect adjusted = [DYYYFullscreenCoordinator adjustDetailTableFrame:self frame:frame];
+    if (CGRectIsNull(adjusted)) {
+        %orig;
+        return;
+    }
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        NSLog(@"[DYYY][table] setFrame 顶高 %.1f → %.1f", CGRectGetHeight(frame), CGRectGetHeight(adjusted));
+    }
+    %orig(adjusted);
+}
+
+%end
 
 %hook AWEPlayInteractionSearchAnchorView
 

@@ -19,7 +19,7 @@
 #import "DYYYFloatClearButton.h"
 #import "DYYYFloatSpeedButton.h"
 #import "DYYYSettingsHelper.h"
-#import "DYYYDiag/Debug/DKDebugInspector.h"
+#import "DYYYDiagnosticsOverlay.h"
 #import "DYYYUtils.h"
 
 @class DYYYIconOptionsDialogView;
@@ -4392,7 +4392,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       [DYYYSettingsHelper setUserDefaults:@(newValue) forKey:strongItem.identifier];
       // 日志开关跟随诊断模式：老 key 同步写入，避免两处状态不一致
       [DYYYSettingsHelper setUserDefaults:@(newValue) forKey:@"DYYYFullscreenDiag"];
-      DKDebugInspectorRefreshOverlay();                            // 用写入后的新值刷新浮层
+      DYYYDiagnosticsOverlayRefresh();                            // 用写入后的新值刷新浮层
     };
     [diagnosticItems addObject:diagEntryItem];
 

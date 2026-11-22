@@ -46,22 +46,18 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 // DYYY 诊断：运行日志导出到"文件" + 可读自检报告面板
 @interface DYYYDiagnostics : NSObject
-// 运行日志文件路径（带大小轮转）。
+// 运行日志文件路径。读取前必须先调 flushRuntimeLogToFile。
 + (NSString *)runtimeLogPath;
-// 追加一行运行日志（内部串行队列 + 轮转）。
+// 追加一行运行日志（内存环形缓冲，零文件 I/O）。
 + (void)appendRuntimeLogLine:(NSString *)line;
+// 把内存缓冲一次性落盘到 runtimeLogPath。
++ (void)flushRuntimeLogToFile;
 + (NSString *)exportedLogPathWithName:(NSString *)name;
-// 清理超过保留期（3 天）的日志与过期导出副本。
 + (void)installUncaughtExceptionHandler;
 + (void)cleanupStaleLogs;
-+ (void)cleanupStaleLogsOnQueue;
-// 手动清空运行日志、轮转备份与导出副本。
 + (void)clearRuntimeLogFromViewController:(UIViewController *)presenter;
-// 把运行日志拷贝到 Documents/DYYY/logs（文件 App 可直接取）。
 + (void)exportRuntimeLogFromViewController:(UIViewController *)presenter;
-// 一键诊断包：纯写文件 + Toast，不弹任何面板。
 + (void)exportDiagnosticsBundleFromViewController:(UIViewController *)presenter;
-// 自检报告写文件 + Toast，不弹面板。
 + (void)showAuditReportFromViewController:(UIViewController *)presenter;
 @end
 @class _TtC33AWECommentPanelContainerSwiftImpl31CommentViewControllerStateModel;
@@ -516,36 +512,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEFeedTableViewController : UIViewController
-@property (nonatomic, strong) UITableView *tableView;
 @end
-
-// ===== 视频全屏装饰层用到的类 =====
-// 只声明本工程实际访问的成员，其余留给运行时。
-
-@interface RichContentContainerViewController : UIViewController
-@end
-
-@interface AWESpecialCardTemplateLynxViewController : UIViewController
-@end
-
-@interface AWESpecialCardTemplateNativeViewController : UIViewController
-@end
-
-@interface AWESpecialCardTemplatePureCell : UITableViewCell
-@property (nonatomic, strong) UIView *contentView;
-@end
-
-@interface AWEFeedPOIDynamicCardCellViewController : UIViewController
-@end
-
-@interface AWELivePreStream4LayerContainerView : UIView
-@end
-
-
-@interface AWEKnowledgeGradientView : UIView
-@end
-
-
 
 @interface AWEFeedTableView : UIView
 @end
@@ -565,12 +532,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEAwemeDetailTableViewCell : UIView
-// 41.2：YES = 播放器不许盖住底栏（内容层被压成「屏高 − 底栏」）。
-// 聊天系视频页正是这个判定为 YES，所以视频停在 843。
-- (BOOL)playerNotCoverBottomBarEnable;
-- (void)p_adjustVideoFrameIfNeeded:(id)reason;
-- (void)adjustVideoFrameIfNeeded;
-- (void)adjustVideoFrameIfNeededWithPanelType:(unsigned long long)panelType;
 @end
 
 @interface IESLiveFeedDrawerEntranceView : UIView
@@ -1414,12 +1375,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, strong) id roomAisle;
 - (BOOL)prefersStatusBarHidden;
 @end
-// 详情页 cell 内的内容控制器：它的 view 就是"视频内容区"那一层。
-// 全屏时该层仍被抖音按"表高 − 底栏"算成 843（聊天系视频页），
-// 导致视频不铺满、且与 cell 的 926 形成两种高度基准。
-@interface AWEAwemeDetailCellViewController : UIViewController
-@end
-
 @interface AWEAwemeDetailTableViewController : UIViewController
 - (BOOL)prefersStatusBarHidden;
 - (CGFloat)baseTableViewBottomInset;
@@ -1430,35 +1385,9 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath;
 - (double)fixedCellHeight;
 - (double)cellHeightAtIndex:(long long)index;
-// 41.2 行高来源探针用：无参数版与带容器版（运行时 dump 确认两者都存在）
-- (double)cellHeight;
-- (double)cellHeightAtIndex:(long long)index forContainer:(id)container;
-- (double)setupDetailTableView;
+- (void)setupDetailTableView;
 - (double)contentOffsetYForCellAtIndex:(long long)index;
 - (void)adjustTableViewHeightForTargetIndex:(long long)index;
-@end
-
-// 详情页行高/翻页基准入口（滚动 delegate 容器与各数据层）。
-// Logos 的 %hook 按类名直接挂，这里只为 %orig 类型转换提供声明。
-@interface AWEDetailFeedScrollDelegateContainer : NSObject
-- (CGFloat)fixedCellHeight;
-@end
-@interface AWEUserProfileAdDataLayer : NSObject
-- (CGFloat)originalTableViewHeight;
-- (void)setOriginalTableViewHeight:(CGFloat)height;
-@end
-@interface AWEUserProFileAdVideoDataController : NSObject
-- (CGFloat)originalTableViewHeight;
-- (void)updateOriginalTableViewHeight:(CGFloat)height;
-@end
-@interface AWELivePostWorkLiveCardLayoutController : NSObject
-- (CGFloat)originalTableViewHeight;
-- (void)setOriginalTableViewHeight:(CGFloat)height;
-@end
-@interface AWELivePostWorkLiveCardLayoutDataLayer : NSObject
-- (CGFloat)normalHeight;
-- (CGFloat)originalTableViewHeight;
-- (void)setOriginalTableViewHeight:(CGFloat)height;
 @end
 // 41.1 视图树实锤：评论列表区不透明底色来源（rgba(0.086,0.086,0.086,1.0)），
 // 盖在原生毛玻璃层之上，是"评论区黑色"的真凶。

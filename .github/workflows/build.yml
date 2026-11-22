@@ -143,7 +143,7 @@ jobs:
           # rootless/rootful/roothide 的 deb 打包脚本保留在 git 历史里，
           # 需要时恢复对应步骤即可。
           # 生成构建标识头文件（诊断包用于区分"哪次构建"）
-          printf '#define DK_BUILD_COMMIT @"%s"\n#define DK_BUILD_BRANCH @"%s"\n#define DK_BUILD_TIME @"%s"\n' \
+          printf '#define DYYY_BUILD_VERSION @"2.2-9"\n#define DYYY_BUILD_COMMIT @"%s"\n#define DYYY_BUILD_BRANCH @"%s"\n#define DYYY_BUILD_TIME @"%s"\n' \
             "${GITHUB_SHA:0:7}" "${GITHUB_REF_NAME:-local}" "$(date -u +%Y%m%d-%H%M)" > DYYYBuildStamp.h
           cat DYYYBuildStamp.h
           make THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 ARCHS=arm64 -j$(sysctl -n hw.ncpu)

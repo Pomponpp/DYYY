@@ -35,7 +35,7 @@
 #import "DYYYCommentBlurCoordinator.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "DYYYClassRegistry.h"
-#import "DYYYDiag/Debug/DKDebugInspector.h"
+#import "DYYYDiagnosticsOverlay.h"
 
 %hook AWEIMPhotoPickerFunctionModel
 

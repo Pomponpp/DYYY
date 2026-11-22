@@ -39,7 +39,18 @@
 @property(nonatomic, assign) CGPoint captionAppliedCenter;
 @property(nonatomic, assign) BOOL applying;
 @property(nonatomic, assign) BOOL adjusted;
+@property(nonatomic, assign) CGRect normalWindowFrame;
+@property(nonatomic, assign) BOOL hasNormalWindowFrame;
+@property(nonatomic, assign) CGSize normalRenderSize;
 @property(nonatomic, weak) UIWindow *normalWindow;
+@property(nonatomic, weak) UIView *normalCell;
+@property(nonatomic, assign) CGRect normalCellWindowFrame;
+@property(nonatomic, assign) CGAffineTransform nativeImageTransform;
+@property(nonatomic, assign) CGAffineTransform closedImageTransform;
+@property(nonatomic, assign) BOOL hasImageTransform;
+@property(nonatomic, assign) BOOL hasClosedImageTransform;
+@property(nonatomic, assign) BOOL imageAdjusted;
+@property(nonatomic, weak) UIImageView *imageContent;
 @property(nonatomic, assign) BOOL mediaHost;
 @property(nonatomic, assign) CGRect mediaHostParentBounds;
 @property(nonatomic, assign) BOOL bottomBarEnabled;
@@ -66,13 +77,7 @@
     return nil;
 }
 + (BOOL)usesRecommendedLayoutForController:(UIViewController *)controller {
-    // 轻量判断：按内容来源白名单回答，无 mediaHost 状态依赖。
-    // 首页推荐流（homepage_hot / homepage_hot_container）= 全屏推荐布局；
-    // 其他 homepage_*（关注/朋友/商城/直播等）与全部非首页来源保持原生。
-    NSString *refer = [self contentSourceForController:controller];
-    if (!refer.length) return NO;
-    return [refer isEqualToString:@"homepage_hot"] ||
-           [refer isEqualToString:@"homepage_hot_container"];
+    return [[self contentSourceForController:controller] isEqualToString:@"homepage_hot"];
 }
 + (BOOL)usesDetailLayoutForController:(UIViewController *)controller {
     Class detailClass = NSClassFromString(@"AWEAwemeDetailTableViewController");
@@ -129,213 +134,39 @@
     // 行高与 UITableView 分页视口使用同一尺寸，预加载时也不扣第二次底栏。
     return height > 0 && table.bounds.size.height > 0 ? table.bounds.size.height : height;
 }
-// ===== 详情页全屏几何 =====
-// 表高唯一写入通道 = AWEFeedDataSafeTableView.setFrame 拦截（写入时拉满+layout 兜底）；
-// 行高 = fullCellHeightForNative 纯函数
-// 独立回答（锚 = 原生底栏高）。两者无先后依赖、无共享状态——
-// 这是修复"表 926 滚 / cell 843 排"错位的关键。
+// ===== #31 详情页全屏闭环 =====
+// 建行/落点计算前准备表：第一次记录原高（抖音创建时写的 843），
+// 之后每次准备都把被压回的表撑回满视口。行高查询只在已接管
+// （表已撑高）时把整页行高答成满视口；特殊行透传。
+// 落点(N×行高)与建行同源：点A弹A 与 全屏 同时成立。
 static const CGFloat kDYYYDetailHeightTol = 0.5;
-// 行高接管区间：原生行高比窗口矮 1~160pt 视为"扣底栏"型压缩，接管为满视口。
-// 上限覆盖机型组合（如 iPad 分屏残留值），下限排除已接管/未就绪。
-static const CGFloat kDYYYRowHeightDiffMin = 1.0;
-static const CGFloat kDYYYRowHeightDiffMax = 160.0;
 
-// 群聊视频详情页（IM 详情）不在全屏作用域：
-// 它原生就是"扣底栏 83"布局，拖进度条时抖音自己把进度容器上移一个底栏
-// 给输入栏让位（原生交互）。行高/表高若在这里接管，会与原生让位布局打架
-// ——表现为拖动中画面跳起一个底栏高度、出现两条底栏分界线，松手弹回。
-// 窗口级 IM 会话判定：递归扫当前窗口可见的 VC 树，同时存在
-// "IM 容器族"与"详情表控制器"才判定为聊天系视频页。
-// 不依赖 parentViewController 链（实测页面创建早期该链未就绪，
-// 逐次实时推理会在 926/843 之间摇摆——这才是拖动"弹"的真因）。
-// 结果短暂缓存 0.4s，避免热路径每帧全树扫描。
-// 判定自证：每次判定结果变化时打一条（verdict + 命中分支 + 对象 + 子VC数）。
-// 目的：导包后一眼看出判定走的哪条路，不再靠推理补全。
-static __weak UIViewController *DYYYLastIMLoggedController;
-static NSInteger DYYYLastIMLoggedVerdict = -1;
 
-static BOOL DYYYLogIMVerdict(BOOL result, NSString *reason, UIViewController *controller) {
++ (void)prepareDetailTableNew:(UIViewController *)controller {
+    // 对齐已验证实现：
+    //   · 首次调用就【同时记录原高 + 撑高】（不能只记录——那样第一批行会在
+    //     压缩高度下创建，行高被 UIKit 缓存成 843，之后撑高也刷不回来）
+    //   · 不碰 inset、不做 beginUpdates、不分页状态——表高只有一个来源
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !controller) return;
+    if (![controller respondsToSelector:@selector(tableView)]) return;
+    UITableView *table = [(id)controller tableView];
+    if (!table) return;
+    UIView *root = controller.viewIfLoaded;
+    if (!root) return;
+    // 半屏/异形窗口不接管（键盘态、小窗等）
+    UIWindow *window = table.window ?: root.window;
+    if (window && window.windowLevel != UIWindowLevelNormal) return;
+    if (table.superview && ![table isDescendantOfView:root]) return;
+    if (!CGAffineTransformIsIdentity(table.transform)) return;
+
+    CGFloat target = table.superview ? CGRectGetHeight(table.superview.bounds) : CGRectGetHeight(root.bounds);
+    CGRect adjusted = [self adjustDetailTableFrame:table frame:table.frame target:target];
+    if (CGRectIsNull(adjusted)) return;
+    table.frame = adjusted;
     if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        BOOL changed = (DYYYLastIMLoggedController != controller) ||
-                       (DYYYLastIMLoggedVerdict != (result ? 1 : 0));
-        if (changed) {
-            DYYYLastIMLoggedController = controller;
-            DYYYLastIMLoggedVerdict = result ? 1 : 0;
-            NSLog(@"[DYYY][imdetail] verdict=%d reason=%@ cls=%@ 子VC=%lu",
-                  result ? 1 : 0,
-                  reason ?: @"?",
-                  NSStringFromClass([controller class]),
-                  (unsigned long)controller.childViewControllers.count);
-        }
+        NSLog(@"[DYYY][table] prepare 撑高 %.1f → %.1f", CGRectGetHeight(table.frame), target);
     }
-    return result;
 }
-
-static BOOL DYYYWindowHasIMSession(void) {
-    static CFTimeInterval cachedAt = 0;
-    static BOOL cachedResult = NO;
-    CFTimeInterval now = CACurrentMediaTime();
-    if (now - cachedAt < 0.4) return cachedResult;
-    cachedAt = now;
-
-    UIWindow *window = [DYYYUtils getActiveWindow];
-    if (!window) { cachedResult = NO; return NO; }
-
-    static NSArray *imClasses;
-    static Class detailClass;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        imClasses = @[
-            NSClassFromString(@"AWEIMMessageBaseViewController"),
-            NSClassFromString(@"AWEIMMessageTabRootViewController"),
-            NSClassFromString(@"AWEIMChatListViewController"),
-            NSClassFromString(@"IESIMInputViewController"),
-            NSClassFromString(@"AWEIMFeedVideoQuickReplayInputViewController"),
-        ].copy;
-        detailClass = NSClassFromString(@"AWEAwemeDetailTableViewController");
-    });
-
-    __block BOOL hasIM = NO;
-    __block BOOL hasDetail = NO;
-    NSMutableArray *queue = [NSMutableArray array];
-    if (window.rootViewController) [queue addObject:window.rootViewController];
-    NSMutableSet<NSValue *> *seen = [NSMutableSet set];
-    NSUInteger guard = 0;
-    while (queue.count > 0 && guard++ < 200) {
-        id item = queue.firstObject;
-        [queue removeObjectAtIndex:0];
-        if (![item isKindOfClass:[UIViewController class]]) continue;
-        UIViewController *vc = (UIViewController *)item;
-        NSValue *key = [NSValue valueWithNonretainedObject:vc];
-        if ([seen containsObject:key]) continue;
-        [seen addObject:key];
-
-        // 只统计真正挂在窗口上的 VC（Tab 切换后旧 Tab 的 view 不在 window）
-        if (vc.isViewLoaded && vc.view.window == window) {
-            for (Class cls in imClasses) if (cls && [vc isKindOfClass:cls]) { hasIM = YES; break; }
-            if (detailClass && [vc isKindOfClass:detailClass]) hasDetail = YES;
-        }
-        [queue addObjectsFromArray:vc.childViewControllers];
-        if (vc.presentedViewController) [queue addObject:vc.presentedViewController];
-        if ([vc isKindOfClass:[UINavigationController class]]) {
-            [queue addObjectsFromArray:((UINavigationController *)vc).viewControllers];
-        }
-        if (hasIM && hasDetail) break;
-    }
-    cachedResult = (hasIM && hasDetail);
-    return cachedResult;
-}
-
-+ (BOOL)isIMSessionContext:(UIViewController *)controller {
-    // 判定"聊天系视频详情页"（群聊 + 朋友聊天）。
-    // 第一判据：窗口级结构快照（一次性、不依赖时序）；
-    // 其余为兜底（refer / 父链 / 兄弟），保留以防窗口判定失效。
-    if (DYYYWindowHasIMSession()) {
-        return DYYYLogIMVerdict(YES, @"window", controller);
-    }
-    static NSArray *imContainerClasses;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        imContainerClasses = @[
-            NSClassFromString(@"AWEIMMessageBaseViewController"),
-            NSClassFromString(@"AWEIMMessageTabRootViewController"),
-            NSClassFromString(@"AWEIMChatListViewController"),
-            NSClassFromString(@"IESIMInputViewController"),
-            NSClassFromString(@"AWEIMFeedVideoQuickReplayInputViewController"),
-        ].copy;
-    });
-    for (UIViewController *parent = controller; parent; parent = parent.parentViewController) {
-        for (Class cls in imContainerClasses) {
-            if (cls && [parent isKindOfClass:cls]) return DYYYLogIMVerdict(YES, @"parent", controller);
-        }
-        // 子 VC / 兄弟层级：实测 IM 容器与详情页是同级兄弟（同挂一个
-        // 导航控制器下），且详情页的子 VC 仅在页面完全就绪后才出现。
-        for (UIViewController *child in parent.childViewControllers) {
-            for (Class cls in imContainerClasses) {
-                if (cls && [child isKindOfClass:cls]) return DYYYLogIMVerdict(YES, @"child/sibling", controller);
-            }
-        }
-        // 同导航栈共存：IM 容器在导航栈里与详情页相邻（从聊天点进视频的 push 链）
-        UINavigationController *nav = parent.navigationController;
-        if (nav) {
-            for (UIViewController *stackVC in nav.viewControllers) {
-                for (Class cls in imContainerClasses) {
-                    if (cls && [stackVC isKindOfClass:cls]) return DYYYLogIMVerdict(YES, @"navstack", controller);
-                }
-            }
-        }
-        if ([parent respondsToSelector:@selector(referString)]) {
-            NSString *refer = [(AWEPlayInteractionViewController *)parent referString];
-            if (refer.length > 0) {
-                NSString *lower = [refer lowercaseString];
-                if ([lower isEqualToString:@"chat"] || [lower containsString:@"chat_room"] ||
-                    [lower hasPrefix:@"im_"]) return DYYYLogIMVerdict(YES, @"refer", controller);
-            }
-        }
-    }
-    return NO;
-}
-
-+ (BOOL)isImDetailController:(UIViewController *)controller {
-    return [self isIMSessionContext:controller];
-}
-
-+ (BOOL)isImDetailView:(id)view {
-    // 数据层对象（DataLayer/DataController 等非视图）不在 responder 链上，
-    // 无法反查 VC——改读全局标记：IM 详情页生命周期 hook 维护（imDetailActive）。
-    if (![view isKindOfClass:[UIView class]]) return [self imDetailActiveOrNavTop];
-    UIViewController *controller = [DYYYUtils firstAvailableViewControllerFromView:view];
-    return controller ? [self isImDetailController:controller] : [self imDetailActiveOrNavTop];
-}
-
-// IM 详情页活跃标记：由 DYYY.xm 的 IMDetail 生命周期 hook 维护。
-static NSInteger imDetailActiveCount = 0;
-+ (void)setImDetailActive:(BOOL)active {
-    if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [self setImDetailActive:active]; });
-        return;
-    }
-    imDetailActiveCount += active ? 1 : -1;
-    if (imDetailActiveCount < 0) imDetailActiveCount = 0;
-}
-+ (BOOL)imDetailActive {
-    return imDetailActiveCount > 0;
-}
-
-// 导航栈实时检测：当前导航栈顶是详情控制器，且其子控制器含群聊快捷回复栏。
-// 与生命周期标记互补——数据层/委托容器对象的调用时机可能早于 viewWillAppear
-// （标记尚未置位，行高已被 UIKit 缓存进行尺寸），导航栈快照则任何时候都稳定。
-+ (BOOL)isImDetailNavTop {
-    UIViewController *top = [DYYYUtils topView];
-    if (![top isKindOfClass:[UIViewController class]]) return NO;
-    if (![self isImDetailController:top]) return NO;
-    // 向下钻取导航/Tab 内容，找到实际的详情控制器（topView 可能返回容器）
-    return YES;
-}
-
-+ (BOOL)imDetailActiveOrNavTop {
-    if ([self imDetailActive]) return YES;
-    UIViewController *vc = [DYYYUtils topView];
-    int depth = 0;
-    while (vc && depth++ < 10) {
-        if ([self isImDetailController:vc]) return YES;
-        UIViewController *next = nil;
-        if ([vc isKindOfClass:[UINavigationController class]]) {
-            next = ((UINavigationController *)vc).topViewController;
-        } else if (vc.presentedViewController) {
-            next = vc.presentedViewController;
-        } else {
-            for (UIViewController *child in vc.childViewControllers) {
-                if (child.viewIfLoaded.window) { next = child; break; }
-            }
-        }
-        if (!next || next == vc) break;
-        vc = next;
-    }
-    return NO;
-}
-
-
 
 // 表写入通道的统一规则（首页表与详情表共用）：
 // 返回 CGRectNull = 放行不干预。
@@ -357,34 +188,69 @@ static NSInteger imDetailActiveCount = 0;
     table.frame = frame;
 }
 
-
-
-
-// 行高纯函数入口：供全部行高 hook 调用。
-// 原生值比窗口矮 1~160pt（扣底栏型压缩）→ 回答满视口；其余透传。
-
-// 带「表是否被撑高」前提的行高回答（对齐已验证实现的判据）。
-//
-// 原版 fullCellHeightForNative: 只看「窗口高 − 原生行高」落在 1~160 就回答满高，
-// 没有任何前置条件。问题是：聊天系视频页的表**从来没有被撑高**（它本来就不受底栏
-// 压缩，实测表高 926 = 容器高），行高却被这条规则拉到 926 ——
-// 于是 cell 926 / 内容层 843 两套基准并存，这就是拖动弹跳的结构性来源。
-//
-// 行为对照的判据是：先拿「表撑高前的原高」，拿不到就直接放行；再要求
-// 「当前表高 > 原高 + 容差」才继续。聊天页这两条都过不去 → 行高放行。
-//
-// 所以这里补上前提：表没被撑高过 → 直接回答原生值。
-
-// 表撑高时登记原高（键与行高查询共用 @selector(rowHeightForTable:native:)）。
-+ (void)rememberTableOriginalHeight:(UITableView *)table height:(CGFloat)height {
-    if (!table || height <= 0.0 || !isfinite(height)) return;
-    if (objc_getAssociatedObject(table, @selector(rowHeightForTable:native:))) return;
-    objc_setAssociatedObject(table, @selector(rowHeightForTable:native:), @(height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++ (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame {
+    if (!table) return CGRectNull;
+    UIView *parent = table.superview;
+    CGFloat target = parent ? CGRectGetHeight(parent.bounds) : 0;
+    return [self adjustDetailTableFrame:table frame:frame target:target];
 }
 
-// 行高纯函数：原生行高比窗口矮一个底栏高度（或类似压缩）时，回答满视口高。
-// 无状态：不依赖任何关联对象/缓存。锚取窗口高与原生行高的差值区间，
-// 特殊行与未就绪尺寸透传。
++ (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target {
+    if (!table) return CGRectNull;
+    if (!DYYYGetBool(@"DYYYEnableFullScreen")) {
+        // 关闭后一律放行，抖音写什么就是什么；标记清掉避免继续干预。
+        objc_setAssociatedObject(table, @selector(prepareDetailTableNew:), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return CGRectNull;
+    }
+    CGFloat current = CGRectGetHeight(frame);
+    // 容器不比来意更高 → 这张表没被底栏压缩过（搜索页/好友聊天页），不在作用域；
+    // 高度不到容器一半 → 布局早期半成品，记下会把行高算错。
+    if (!isfinite(target) || !isfinite(current) || target <= 0.0
+        || current >= target - kDYYYDetailHeightTol
+        || current < target * 0.5) {
+        return CGRectNull;
+    }
+    if (!objc_getAssociatedObject(table, @selector(prepareDetailTableNew:))) {
+        objc_setAssociatedObject(table, @selector(prepareDetailTableNew:), @(current), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+            NSLog(@"[DYYY][table] 记原高=%.1f 目标=%.1f", current, target);
+        }
+    }
+    frame.size.height = target;
+    return frame;
+}
+
++ (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target {
+    if (!table || target <= 0) return;
+    NSArray<UITableViewCell *> *cells = table.visibleCells;
+    for (UITableViewCell *cell in cells) {
+        CGFloat h = CGRectGetHeight(cell.frame);
+        if (h > 0 && fabs(h - target) > 0.5 && h >= target * 0.5) {
+            CGRect f = cell.frame;
+            f.size.height = target;
+            cell.frame = f;
+            if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+                NSLog(@"[DYYY][table] 对齐残留 cell %.1f → %.1f", h, target);
+            }
+        }
+    }
+}
+
++ (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight {
+    // 对齐已验证实现：表已撑高时把整页行高答成满视口；特殊行与未就绪尺寸透传。
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !table) return nativeHeight;
+    NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
+    CGFloat target = CGRectGetHeight(table.bounds);
+    if (!original || !isfinite(nativeHeight) || !isfinite(target)
+        || nativeHeight <= 0.0 || target <= original.doubleValue + kDYYYDetailHeightTol) {
+        return nativeHeight;
+    }
+    if (fabs(nativeHeight - original.doubleValue) > kDYYYDetailHeightTol &&
+        fabs(nativeHeight - target) > kDYYYDetailHeightTol) {
+        return nativeHeight;
+    }
+    return target;
+}
 
 + (UIViewController *)controllerForTable:(UITableView *)table {
     UIResponder *responder = table;
@@ -523,18 +389,6 @@ static NSInteger imDetailActiveCount = 0;
         if (legacy) return NO;
         CGRect frame = view.frame;
         barRect = [self bottomBarRect:bar followingView:view controller:controller];
-
-        // 互动层高度：**只按原生底栏上沿算，不做任何页面特判**。
-        //
-        // 曾经这里有一支「聊天页 → 把互动层拉到内容层高 843」的分支，
-        // 那是拖动弹跳的直接写入源：抖音写 760（= 843 − 83，原生静止值），
-        // 我们拉到 843，它下一轮又写 760 —— 每秒几十次互顶，肉眼就是弹。
-        //
-        // 行为对照里没有这种分支：HUD 的高度写入由 setFrame 拦截统一处理，
-        // 且规则是「只向下压到表撑高前的原高，拿不到原高就放行」。
-        // 聊天页的表从来没被撑高过，所以那边完全放行，什么都不写。
-        // 我们的 setFrame 拦截（DYYYGeoHUDAdjustFrame）现在也是同一套规则，
-        // 这里就不该再有第二条写入路径。
         CGFloat bottom = CGRectGetMinY([parent convertRect:barRect fromView:view.window]);
         CGFloat height = MIN(CGRectGetMaxY(parent.bounds), bottom) - frame.origin.y;
         if (height <= 0) return NO;
@@ -564,6 +418,12 @@ static NSInteger imDetailActiveCount = 0;
     dispatch_once(&once, ^{ players = [NSHashTable weakObjectsHashTable]; });
     return players;
 }
++ (NSHashTable<UIView *> *)images {
+    static NSHashTable *images;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ images = [NSHashTable weakObjectsHashTable]; });
+    return images;
+}
 + (NSHashTable<UIView *> *)tabBars {
     static NSHashTable *views;
     static dispatch_once_t once;
@@ -584,6 +444,7 @@ static NSInteger imDetailActiveCount = 0;
         scheduled = NO;
         for (UIViewController *controller in [self interactions].allObjects) [controller.viewIfLoaded setNeedsLayout];
         for (UIView *player in [self players].allObjects) if (player.window) [player setNeedsLayout];
+        for (UIView *image in [self images].allObjects) if (image.window) [image setNeedsLayout];
     });
 }
 + (void)layoutRootTabBar:(UIView *)bar {
@@ -700,9 +561,11 @@ static NSInteger imDetailActiveCount = 0;
     if (fabs(current.size.height - target.size.height) > 0.25 || fabs(current.origin.y - target.origin.y) > 0.25) {
         view.frame = target;
     }
-    // 签名覆盖全部几何输入：开关变化时重排一次播放器。
-    NSString *signature = [NSString stringWithFormat:@"%@/%d/%d", NSStringFromCGRect(target),
-                           DYYYGetBool(@"DYYYEnableFullScreen"), DYYYGetBool(@"DYYYEnableCommentBlur")];
+    // 签名必须覆盖全部几何输入：避让开关改变时 panel 分支结果会变，
+    // 不加入签名会漏掉一次播放器重排。
+    NSString *signature = [NSString stringWithFormat:@"%@/%d/%d/%d", NSStringFromCGRect(target),
+                           DYYYGetBool(@"DYYYEnableFullScreen"), DYYYGetBool(@"DYYYEnableCommentBlur"),
+                           DYYYGetBool(@"DYYYCommentAvoidVideo")];
     NSString *previous = objc_getAssociatedObject(controller, @selector(layoutInteraction:));
     if (![signature isEqualToString:previous]) {
         objc_setAssociatedObject(controller, @selector(layoutInteraction:), signature, OBJC_ASSOCIATION_COPY_NONATOMIC);
@@ -832,6 +695,10 @@ static NSInteger imDetailActiveCount = 0;
         state.layoutWindowSize = window.bounds.size;
         state.layoutSafeArea = window.safeAreaInsets;
         state.hasNativeFrame = NO;
+        state.hasNormalWindowFrame = NO;
+        state.normalRenderSize = CGSizeZero;
+        state.hasClosedImageTransform = NO;
+        state.imageAdjusted = NO;
         state.closedInteractionSize = CGSizeZero;
         state.hasCaptionFrame = NO;
         state.captionAdjusted = NO;
@@ -869,6 +736,18 @@ static NSInteger imDetailActiveCount = 0;
     }
     return cell ?: owner.parentViewController.viewIfLoaded.superview ?: owner.viewIfLoaded.superview;
 }
++ (CGRect)panelInWindow:(UIWindow *)window viewport:(CGRect)viewport {
+    CGRect result = CGRectNull;
+    for (UIViewController *controller in [self comments].allObjects) {
+        UIView *view = controller.viewIfLoaded;
+        if (view.window != window || ![self visible:view]) continue;
+        CGRect rect = [view convertRect:view.bounds toView:window];
+        // 过滤全屏宿主；使用真正的半屏评论根视图，避免取到整页容器。
+        if (rect.size.height < window.bounds.size.height * 0.25 || CGRectGetMinY(rect) <= CGRectGetMinY(viewport) + 1) continue;
+        if (CGRectIntersectsRect(rect, viewport) && (CGRectIsNull(result) || CGRectGetMinY(rect) < CGRectGetMinY(result))) result = rect;
+    }
+    return result;
+}
 + (BOOL)hasCommentInWindow:(UIWindow *)window {
     if (!window) return NO;
     NSNumber *deadline = [[self pendingComments] objectForKey:window];
@@ -885,15 +764,59 @@ static NSInteger imDetailActiveCount = 0;
     UIViewController *owner = [self owner:player state:state];
     BOOL recommended = [self usesRecommendedLayoutForController:owner];
     if (![self usesFullscreenLayoutForController:owner]) return native;
-    if ([self isImageContentController:owner]) return native;
-    if (!owner || !player.superview) return native;
+    if ([self isImageContentController:owner]) {
+        state.hasNormalWindowFrame = NO;
+        state.normalRenderSize = CGSizeZero;
+        return native;
+    }
+    BOOL activeComment = [self hasCommentInWindow:window];
     UIView *cell = [self cellForPlayer:player owner:owner];
-    if (!cell || cell.window != window) return native;
+    // 复查修正：此"毛玻璃记录态提前返回"分支必须让位给「评论避让视频」，
+    // 否则避让开关会被这里抢先 return 旁路掉。
+    if (recommended && DYYYGetBool(@"DYYYEnableCommentBlur") && !DYYYGetBool(@"DYYYCommentAvoidVideo") && activeComment && state.hasNormalWindowFrame && state.normalWindow == window &&
+        state.normalCell == cell && cell.window == window && player.superview) {
+        // 预加载下一页时记录的窗口 y 不能直接用于已滚到屏幕中心的页面。
+        CGRect reference = [cell convertRect:cell.bounds toView:window];
+        CGRect normal = [DYYYFullscreenGeometry translateRect:state.normalWindowFrame fromReference:state.normalCellWindowFrame toReference:reference];
+        if (!CGRectIsNull(normal)) return [player.superview convertRect:normal fromView:window];
+    }
+    if (!owner || !cell || cell.window != window || !player.superview) return native;
     CGRect viewport = CGRectIntersection([cell convertRect:cell.bounds toView:window], window.bounds);
     if (CGRectIsNull(viewport) || CGRectIsEmpty(viewport)) return native;
     CGSize media = CGSizeZero;
     if ([owner respondsToSelector:@selector(getPlayerVideoSize)]) media = [(AWEPlayVideoViewController *)owner getPlayerVideoSize];
-    if (media.width <= 0 || media.height <= 0) return native;
+    if (media.width <= 0 || media.height <= 0) {
+        // 复用播放器切到图文时，不能沿用上一条视频的毛玻璃关闭态。
+        state.hasNormalWindowFrame = NO;
+        state.normalRenderSize = CGSizeZero;
+        return native;
+    }
+    // 上游把"毛玻璃"与"评论避让缩小"硬绑成二选一：毛玻璃开时避让被跳过。
+    // 「评论避让视频」开关解耦两者：开启后即使毛玻璃开着，也照常计算
+    // 评论面板避让区（视频缩到评论上方，官方行为）；关闭维持原二选一。
+    CGRect panel = (DYYYGetBool(@"DYYYEnableCommentBlur") && !DYYYGetBool(@"DYYYCommentAvoidVideo")) ? CGRectNull : [self panelInWindow:window viewport:viewport];
+    if (!CGRectIsNull(panel)) {
+        // 用满状态栏下沿到评论区顶部的空间，等比缩放时不额外预留导航栏或间距。
+        CGFloat top = MAX(CGRectGetMinY(viewport), CGRectGetMinY(window.bounds) + window.safeAreaInsets.top);
+        CGRect available = [DYYYFullscreenGeometry unoccludedViewport:viewport top:top panel:panel gap:0];
+        // 原生“铺满”可能让 Metal 按屏幕比例裁剪；按实际渲染比例适配，
+        // 不能只按视频源尺寸缩小容器，否则 Metal 仍会溢出评论可用区。
+        CGSize rendered = state.normalRenderSize;
+        if (state.hasNormalWindowFrame && state.normalWindow == window && rendered.width > 0 && rendered.height > 0) media = rendered;
+        CGRect fit = [DYYYFullscreenGeometry aspectFit:media inRect:available];
+        return CGRectIsNull(fit) ? native : [player.superview convertRect:fit fromView:window];
+    }
+    if (!recommended) {
+        // 原生详情页只共用不透明评论下的避让计算，关闭态保留原有播放器布局。
+        if (!activeComment) {
+            state.normalWindowFrame = [player.superview convertRect:native toView:window];
+            state.normalCell = cell;
+            state.normalCellWindowFrame = [cell convertRect:cell.bounds toView:window];
+            state.hasNormalWindowFrame = YES;
+            state.normalWindow = window;
+        }
+        return native;
+    }
     if (media.width > media.height) {
         // 横屏视频沿用原生信息层的布局高度；背景仍由全高 Feed 承载。
         for (UIViewController *controller in [self interactions].allObjects) {
@@ -903,10 +826,24 @@ static NSInteger imDetailActiveCount = 0;
             if (guide.size.height > viewport.size.height * 0.6 && guide.size.height <= viewport.size.height) native.size.height = guide.size.height;
             break;
         }
+        if (!activeComment) {
+            state.normalWindowFrame = [player.superview convertRect:native toView:window];
+            state.normalCell = cell;
+            state.normalCellWindowFrame = [cell convertRect:cell.bounds toView:window];
+            state.hasNormalWindowFrame = YES;
+            state.normalWindow = window;
+        }
         return native;
     }
     // 竖屏媒体扩展到本页底部；不影响宽度缩小的原生面板/小窗布局。
     if (fabs(native.size.width - viewport.size.width) < 1 && fabs(native.origin.x) < 1) native.size.height = MAX(native.size.height, viewport.size.height);
+    if (!activeComment) {
+        state.normalWindowFrame = [player.superview convertRect:native toView:window];
+        state.normalCell = cell;
+        state.normalCellWindowFrame = [cell convertRect:cell.bounds toView:window];
+        state.hasNormalWindowFrame = YES;
+        state.normalWindow = window;
+    }
     return native;
 }
 + (CGRect)frameForPlayer:(UIView *)player proposed:(CGRect)frame {
@@ -924,7 +861,11 @@ static NSInteger imDetailActiveCount = 0;
     [[self players] addObject:player];
     UIViewController *owner = [self owner:player state:state];
     [self layoutPlayerContainer:owner.parentViewController];
-    if ([self isImageContentController:owner]) return;
+    if ([self isImageContentController:owner]) {
+        state.hasNormalWindowFrame = NO;
+        state.normalRenderSize = CGSizeZero;
+        return;
+    }
     if (!state.hasNativeFrame) { state.nativeFrame = player.frame; state.hasNativeFrame = YES; }
     CGRect target = [self targetForPlayer:player native:state.nativeFrame state:state];
     state.adjusted = !CGRectEqualToRect(target, state.nativeFrame);
@@ -935,97 +876,176 @@ static NSInteger imDetailActiveCount = 0;
         state.applying = NO;
     }
 }
-#pragma mark - 媒体容器
-
-
-// 渲染布局完成后记录画面尺寸，供评论避让使用。
-// ===== 背景色延伸（非满屏视频的黑边）=====
-//
-// 诊断包实证（DYDebug-20261122-062737，首页横屏视频）：
-//   cell contentView 428x926   ← 满高
-//   外层 UIView       926      ← 我们钉满的容器
-//   TTPlayerView      843      ← 原生 player view，装视频画面
-//   TTMetalViewVP     240.8    ← 实际画面（16:9 比例 fit）
-//
-// 容器 926、内容 843，底部差 83 —— 那段空隙就是黑边来源。
-// 抖音自己会用 playerBackgroundView 的颜色去填，但它只填原生那一层；
-// 我们把容器钉高之后，露出来的那层祖先没人管。
-//
-// 做法（行为对照的机制，不是抄代码）：
-//   1. 从播放器视图往上，找第一个「高度超过它内容底边」的祖先 —— 那层才是会露出来的
-//   2. 把它的 backgroundColor 设成播放器原生背景色
-//   3. 首次接管时存下原值，关闭全屏时按标记还原
-//
-// 图文页要排除：图文 cell 里嵌套的那套播放器 alpha=0，若让它也涂色，
-// 会用黑底把图文渐变的末色盖掉（行为对照里记录过这个「偶发」现象）。
-static char kDYYYBackdropAppliedKey;
-static char kDYYYBackdropCanvasKey;
-
-// 从 anchor 往上找第一层「比内容底边更高」的祖先，最多到 cell contentView。
-static UIView *DYYYBackdropCanvas(UIView *anchor) {
-    if (!anchor) return nil;
-    static Class sContentClass;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ sContentClass = NSClassFromString(@"UITableViewCellContentView"); });
-
-    for (UIView *ancestor = anchor.superview; ancestor; ancestor = ancestor.superview) {
-        CGRect rect = [anchor convertRect:anchor.bounds toView:ancestor];
-        if (CGRectGetHeight(ancestor.bounds) > CGRectGetMaxY(rect) + 0.5) return ancestor;
-        if (sContentClass && [ancestor isKindOfClass:sContentClass]) break;
++ (UIView *)renderView:(UIView *)player {
+    for (UIView *view in player.subviews) {
+        NSString *name = NSStringFromClass(view.class);
+        if ([name hasPrefix:@"TTMetal"] || [name containsString:@"RenderView"]) return view;
     }
     return nil;
 }
+#pragma mark - 媒体容器
 
-// 按标记还原所有接管过的层（不假设是哪一层，承载层会随布局变化）。
-static void DYYYRestoreBackdrop(UIView *anchor, UIView *except) {
-    if (!anchor) return;
-    UIView *ancestor = anchor.superview;
-    for (NSUInteger i = 0; ancestor && i < 12; i++, ancestor = ancestor.superview) {
-        if (ancestor == except) continue;
-        id baseline = objc_getAssociatedObject(ancestor, &kDYYYBackdropCanvasKey);
-        if (!baseline) continue;
-        ancestor.backgroundColor = (baseline == [NSNull null]) ? nil : (UIColor *)baseline;
-        objc_setAssociatedObject(ancestor, &kDYYYBackdropCanvasKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++ (void)layoutPlayerContainer:(UIViewController *)controller {
+    Class pureListClass = NSClassFromString(@"AFDPureModePageListViewController");
+    BOOL pureModeList = pureListClass && [controller isKindOfClass:pureListClass];
+    if (![NSThread isMainThread] || (!pureModeList && ![controller respondsToSelector:@selector(contentView)])) return;
+    UIView *view = controller.viewIfLoaded;
+    if (!view.window || !view.superview) return;
+    BOOL enabled = DYYYGetBool(@"DYYYEnableFullScreen") && [self usesFullscreenLayoutForController:controller];
+    UIView *content = pureModeList ? nil : [(AWEDPlayerViewController_Merge *)controller contentView];
+    for (UIView *host in content && content != view ? @[view, content] : @[view]) {
+        DYYYFullscreenPlayerState *state = objc_getAssociatedObject(host, @selector(state:));
+        if (state.applying) continue;
+        CGRect current = host.frame;
+        if (!enabled) {
+            BOOL restore = state.mediaHost && CGRectEqualToRect(current, state.fullscreenHostFrame);
+            state.mediaHost = NO;
+            if (restore) host.frame = state.nativeHostFrame;
+            continue;
+        }
+        UIView *parent = host.superview;
+        if (!parent || CGRectIsEmpty(parent.bounds) || !CGAffineTransformIsIdentity(host.transform)) continue;
+        if (!state.mediaHost && ![self view:host spansWidthOf:parent]) continue;
+        state = [self state:host];
+        if (!state.mediaHost || state.normalWindow != view.window || !CGRectEqualToRect(state.mediaHostParentBounds, parent.bounds)) {
+            state.nativeHostFrame = current;
+            state.fullscreenHostFrame = current;
+        }
+        CGRect target = parent.bounds;
+        state.mediaHost = YES;
+        state.mediaHostParentBounds = parent.bounds;
+        state.owner = controller;
+        state.normalWindow = view.window;
+        state.fullscreenHostFrame = target;
+        // 诊断：完整记录每次撑满判定（纯打印，不改行为），用于定位滑动时
+        // 多页同时撑满/新旧页状态打架的问题。开关：设置→诊断工具→全屏诊断日志。
+        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+            UIView *diagCell = [self cellForPlayer:host owner:controller];
+            UIView *diagPager = [self pagingViewForCell:diagCell];
+            CGRect cellRect = diagCell ? [diagCell convertRect:diagCell.bounds toView:diagCell.window] : CGRectZero;
+            UIScrollView *scroll = (UIScrollView *)diagPager;
+            CGPoint center = CGPointMake(CGRectGetMidX(host.window.bounds), CGRectGetMidY(host.window.bounds));
+            NSLog(@"[DYYY][fullscreen] host=%s cell=%s pager=%s cellRect=%@ win=%@ "
+                  @"centerHit=%d tracking=%d dragging=%d decel=%d offset=%@",
+                  class_getName([host class]),
+                  diagCell ? class_getName([diagCell class]) : "nil",
+                  diagPager ? class_getName([diagPager class]) : "nil",
+                  NSStringFromCGRect(cellRect),
+                  NSStringFromCGRect(host.window.bounds),
+                  CGRectContainsPoint(cellRect, center) ? 1 : 0,
+                  scroll ? scroll.isTracking : -1,
+                  scroll ? scroll.isDragging : -1,
+                  scroll ? scroll.isDecelerating : -1,
+                  scroll ? NSStringFromCGPoint(scroll.contentOffset) : @"nil");
+        }
+        // 承载区全程全高；评论避让只改内部播放器，不补背景或等待消失回调。
+        if (!CGRectEqualToRect(current, target)) {
+            state.applying = YES;
+            host.frame = target;
+            state.applying = NO;
+        }
     }
 }
 
-// 取播放器原生背景色：优先走原生访问入口，缺入口时退回控制器属性。
-// 只认「已挂载且可见」的背景层，避免拿到还没落位的空壳。
-static UIColor *DYYYPlayerBackdropColor(UIViewController *controller) {
-    if (!controller) return nil;
-    UIView *backdrop = nil;
-    if ([controller respondsToSelector:NSSelectorFromString(@"getPlayerBackgroundView")]) {
-        backdrop = [controller performSelector:NSSelectorFromString(@"getPlayerBackgroundView")];
-    }
-    if (![backdrop isKindOfClass:[UIView class]] &&
-        [controller respondsToSelector:NSSelectorFromString(@"playerBackgroundView")]) {
-        backdrop = [controller performSelector:NSSelectorFromString(@"playerBackgroundView")];
-    }
-    if (![backdrop isKindOfClass:[UIView class]]) return nil;
-    if (!backdrop.superview || backdrop.hidden) return nil;
-    return backdrop.backgroundColor;
-}
-
-// 图文页排除：父链上有 RichContentContainerViewController 就不接管。
-static BOOL DYYYIsUnderRichContent(UIViewController *controller) {
-    static Class sRichClass;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ sRichClass = NSClassFromString(@"RichContentContainerViewController"); });
-    if (!sRichClass) return NO;
-    for (NSUInteger i = 0; controller && i < 12; i++, controller = controller.parentViewController) {
-        if ([controller isKindOfClass:sRichClass]) return YES;
-    }
-    return NO;
-}
-
-// 主入口：涂色或还原。color 为 nil 表示本条不需要延伸（关闭全屏/无背景色）。
-
+// 渲染布局完成后记录画面尺寸，供评论避让使用。
 + (void)finishPlayer:(UIView *)player {
     if (![NSThread isMainThread]) return;
     DYYYFullscreenPlayerState *state = [self state:player];
     UIViewController *owner = [self owner:player state:state];
     [self layoutPlayerContainer:owner.parentViewController];
+    BOOL recommended = [self usesRecommendedLayoutForController:owner];
     if (![self usesFullscreenLayoutForController:owner] || [self isImageContentController:owner]) return;
+    if (recommended && DYYYGetBool(@"DYYYEnableFullScreen") && DYYYGetBool(@"DYYYEnableCommentBlur") && [self hasCommentInWindow:player.window]) [self preparePlayer:player];
+    UIView *render = [self renderView:player];
+    if (DYYYGetBool(@"DYYYEnableFullScreen") && ![self hasCommentInWindow:player.window] &&
+        state.hasNormalWindowFrame && render.bounds.size.width > 0 && render.bounds.size.height > 0) {
+        state.normalRenderSize = render.bounds.size;
+    }
+}
++ (CGRect)contentRectForImageView:(UIView *)view state:(DYYYFullscreenPlayerState *)state {
+    UIImageView *image = state.imageContent;
+    if (!image || ![image isDescendantOfView:view]) {
+        NSMutableArray<UIView *> *queue = [view.subviews mutableCopy];
+        for (NSUInteger i = 0; i < queue.count && i < 64; i++) {
+            UIView *candidate = queue[i];
+            if (candidate.hidden || candidate.alpha < 0.01) continue;
+            if ([candidate isKindOfClass:[UIImageView class]] && ((UIImageView *)candidate).image &&
+                candidate.bounds.size.width > 0 && candidate.bounds.size.height > 0) {
+                image = (UIImageView *)candidate;
+                state.imageContent = image;
+                break;
+            }
+            if (queue.count < 64) [queue addObjectsFromArray:candidate.subviews];
+        }
+    }
+    if (!image || !image.image) return view.bounds;
+    CGRect content = image.bounds;
+    if (image.contentMode == UIViewContentModeScaleAspectFit) content = [DYYYFullscreenGeometry aspectFit:image.image.size inRect:content];
+    return CGRectIsNull(content) ? view.bounds : [image convertRect:content toView:view];
+}
++ (CGAffineTransform)targetForImageView:(UIView *)view native:(CGAffineTransform)native state:(DYYYFullscreenPlayerState *)state {
+    // 图文避让与视频避让同一语义：「评论避让视频」开启时，即使毛玻璃开着
+    // 也照常计算图文的评论避让变换（官方行为）；关闭维持上游二选一。
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || (DYYYGetBool(@"DYYYEnableCommentBlur") && !DYYYGetBool(@"DYYYCommentAvoidVideo")) || !view.window || !view.superview) {
+        return state.imageAdjusted && state.hasClosedImageTransform ? state.closedImageTransform : native;
+    }
+    UIViewController *owner = [DYYYUtils firstAvailableViewControllerFromView:view];
+    if (![self usesFullscreenLayoutForController:owner]) return native;
+    UIWindow *window = view.window;
+    UIView *cell = [self cellForPlayer:view owner:owner];
+    if (!cell || cell.window != window) return native;
+    CGRect viewport = CGRectIntersection([cell convertRect:cell.bounds toView:window], window.bounds);
+    CGRect panel = [self panelInWindow:window viewport:viewport];
+    if (CGRectIsNull(panel)) {
+        return ![self hasCommentInWindow:window] && state.imageAdjusted && state.hasClosedImageTransform ? state.closedImageTransform : native;
+    }
+    CGFloat top = MAX(CGRectGetMinY(viewport), CGRectGetMinY(window.bounds) + window.safeAreaInsets.top);
+    CGRect available = [DYYYFullscreenGeometry unoccludedViewport:viewport top:top panel:panel gap:0];
+    if (CGRectIsNull(available) || view.bounds.size.width <= 0 || view.bounds.size.height <= 0) return native;
+    CGRect local = [view.superview convertRect:available fromView:window];
+    return [DYYYFullscreenGeometry aspectFitTransformForBounds:view.bounds contentRect:[self contentRectForImageView:view state:state] center:view.center inRect:local];
+}
++ (CGAffineTransform)transformForImageView:(UIView *)view proposed:(CGAffineTransform)transform {
+    if (![NSThread isMainThread]) return transform;
+    DYYYFullscreenPlayerState *state = [self state:view];
+    if (state.applying) return transform;
+    [[self images] addObject:view];
+    // 保留毛玻璃模式的原有冻结行为，并恢复本协调器曾缩小的图片。
+    // 与 targetForImageView 同步：「评论避让视频」开启时不拦截，
+    // 否则会把刚算好的避让 transform 在这里旁路回去。
+    if (DYYYGetBool(@"DYYYEnableCommentBlur") && !DYYYGetBool(@"DYYYCommentAvoidVideo")) {
+        return state.imageAdjusted && state.hasClosedImageTransform ? state.closedImageTransform : view.transform;
+    }
+    state.nativeImageTransform = transform;
+    state.hasImageTransform = YES;
+    if (![self hasCommentInWindow:view.window]) {
+        state.closedImageTransform = transform;
+        state.hasClosedImageTransform = YES;
+    }
+    CGAffineTransform target = [self targetForImageView:view native:transform state:state];
+    state.imageAdjusted = !CGAffineTransformEqualToTransform(target, transform);
+    return target;
+}
++ (void)layoutImageView:(UIView *)view {
+    if (![NSThread isMainThread] || !view.window) return;
+    DYYYFullscreenPlayerState *state = [self state:view];
+    if (state.applying) return;
+    [[self images] addObject:view];
+    if (!state.hasImageTransform) {
+        state.nativeImageTransform = view.transform;
+        state.hasImageTransform = YES;
+        if (![self hasCommentInWindow:view.window]) {
+            state.closedImageTransform = view.transform;
+            state.hasClosedImageTransform = YES;
+        }
+    }
+    CGAffineTransform target = [self targetForImageView:view native:state.nativeImageTransform state:state];
+    if (!CGAffineTransformEqualToTransform(view.transform, target)) {
+        state.applying = YES;
+        view.transform = target;
+        state.applying = NO;
+    }
+    state.imageAdjusted = !CGAffineTransformEqualToTransform(target, state.nativeImageTransform);
 }
 + (void)commentController:(UIViewController *)controller visible:(BOOL)visible {
     if (![NSThread isMainThread]) {
@@ -1035,8 +1055,9 @@ static BOOL DYYYIsUnderRichContent(UIViewController *controller) {
     }
     UIView *view = controller.viewIfLoaded;
     CGRect rect = visible && view.window ? [view convertRect:view.bounds toView:view.window] : CGRectNull;
-    NSString *signature = [NSString stringWithFormat:@"%p/%@/%d/%d", view.window, NSStringFromCGRect(rect), visible,
-                           DYYYGetBool(@"DYYYEnableFullScreen"), DYYYGetBool(@"DYYYEnableCommentBlur")];
+    NSString *signature = [NSString stringWithFormat:@"%p/%@/%d/%d/%d/%d", view.window, NSStringFromCGRect(rect), visible,
+                           DYYYGetBool(@"DYYYEnableFullScreen"), DYYYGetBool(@"DYYYEnableCommentBlur"),
+                           DYYYGetBool(@"DYYYCommentAvoidVideo")];
     NSString *previous = objc_getAssociatedObject(controller, @selector(commentController:visible:));
     if ([signature isEqualToString:previous]) return;
     objc_setAssociatedObject(controller, @selector(commentController:visible:), signature, OBJC_ASSOCIATION_COPY_NONATOMIC);
@@ -1058,6 +1079,7 @@ static BOOL DYYYIsUnderRichContent(UIViewController *controller) {
     dispatch_async(dispatch_get_main_queue(), ^{
         scheduled = NO;
         for (UIView *player in [self players].allObjects) if (player.window) [player setNeedsLayout];
+        for (UIView *image in [self images].allObjects) if (image.window) [image setNeedsLayout];
     });
 }
 @end
