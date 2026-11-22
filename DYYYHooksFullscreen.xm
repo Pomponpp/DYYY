@@ -425,3 +425,55 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
     %orig;
 }
 %end
+
+
+#pragma mark - 诊断探针：谁把详情 cell 写成 843（#148，抓完即删）
+
+// 现象：详情页列表里同一个 cell 滑到屏幕中央时高度从 926 塌成 843，
+// 视觉上视频矮一截（错位）。诊断包只能看到快照，抓不到写入瞬间的来源。
+//
+// 本探针在 cell 的 setFrame: 里，只要高度落在 843 附近就打一条栈 +
+// 表高/父高/屏幕高等上下文，用来定位是哪个方法把高度写成 843。
+// 只诊断、不改值；受 DYYYDiagEntryEnabled 控制。
+
+static char kDYYYCell843CountKey;
+
+%hook AWEAwemeDetailTableViewCell
+
+- (void)setFrame:(CGRect)frame {
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        CGFloat h = CGRectGetHeight(frame);
+        // 843 是「满屏 926 − 底栏 83」，1pt 容差
+        if (fabs(h - 843.0) < 1.0) {
+            NSNumber *count = objc_getAssociatedObject(self, &kDYYYCell843CountKey);
+            NSInteger n = count.integerValue;
+            // 每个 cell 最多打 3 条，避免刷屏
+            if (n < 3) {
+                objc_setAssociatedObject(self, &kDYYYCell843CountKey, @(n + 1),
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                UITableView *table = nil;
+                for (UIView *v = self.superview; v; v = v.superview) {
+                    if ([v isKindOfClass:[UITableView class]]) { table = (UITableView *)v; break; }
+                }
+                CGFloat tableH = table ? CGRectGetHeight(table.bounds) : -1;
+                CGFloat superH = self.superview ? CGRectGetHeight(self.superview.bounds) : -1;
+                CGFloat winH = CGRectGetHeight(self.window.bounds);
+                NSArray<NSString *> *stack = [NSThread callStackSymbols];
+                NSMutableString *out = [NSMutableString stringWithFormat:
+                    @"[DYYY][cell843] #%ld h=%.1f y=%.1f 表高=%.1f 父高=%.1f 屏高=%.1f",
+                    (long)(n + 1), h, CGRectGetMinY(frame), tableH, superH, winH];
+                NSUInteger limit = MIN(stack.count, (NSUInteger)18);
+                for (NSUInteger i = 1; i < limit; i++) {
+                    NSRange r = [stack[i] rangeOfString:@"["];
+                    NSString *tail = r.location != NSNotFound ? [stack[i] substringFromIndex:r.location] : stack[i];
+                    [out appendFormat:@"\n    %@", tail];
+                }
+                NSLog(@"%@", out);
+                [DYYYDiagnostics appendRuntimeLogLine:out];
+            }
+        }
+    }
+    %orig;
+}
+
+%end
