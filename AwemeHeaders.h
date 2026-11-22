@@ -1,6 +1,7 @@
 #import <Photos/Photos.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
+#import "DYYYDiagnosticsCore.h"
 
 // 注：Linux 交叉编译时 @available 展开的 ___isOSVersionAtLeast 符号
 // 由 Makefile 的 -Wl,--defsym 在链接期提供（恒真语义，所有调用点均有
