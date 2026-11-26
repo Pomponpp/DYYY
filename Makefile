@@ -38,6 +38,7 @@ TWEAK_NAME = DYYY
 
 DYYY_FILES = DYYYConfigCache.m DYYYClassRegistry.m DYYYFullscreenCoordinator.m DYYYCommentBlurCoordinator.m DYYYFullscreenGeometry.m DYYY.xm DYYYHooksFullscreen.xm DYYYHooksTabBar.xm DYYYHooksComment.xm DYYYHooksProfile.xm DYYYHooksFeed.xm DYYYHooksMedia.xm DYYYHooksLive.xm DYYYHooksSettings.xm DYYYHooksGlobal.xm DYYYFloatClearButton.xm DYYYFloatSpeedButton.m DYYYSettings.xm DYYYABTestHook.xm DYYYLongPressPanel.xm DYYYSettingsHelper.m DYYYImagePickerDelegate.m DYYYBackupPickerDelegate.m DYYYSettingViewController.m DYYYBottomAlertView.m DYYYCustomInputView.m DYYYOptionsSelectionView.m DYYYIconOptionsDialogView.m DYYYAboutDialogView.m DYYYKeywordListView.m DYYYFilterSettingsView.m DYYYConfirmCloseView.m DYYYToast.m DYYYManager.m DYYYUtils.m CityManager.m AWMSafeDispatchTimer.m
 DYYY_FILES += DYYYDownloadScheduler.m
+DYYY_FILES += DYYYDetailRowPolicy.c
 DYYY_FILES += DYYYCommentPlaybackCoordinator.m DYYYCommentPlaybackHooks.xm
 DYYY_FILES += DYYYFloatingButtonCoordinator.m
 DYYY_FILES += DYYYLoginBypassManager.m DYYYLoginRepairHooks.m DYYYPrivacyRecordUploadGuard.m DYYYHideMessageAndMinePageHooks.m DYYYExactInteractionCountHooks.m DYYYRuntimeHookInstaller.m DYYYFeatureUI.m DYYYLoginBypassHooks.xm DYYYPrivacyHooks.xm DYYYFeatureHooks.xm

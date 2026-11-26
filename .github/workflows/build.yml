@@ -135,6 +135,15 @@ jobs:
             -o "$RUNNER_TEMP/dyyy-geometry-tests"
           "$RUNNER_TEMP/dyyy-geometry-tests"
 
+      # 行高策略回归：纯 C，复现并锁死 41.2 拔河根因（详情页行高必须透传原生）。
+      - name: Detail row policy tests
+        run: |
+          set -o pipefail
+          cc -std=c11 -Wall -Wextra \
+            tests/DetailRowPolicyTests.c DYYYDetailRowPolicy.c -lm \
+            -o "$RUNNER_TEMP/dyyy-row-policy-tests"
+          "$RUNNER_TEMP/dyyy-row-policy-tests"
+
       - name: Build dylib only (arm64)
         run: |
           rm -rf packages && mkdir -p packages

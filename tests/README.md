@@ -151,3 +151,24 @@ clang -fobjc-arc -framework Foundation -framework CoreGraphics -I . DYYYFullscre
 原生详情列表按控制器结构统一处理基础底部边距、分页缓存及固定底栏，覆盖创作者主页、观看历史及共享该结构的入口。关闭评论毛玻璃时，视频与图片使用状态栏下沿到实际评论面板顶部的可用区域；图片按真实图片内容范围等比缩放，并缓存关闭态以恢复布局。
 
 `make package SCHEME=roothide PACKAGE_VERSION=2.2-9-24+sync.10` 和几何测试通过；几何测试补充整图、带留白和不居中图片的边界。XR 用户确认观看历史视频铺满、底部输入栏透明和当前图片效果可以；图片自动验证中的“实际尺寸与理论最大尺寸误差小于 0.6 pt”断言未通过，因此没有把自动开关评论两轮记为通过。一次自动翻页也捕到了未对齐的中间状态，未计入通过记录。失败日志保留在本机 `/private/tmp/dyyy-image-final/report.json` 与 `/private/tmp/dyyy-xr-fullscreen-debug/detail-regression-history/report.json`。
+
+
+## 2026-11-26 详情页行高策略回归（41.2 错位与进度条跳动根因）
+
+41.2.0 真机诊断（诊断包 fc6c27）显示：详情页表已撑高 926，但行高混用
+843/926，cell 几何逐帧震荡（日志同秒 y=594↔-249），下游互动层/文案/
+进度条继承震荡，表现为上下错位与进度条拖动跳动。根因是 41.1"行高交还
+原生＋容器补偿"重构遗留的回答路径仍答 926，与抖音内部 843 写入拔河。
+
+修复：行高决策抽为纯 C 单点 `DYYYDetailRowPolicy`，一律透传原生值；
+协调器 `detailRowHeight:` 只调用该函数。几何内核与容器补偿链未改动。
+
+本地命令（宿主机 gcc/clang 均可，无框架依赖）：
+
+```sh
+cc -std=c11 -Wall -Wextra tests/DetailRowPolicyTests.c DYYYDetailRowPolicy.c -lm -o /tmp/dyyy-row-policy-tests
+/tmp/dyyy-row-policy-tests
+```
+
+测试覆盖：拔河场景（表撑高/原高已记录）、首次建行早于撑高、pinned 目标、
+开关关闭、特殊短行、非法输入、横屏等高。CI 在几何回归后同步执行。

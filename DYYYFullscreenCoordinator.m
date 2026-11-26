@@ -19,6 +19,7 @@
 
 #import "DYYYFullscreenCoordinator.h"
 #import "DYYYFullscreenGeometry.h"
+#import "DYYYDetailRowPolicy.h"
 #import "DYYYUtils.h"
 #import "DYYYFloatingButtonCoordinator.h"
 #import "AwemeHeaders.h"
@@ -241,7 +242,7 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
 }
 
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight {
-    // 对齐已验证实现：表已撑高时把整页行高答成满视口；特殊行与未就绪尺寸透传。
+    // 41.2 统一：行高一律透传抖音原生值，全屏视觉由容器撑满补偿负责。
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread || !table) return nativeHeight;
     NSNumber *original = objc_getAssociatedObject(table, @selector(prepareDetailTableNew:));
     if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
@@ -254,32 +255,17 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
         }
     }
     NSNumber *pinned = objc_getAssociatedObject(table, @selector(alignExistingCellsIfNeeded:target:));
-    CGFloat tableH = CGRectGetHeight(table.bounds);
-    CGFloat target = pinned ? MAX(pinned.doubleValue, tableH) : tableH;
-
-    // 首次建行早于撑高：那一刻 original/pinned 都还没有，表也还是 843。
-    // 详情页全屏下 cell 高度就等于窗口高度，直接用它，避免行高被缓存成 843。
-    if (!original) {
-        if ([self isDetailTable:table] && nativeHeight > 0.0) {
-            CGFloat windowH = table.window ? CGRectGetHeight(table.window.bounds)
-                                           : CGRectGetHeight([UIScreen mainScreen].bounds);
-            if (windowH > nativeHeight + kDYYYDetailHeightTol
-                && nativeHeight >= windowH * 0.5) {
-                return windowH;
-            }
-        }
-        return nativeHeight;
-    }
-
-    if (!isfinite(nativeHeight) || !isfinite(target)
-        || nativeHeight <= 0.0 || target <= original.doubleValue + kDYYYDetailHeightTol) {
-        return nativeHeight;
-    }
-    if (fabs(nativeHeight - original.doubleValue) > kDYYYDetailHeightTol &&
-        fabs(nativeHeight - target) > kDYYYDetailHeightTol) {
-        return nativeHeight;
-    }
-    return target;
+    CGFloat windowH = table.window ? CGRectGetHeight(table.window.bounds)
+                                   : CGRectGetHeight([UIScreen mainScreen].bounds);
+    // 41.2 统一：行高只由策略函数回答（当前一律透传原生 843），全屏视觉
+    // 交给容器撑满补偿。消除遗留 926 回答与抖音内部 843 写入的逐帧拔河——
+    // 该拔河是详情页上下错位与进度条拖动跳动的共同根因。
+    // 策略单点见 DYYYDetailRowPolicy，回归测试 tests/DetailRowPolicyTests.c。
+    return DYYYDetailRowHeightAnswer(YES, [self isDetailTable:table], nativeHeight,
+                                     CGRectGetHeight(table.bounds),
+                                     original ? original.doubleValue : NAN,
+                                     pinned ? pinned.doubleValue : NAN,
+                                     windowH);
 }
 
 // 这张表是否属于详情页。

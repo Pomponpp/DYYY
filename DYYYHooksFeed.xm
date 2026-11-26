@@ -641,4 +641,13 @@ static BOOL DYYYIsInHomeFeedContext(UIView *view) {
     }
     %orig;
 }
+
+// 41.2.0：AWEFeedViewCell 的模型入口改为 configWithModel:，
+// 旧 setModel: 不再被调用（保留兼容旧版）。清屏状态重挂两个入口都覆盖。
+- (void)configWithModel:(id)model {
+    if (hideButton && hideButton.isElementsHidden) {
+        [hideButton hideUIElements];
+    }
+    %orig;
+}
 %end
