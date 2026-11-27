@@ -256,16 +256,18 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     if (!delegate) return nil;
     // ① 容器自己登记的详情代理（通常就是 AWEAwemeDetailTableViewController），
     //    它直接给表，最准也最早——首建行时可见 cell 还是空的。
-    if ([delegate respondsToSelector:@selector(detailDelegate)]) {
-        id detailDelegate = [delegate detailDelegate];
-        if ([detailDelegate respondsToSelector:@selector(tableView)]) {
-            id provided = [detailDelegate tableView];
+    //    强类型再用，避免在 id 上调用未声明 selector 触发编译错误。
+    AWEDetailFeedScrollDelegateContainer *container = (AWEDetailFeedScrollDelegateContainer *)delegate;
+    if ([container respondsToSelector:@selector(detailDelegate)]) {
+        id detail = [container detailDelegate];
+        if ([detail respondsToSelector:@selector(tableView)]) {
+            id provided = [(id)detail tableView];
             if ([provided isKindOfClass:[UITableView class]]) return (UITableView *)provided;
         }
     }
     // ② 退路：可见 cell 上溯拿表。
-    if (![delegate respondsToSelector:@selector(visibleDetailCells)]) return nil;
-    id cells = [delegate visibleDetailCells];
+    if (![container respondsToSelector:@selector(visibleDetailCells)]) return nil;
+    id cells = [container visibleDetailCells];
     if (![cells isKindOfClass:[NSArray class]]) return nil;
     for (id cell in (NSArray *)cells) {
         if (![cell isKindOfClass:[UIView class]]) continue;

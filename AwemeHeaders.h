@@ -1384,6 +1384,9 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)adjustTableViewHeightForTargetIndex:(long long)index;
 - (NSArray *)visibleDetailCells;
 - (NSUInteger)currentVisibleCellIndex;
+// 容器登记的详情代理（通常就是 AWEAwemeDetailTableViewController）。
+- (id)detailDelegate;
+- (void)setDetailDelegate:(id)delegate;
 @end
 
 // 41.1 视图树实锤：评论列表区不透明底色来源（rgba(0.086,0.086,0.086,1.0)），
