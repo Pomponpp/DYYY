@@ -118,11 +118,24 @@ static BOOL DYYYDiagWriteString(DYYYDiagExportSink *sink, NSString *relativePath
 
 static BOOL DYYYDiagWriteJSON(DYYYDiagExportSink *sink, NSString *relativePath, id object, BOOL critical) {
     if (!object) return NO;
-    NSData *data = [NSJSONSerialization dataWithJSONObject:object
-                                                   options:NSJSONWritingPrettyPrinted
-                                                     error:nil];
+    // 不加 NSJSONWritingPrettyPrinted：诊断包是给机器读的，格式化只会让体积翻倍、
+    // 序列化变慢。真要看内容，json.tool 之类的工具随时能格式化。
+    // 外层 @try 只能挡住 ObjC 层异常；NaN/Inf 那种在 NSJSONSerialization 内部
+    // 是 C++ 抛出的，会直接 terminate —— 所以入口侧必须先用有限值保护过滤干净。
+    NSData *data = nil;
+    @try {
+        data = [NSJSONSerialization dataWithJSONObject:object options:0 error:nil];
+    } @catch (NSException *exception) {
+        DYYYDiagRecordError(sink, relativePath, @"json-serialize",
+                            DYYYDiagMakeExportError(21, exception.reason ?: @"JSON 序列化异常", nil),
+                            critical);
+    }
     if (!data) {
+        // 序列化失败不静默留空：写一份占位说明，保证包结构与后续消费方能解析。
         if (critical) sink.criticalFailed = YES;
+        NSString *placeholder = @"{\"error\":\"serialize_failed\"}";
+        DYYYDiagWriteData(sink, relativePath,
+                          [placeholder dataUsingEncoding:NSUTF8StringEncoding], NO);
         return NO;
     }
     return DYYYDiagWriteData(sink, relativePath, data, critical);
@@ -175,8 +188,26 @@ static void DYYYDiagWritePageFiles(DYYYDiagExportSink *sink,
     DYYYDiagWriteJSON(sink, @"page/selected-view.json", context.selectedViewJSON ?: @{}, NO);
     DYYYDiagWriteString(sink, @"page/view-controllers.txt", context.viewControllersText, NO);
     DYYYDiagWriteJSON(sink, @"page/layers.json", context.layersJSON ?: @[], NO);
+    // 只导"选中视图链 + 当前页控制器"相关的类头文件。
+    // 之前是整页所有类（实测 139 个文件 1.9MB），绝大多数与当次排查无关，
+    // 纯粹撑大包体、拖慢导出。真要查某个类的方法签名，target-methods.txt 里就有。
     if (progress) progress(@"导出本页类头文件...");
-    DYYYDiagWritePageClasses(sink, context.pageClassNames ?: @[]);
+    NSMutableArray<NSString *> *focused = [NSMutableArray array];
+    NSArray<NSString *> *allNames = context.pageClassNames ?: @[];
+    NSString *hitClass = [context.selectedViewJSON[@"hitView"] isKindOfClass:[NSDictionary class]]
+                             ? context.selectedViewJSON[@"hitView"][@"class"] : nil;
+    NSString *vcClass = [context.selectedViewJSON[@"nearestViewController"] isKindOfClass:[NSDictionary class]]
+                            ? context.selectedViewJSON[@"nearestViewController"][@"class"] : nil;
+    for (NSString *name in allNames) {
+        if ([name isEqualToString:hitClass] || [name isEqualToString:vcClass]) [focused addObject:name];
+    }
+    // 选中链上的类一个都没匹配到时，退回导出前 20 个，保证至少有东西可看。
+    if (focused.count == 0) {
+        NSArray<NSString *> *sorted = [allNames sortedArrayUsingSelector:@selector(compare:)];
+        NSUInteger limit = MIN(sorted.count, (NSUInteger)20);
+        [focused addObjectsFromArray:[sorted subarrayWithRange:NSMakeRange(0, limit)]];
+    }
+    DYYYDiagWritePageClasses(sink, focused);
 }
 
 #pragma mark - 崩溃报告

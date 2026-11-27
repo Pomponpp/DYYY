@@ -523,7 +523,6 @@ TIMXLongConnectionClient           37 方法
 
 ### 开发工具
 
-`tools/aweme_classdump.js` —— Mach-O 解析器。可从脱壳二进制反查
-「selector → 宿主类」与「类 → 全部方法/属性」。
-用法与实现要点（含 relative method list 必须二次解引用这个坑）见 `tools/README.md`。
+`tools/` —— 开发辅助脚本目录（不参与编译）。Mach-O 解析器按需现写、不随仓库分发，
+需要「selector → 宿主类」「类 → 全部方法/属性」时照 `tools/README.md` 的实现要点起一个。
 

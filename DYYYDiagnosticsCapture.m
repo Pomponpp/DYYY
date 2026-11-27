@@ -34,8 +34,15 @@ static NSString *DYYYDiagObjectDesc(id object) {
     }
 }
 
-static NSNumber *DYYYDiagNum(double value) {
-    return @(value);
+#pragma mark - 有限值保护
+
+// JSON 序列化遇到 NaN / Inf 会直接抛异常，而 NSJSONSerialization 内部是 C++ 实现，
+// 抛出即 std::terminate → abort()，外层 @try 挡不住。真机上就发生在导出诊断包时。
+// 所有进入快照字典的浮点数一律先过这里：非有限值降级成字符串，
+// 既保证 JSON 可写，也保留"当时到底是什么值"这条信息。
+static id DYYYDiagFinite(double value) {
+    if (isfinite(value)) return @(value);
+    return isnan(value) ? @"nan" : (value > 0 ? @"inf" : @"-inf");
 }
 
 static NSString *DYYYDiagStringFromColor(UIColor *color) {
@@ -50,28 +57,28 @@ static NSString *DYYYDiagStringFromColor(UIColor *color) {
 }
 
 static NSDictionary *DYYYDiagRectDict(CGRect rect) {
-    return @{@"x": @(rect.origin.x), @"y": @(rect.origin.y),
-             @"w": @(rect.size.width), @"h": @(rect.size.height)};
+    return @{@"x": DYYYDiagFinite(rect.origin.x), @"y": DYYYDiagFinite(rect.origin.y),
+             @"w": DYYYDiagFinite(rect.size.width), @"h": DYYYDiagFinite(rect.size.height)};
 }
 
 static NSDictionary *DYYYDiagPointDict(CGPoint point) {
-    return @{@"x": @(point.x), @"y": @(point.y)};
+    return @{@"x": DYYYDiagFinite(point.x), @"y": DYYYDiagFinite(point.y)};
 }
 
 static NSDictionary *DYYYDiagSizeDict(CGSize size) {
-    return @{@"w": @(size.width), @"h": @(size.height)};
+    return @{@"w": DYYYDiagFinite(size.width), @"h": DYYYDiagFinite(size.height)};
 }
 
 static NSDictionary *DYYYDiagAffineDict(CGAffineTransform t) {
-    return @{@"a": @(t.a), @"b": @(t.b), @"c": @(t.c),
-             @"d": @(t.d), @"tx": @(t.tx), @"ty": @(t.ty)};
+    return @{@"a": DYYYDiagFinite(t.a), @"b": DYYYDiagFinite(t.b), @"c": DYYYDiagFinite(t.c),
+             @"d": DYYYDiagFinite(t.d), @"tx": DYYYDiagFinite(t.tx), @"ty": DYYYDiagFinite(t.ty)};
 }
 
 static NSDictionary *DYYYDiagTransform3DDict(CATransform3D t) {
-    return @{@"m11": @(t.m11), @"m12": @(t.m12), @"m13": @(t.m13), @"m14": @(t.m14),
-             @"m21": @(t.m21), @"m22": @(t.m22), @"m23": @(t.m23), @"m24": @(t.m24),
-             @"m31": @(t.m31), @"m32": @(t.m32), @"m33": @(t.m33), @"m34": @(t.m34),
-             @"m41": @(t.m41), @"m42": @(t.m42), @"m43": @(t.m43), @"m44": @(t.m44)};
+    return @{@"m11": DYYYDiagFinite(t.m11), @"m12": DYYYDiagFinite(t.m12), @"m13": DYYYDiagFinite(t.m13), @"m14": DYYYDiagFinite(t.m14),
+             @"m21": DYYYDiagFinite(t.m21), @"m22": DYYYDiagFinite(t.m22), @"m23": DYYYDiagFinite(t.m23), @"m24": DYYYDiagFinite(t.m24),
+             @"m31": DYYYDiagFinite(t.m31), @"m32": DYYYDiagFinite(t.m32), @"m33": DYYYDiagFinite(t.m33), @"m34": DYYYDiagFinite(t.m34),
+             @"m41": DYYYDiagFinite(t.m41), @"m42": DYYYDiagFinite(t.m42), @"m43": DYYYDiagFinite(t.m43), @"m44": DYYYDiagFinite(t.m44)};
 }
 
 #pragma mark - 窗口与控制器工具
@@ -113,13 +120,29 @@ UIWindow *DYYYDiagTargetWindow(void) {
     return windows.firstObject;
 }
 
+// 沿 responder 链找最近的 VC。
+// 同一个父视图下的所有子视图走的是同一条链尾：跳过的层数完全一样，结果必然相同。
+// 视图树有几百个节点时，逐节点重走 80 层是纯浪费（330 节点 × 80 ≈ 2.6 万次），
+// 这里按"起点视图的 superview"做一次浅缓存，兄弟节点直接复用上一次的答案。
 static UIViewController *DYYYDiagViewControllerForView(UIView *view) {
+    if (!view) return nil;
+    static __unsafe_unretained UIView *sCachedOrigin = nil;
+    static UIViewController *sCachedVC = nil;
+    UIView *origin = view.superview;
+    if (origin && origin == sCachedOrigin) return sCachedVC;
+
+    UIViewController *found = nil;
     UIResponder *responder = view;
     for (NSUInteger i = 0; responder && i < 80; i++) {
         responder = responder.nextResponder;
-        if ([responder isKindOfClass:[UIViewController class]]) return (UIViewController *)responder;
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            found = (UIViewController *)responder;
+            break;
+        }
     }
-    return nil;
+    sCachedOrigin = origin;
+    sCachedVC = found;
+    return found;
 }
 
 static UIViewController *DYYYDiagTopViewControllerFrom(UIViewController *vc) {
@@ -155,11 +178,11 @@ static NSDictionary *DYYYDiagLayerInfo(CALayer *layer) {
         @"bounds": DYYYDiagRectDict(layer.bounds),
         @"position": DYYYDiagPointDict(layer.position),
         @"anchorPoint": DYYYDiagPointDict(layer.anchorPoint),
-        @"zPosition": DYYYDiagNum(layer.zPosition),
-        @"opacity": DYYYDiagNum(layer.opacity),
+        @"zPosition": DYYYDiagFinite(layer.zPosition),
+        @"opacity": DYYYDiagFinite(layer.opacity),
         @"hidden": @(layer.hidden),
         @"masksToBounds": @(layer.masksToBounds),
-        @"cornerRadius": DYYYDiagNum(layer.cornerRadius),
+        @"cornerRadius": DYYYDiagFinite(layer.cornerRadius),
         @"sublayerCount": @(layer.sublayers.count),
         @"transform": DYYYDiagTransform3DDict(layer.transform),
         @"mask": layer.mask ? @{
@@ -248,7 +271,7 @@ static NSMutableDictionary *DYYYDiagBaseViewInfo(UIView *view, NSUInteger depth)
         @"frame": DYYYDiagRectDict(view.frame),
         @"bounds": DYYYDiagRectDict(view.bounds),
         @"center": DYYYDiagPointDict(view.center),
-        @"alpha": DYYYDiagNum(view.alpha),
+        @"alpha": DYYYDiagFinite(view.alpha),
         @"hidden": @(view.hidden),
         @"opaque": @(view.opaque),
         @"clipsToBounds": @(view.clipsToBounds),
@@ -287,12 +310,16 @@ static NSMutableDictionary *DYYYDiagBaseViewInfo(UIView *view, NSUInteger depth)
 
     // 约束列表：只在这个 view 自己有约束、或父视图约束涉及它时才展开。
     // 上限 12 条，超出只记总数——避免整棵树的约束把诊断包撑爆。
+    // 用独立 autoreleasepool 包住：约束字符串是临时对象，几百个节点累积会明显抬内存峰值。
     {
         NSUInteger total = 0;
-        NSArray<NSString *> *texts = DYYYDiagConstraintsForView(view, 12, &total);
-        if (total > 0) {
-            info[@"constraintCount"] = @(total);
-            info[@"constraints"] = texts;
+        __block NSArray<NSString *> *texts = nil;
+        @autoreleasepool {
+            texts = DYYYDiagConstraintsForView(view, 12, &total);
+            if (total > 0) {
+                info[@"constraintCount"] = @(total);
+                info[@"constraints"] = texts;
+            }
         }
     }
 
@@ -340,9 +367,9 @@ static NSMutableDictionary *DYYYDiagBaseViewInfo(UIView *view, NSUInteger depth)
             @"contentSize": DYYYDiagSizeDict(scroll.contentSize),
             @"contentInset": NSStringFromUIEdgeInsets(scroll.contentInset),
             @"adjustedContentInset": NSStringFromUIEdgeInsets(scroll.adjustedContentInset),
-            @"zoomScale": DYYYDiagNum(scroll.zoomScale),
-            @"minimumZoomScale": DYYYDiagNum(scroll.minimumZoomScale),
-            @"maximumZoomScale": DYYYDiagNum(scroll.maximumZoomScale),
+            @"zoomScale": DYYYDiagFinite(scroll.zoomScale),
+            @"minimumZoomScale": DYYYDiagFinite(scroll.minimumZoomScale),
+            @"maximumZoomScale": DYYYDiagFinite(scroll.maximumZoomScale),
             @"pagingEnabled": @(scroll.pagingEnabled),
             @"scrollEnabled": @(scroll.scrollEnabled),
             @"dragging": @(scroll.dragging),
@@ -356,7 +383,30 @@ static NSMutableDictionary *DYYYDiagBaseViewInfo(UIView *view, NSUInteger depth)
     return info;
 }
 
-static NSDictionary *DYYYDiagViewTreeJSON(UIView *view, NSUInteger depth, NSMutableArray *layers) {
+// 视图树遍历的硬上限。
+// 之前递归没有任何深度/数量限制：抖音某些页面（直播间、商城、长列表）视图上千个、
+// 层级几十层，递归会把栈撑爆，或让 3MB 级 JSON 涨到几十 MB 被系统杀掉——
+// 表现出来就是"偶发闪退"。超限时不报错，写一条 truncated 说明继续导出其余部分。
+static const NSUInteger kDYYYDiagMaxTreeDepth = 60;
+static const NSUInteger kDYYYDiagMaxTreeNodes = 5000;
+
+// 单次采集的节点计数，归采集入口持有，避免全局可变状态。
+typedef struct {
+    NSUInteger count;
+    BOOL hitLimit;
+} DYYYDiagTreeBudget;
+
+static NSDictionary *DYYYDiagViewTreeJSON(UIView *view, NSUInteger depth, NSMutableArray *layers,
+                                          DYYYDiagTreeBudget *budget) {
+    if (depth >= kDYYYDiagMaxTreeDepth || budget->count >= kDYYYDiagMaxTreeNodes) {
+        budget->hitLimit = YES;
+        return @{@"truncated": @YES,
+                 @"reason": depth >= kDYYYDiagMaxTreeDepth ? @"depth" : @"node-limit",
+                 @"class": DYYYDiagClassName(view),
+                 @"depth": @(depth)};
+    }
+    budget->count++;
+
     NSMutableDictionary *info = DYYYDiagBaseViewInfo(view, depth);
     [layers addObject:@{
         @"viewClass": info[@"class"],
@@ -366,13 +416,25 @@ static NSDictionary *DYYYDiagViewTreeJSON(UIView *view, NSUInteger depth, NSMuta
     }];
     NSMutableArray *children = [NSMutableArray arrayWithCapacity:view.subviews.count];
     for (UIView *subview in view.subviews) {
-        [children addObject:DYYYDiagViewTreeJSON(subview, depth + 1, layers)];
+        @autoreleasepool {
+            [children addObject:DYYYDiagViewTreeJSON(subview, depth + 1, layers, budget)];
+        }
     }
     info[@"children"] = children;
     return info;
 }
 
-static void DYYYDiagAppendViewTreeText(UIView *view, NSUInteger depth, NSMutableString *out) {
+static void DYYYDiagAppendViewTreeText(UIView *view, NSUInteger depth, NSMutableString *out,
+                                       DYYYDiagTreeBudget *budget) {
+    if (depth >= kDYYYDiagMaxTreeDepth || budget->count >= kDYYYDiagMaxTreeNodes) {
+        budget->hitLimit = YES;
+        [out appendFormat:@"(truncated: %@ depth=%lu)\n",
+         depth >= kDYYYDiagMaxTreeDepth ? @"depth" : @"node-limit",
+         (unsigned long)depth];
+        return;
+    }
+    budget->count++;
+
     NSMutableString *indent = [NSMutableString string];
     for (NSUInteger i = 0; i < depth; i++) [indent appendString:@"  "];
     UIViewController *vc = DYYYDiagViewControllerForView(view);
@@ -395,7 +457,7 @@ static void DYYYDiagAppendViewTreeText(UIView *view, NSUInteger depth, NSMutable
      view.safeAreaInsets.bottom,
      view.translatesAutoresizingMaskIntoConstraints ? 1 : 0,
      (unsigned long)cTotal];
-    for (UIView *subview in view.subviews) DYYYDiagAppendViewTreeText(subview, depth + 1, out);
+    for (UIView *subview in view.subviews) DYYYDiagAppendViewTreeText(subview, depth + 1, out, budget);
 }
 
 static NSDictionary *DYYYDiagWindowJSON(UIWindow *window) {
@@ -404,9 +466,9 @@ static NSDictionary *DYYYDiagWindowJSON(UIWindow *window) {
         @"address": DYYYDiagStringFromPointer((__bridge const void *)window),
         @"frame": DYYYDiagRectDict(window.frame),
         @"bounds": DYYYDiagRectDict(window.bounds),
-        @"windowLevel": DYYYDiagNum(window.windowLevel),
+        @"windowLevel": DYYYDiagFinite(window.windowLevel),
         @"hidden": @(window.hidden),
-        @"alpha": DYYYDiagNum(window.alpha),
+        @"alpha": DYYYDiagFinite(window.alpha),
         @"keyWindow": @(window.isKeyWindow),
         @"rootViewController": window.rootViewController ? @{
             @"class": DYYYDiagClassName(window.rootViewController),
@@ -546,11 +608,16 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
     NSHashTable *seenVCs = [NSHashTable weakObjectsHashTable];
     NSMutableSet<NSString *> *pageClasses = [NSMutableSet set];
     NSHashTable *seenClassVCs = [NSHashTable weakObjectsHashTable];
+    BOOL treeTruncated = NO;
 
     for (UIWindow *window in windows) {
         [windowsJSON addObject:DYYYDiagWindowJSON(window)];
-        [treeJSON addObject:DYYYDiagViewTreeJSON(window, 0, layersJSON)];
-        DYYYDiagAppendViewTreeText(window, 0, treeText);
+        // JSON 与文本树各自独立预算：两者遍历路径不同，不共享计数才能各自完整。
+        DYYYDiagTreeBudget jsonBudget = {0, NO};
+        DYYYDiagTreeBudget textBudget = {0, NO};
+        [treeJSON addObject:DYYYDiagViewTreeJSON(window, 0, layersJSON, &jsonBudget)];
+        DYYYDiagAppendViewTreeText(window, 0, treeText, &textBudget);
+        if (jsonBudget.hitLimit || textBudget.hitLimit) treeTruncated = YES;
         DYYYDiagCollectPageClassesFromView(window, pageClasses);
         DYYYDiagCollectPageClassesFromVC(window.rootViewController, pageClasses, seenClassVCs);
         if (window.rootViewController) {
@@ -581,7 +648,14 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
                          (unsigned long)windows.count,
                          (unsigned long)selectedView.subviews.count];
 
-    context.metadata = DYYYDiagMetadata(targetWindow, point);
+    NSMutableDictionary *metadata = [DYYYDiagMetadata(targetWindow, point) mutableCopy];
+    if (treeTruncated) {
+        // 快照被上限截断时明确标注，避免把"不完整"误读成"页面就这么大"。
+        metadata[@"treeTruncated"] = @YES;
+        metadata[@"treeLimitDepth"] = @(kDYYYDiagMaxTreeDepth);
+        metadata[@"treeLimitNodes"] = @(kDYYYDiagMaxTreeNodes);
+    }
+    context.metadata = metadata;
     context.windowsJSON = windowsJSON;
     context.viewTreeJSON = treeJSON;
     context.viewTreeText = treeText;

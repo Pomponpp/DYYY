@@ -4,61 +4,32 @@
 
 ---
 
-## aweme_classdump.js
+## 静态解析 AwemeCore 二进制
 
-从脱壳的 `AwemeCore` 二进制里提取 ObjC 类信息，解决「某个方法属于哪个类」的定位问题。
+抖音私有 API 的类名和 selector 每版都在变。静态扫字符串只能确认「名字存在」，
+**无法确认它属于哪个类**——不知道宿主类就写不了 `%hook`。
 
-### 为什么需要它
+解析 Mach-O 的 `__objc_classlist` / `class_ro_t` / `method_list_t`，
+建双向索引：类名 → 全部方法+属性，selector → 宿主类列表。
 
-抖音私有 API 的类名和 selector 每版都在变。静态扫字符串只能确认「名字存在」，**无法确认它属于哪个类**。
+**本目录不内置解析器**：分析用的脚本按需现写，不随仓库分发。
+需要时按下面「实现要点」自己起一个（Python 或 Node 都行），
+或者直接问 AI 助手要（当前分析用的是 Python 版，放在仓库外的分析目录里）。
 
-比如 41.1 里已知存在这些 selector：
-```
-setTargetBrightness:
-adjustScreenBrightnessToTargetBrightness
-getHDRBrightnessThreshold
-```
-但不知道宿主类是谁，就没法写 `%hook`。
+### 需要建立的能力
 
-本工具解析 Mach-O 的 `__objc_classlist` / `class_ro_t` / `method_list_t`，建立双向索引：
-- 类名 → 全部方法 + 属性
-- selector → 宿主类列表
-
-### 用法
-
-```bash
-# 列出某个类的全部方法和属性
-node aweme_classdump.js /path/to/AwemeCore --class AWEVideoModel
-
-# 只看名字里带 water 的成员
-node aweme_classdump.js /path/to/AwemeCore --class AWEVideoModel --match water
-
-# 反查 selector 的宿主类
-node aweme_classdump.js /path/to/AwemeCore --sel setTargetBrightness:
-
-# 按关键字搜类名
-node aweme_classdump.js /path/to/AwemeCore --grep Brightness
-```
-
-首次运行会建索引（约 10-30 秒，13.6 万个类）。
-
-### 实际战果（41.1.0）
-
-用它定位到：
-
-| 需求 | 定位结果 |
+| 查询 | 用途 |
 |---|---|
-| HDR 亮度调节 | `AWEVideoPlayerScreenBrightnessManager`（23 个方法） |
-| HDR 亮度阈值 | `AWEBDSimPlayerBizConfig.getHDRBrightnessThreshold` |
-| 无水印字段 | `AWEVideoModel.endWatermarkDownloadURL` / `captionWatermarkDownloadURL` |
-| 图片无水印 | `AWEImageAlbumImageModel.watermarkFreeUrlList` |
-| 14 种封面 | `AWEVideoModel.originCover` / `universalCoverUltimate` 等 |
+| 类名 → 方法 + 属性 + 继承链 | 写 `%hook` 前确认有哪些入口 |
+| selector → 宿主类列表 | 反查某个 API 在哪个类上 |
+| 关键字搜类名 | 版本改了名之后找继任类 |
+| 类是否存在 | 判断旧 hook 是否已失效 |
 
 ---
 
 ## 实现要点（改代码前必读）
 
-这几个坑是踩过的，改错了会得到乱码或空结果：
+这几个坑是踩过的，改错了会得到乱码或空结果。
 
 ### 1. `vmaddr == fileoff`
 
@@ -104,18 +75,33 @@ struct method_t {
 
 **关键**：`nameOffset` 指向的是 `__objc_selrefs` 里的**槽位**，不是字符串本身。
 
-```js
-const selRefAddr = mAddr + nameOffset;
-const strAddr = readU64(selRefAddr);   // ← 这里才拿到字符串地址
-const sel = readStr(strAddr);
+```python
+sel_ref_addr = m_addr + name_offset
+str_addr = read_u64(sel_ref_addr)   # ← 这里才拿到字符串地址
+sel = read_str(str_addr)
 ```
 
-**漏掉这一步会得到一堆乱码**（这次就是这么踩的）。
+**漏掉这一步会得到一堆乱码。**
+
+### 5. 类型编码 `typesOffset` 不经过 selrefs
+
+和 `nameOffset` 不同，`typesOffset` 直接指向 `__objc_methtype` 里的字符串：
+
+```python
+types = read_str(m_addr + 4 + types_offset)
+```
+
+### 6. 只在 `__objc_classlist` 里找类会漏
+
+- **分类（category）方法**在 `__objc_catlist`，不在类的 method_list 里
+- **Swift 类**以 mangled 名（`_TtC<模块长度><模块><类长度><类>`）出现，运行时用带点号的名字（`Module.Class`）查不到
+- **类方法**在 metaclass 里，`class_ro_t.baseMethods` 只有实例方法
 
 ---
 
-## 注意
+## 已知限制
 
 - 需要**已脱壳**的二进制。App Store 加壳版解不出类信息。
-- 只能读 ObjC 类。纯 Swift 类（无 `@objc` 暴露）不在 `__objc_classlist` 里。
-- Swift 类如果带 `@objc` 方法，会以 mangled 名（`_TtC...`）出现在 classlist 里。
+- 共享缓存里的父类（如 `NSObject`、UIKit 类）`superclass` 指针指向镜像外，
+  解析时会读到 0 或无效地址，需要单独判断。
+- 纯 Swift 类（无 `@objc` 暴露）不在 `__objc_classlist` 里。

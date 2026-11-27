@@ -14,6 +14,7 @@
 #import "DYYYUtils.h"
 #import <objc/runtime.h>
 #import <os/log.h>
+#import <signal.h>
 
 #pragma mark - 常量
 
@@ -161,6 +162,79 @@ static NSUncaughtExceptionHandler *gDYYYDiagPreviousHandler = nil;
 
 #pragma mark - 崩溃捕获
 
+// 崩溃现场落盘：异常 handler 和信号 handler 共用。
+// 崩溃线程同步写盘：进程将死，异步队列不会再跑。
+static void DYYYDiagFlushCrashContext(NSString *kind, NSString *detail, NSArray<NSString *> *stack) {
+    @try {
+        NSMutableArray<NSString *> *lines = [NSMutableArray array];
+        [lines addObject:[NSString stringWithFormat:@"[DYYY][CRASH] %@: %@", kind, detail ?: @"(无详情)"]];
+        for (NSString *s in stack) {
+            [lines addObject:[@"   " stringByAppendingString:s]];
+        }
+        NSMutableArray<NSString *> *buffer = [DYYYDiagnostics logBuffer];
+        [buffer addObjectsFromArray:lines];
+        NSMutableString *all = [NSMutableString string];
+        for (NSString *l in buffer) [all appendFormat:@"%@\n", l];
+        [[NSFileManager defaultManager] createFileAtPath:[DYYYDiagnostics runtimeLogPath]
+                                              contents:[all dataUsingEncoding:NSUTF8StringEncoding]
+                                            attributes:nil];
+    } @catch (__unused NSException *e) {
+    }
+}
+
+// 信号名：崩溃报告里用可读名字，比裸数字强。
+static NSString *DYYYDiagSignalName(int sig) {
+    switch (sig) {
+        case SIGABRT: return @"SIGABRT(abort)";
+        case SIGSEGV: return @"SIGSEGV(段错误)";
+        case SIGBUS:  return @"SIGBUS(总线错误)";
+        case SIGILL:  return @"SIGILL(非法指令)";
+        case SIGFPE:  return @"SIGFPE(算术异常)";
+        case SIGTRAP: return @"SIGTRAP(陷阱)";
+        default:      return [NSString stringWithFormat:@"signal(%d)", sig];
+    }
+}
+
+// 上一层信号处理：系统或别的库可能已经装过，处理完原样转交。
+static struct sigaction gDYYYDiagPreviousSignalActions[6];
+static int gDYYYDiagHandledSignals[6] = {SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP};
+
+static void DYYYDiagSignalHandler(int sig, siginfo_t *info, void *context) {
+    // 这已经是最后时刻：只做内存缓冲 + 一次文件写，不做任何 UIKit 调用。
+    NSArray<NSString *> *stack = [NSThread callStackSymbols];
+    NSString *addr = (info && info->si_addr) ? [NSString stringWithFormat:@" addr=%p", info->si_addr] : @"";
+    DYYYDiagFlushCrashContext(@"信号崩溃", [DYYYDiagSignalName(sig) stringByAppendingString:addr], stack);
+
+    // 还原默认处理并重新投递，让系统照常生成 .ips 报告。
+    for (NSUInteger i = 0; i < sizeof(gDYYYDiagHandledSignals) / sizeof(int); i++) {
+        if (gDYYYDiagHandledSignals[i] != sig) continue;
+        struct sigaction previous = gDYYYDiagPreviousSignalActions[i];
+        if (previous.sa_flags & SA_SIGINFO) {
+            if (previous.sa_sigaction) previous.sa_sigaction(sig, info, context);
+        } else if (previous.sa_handler != SIG_DFL && previous.sa_handler != SIG_IGN) {
+            previous.sa_handler(sig);
+        }
+        break;
+    }
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+static void DYYYDiagInstallSignalHandlers(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      for (NSUInteger i = 0; i < sizeof(gDYYYDiagHandledSignals) / sizeof(int); i++) {
+          int sig = gDYYYDiagHandledSignals[i];
+          struct sigaction action;
+          memset(&action, 0, sizeof(action));
+          action.sa_sigaction = DYYYDiagSignalHandler;
+          action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+          sigemptyset(&action.sa_mask);
+          sigaction(sig, &action, &gDYYYDiagPreviousSignalActions[i]);
+      }
+    });
+}
+
 static void DYYYDiagUncaughtExceptionHandler(NSException *exception) {
     @try {
         NSMutableArray<NSString *> *lines = [NSMutableArray array];
@@ -169,7 +243,6 @@ static void DYYYDiagUncaughtExceptionHandler(NSException *exception) {
         for (NSString *s in exception.callStackSymbols) {
             [lines addObject:[@"   " stringByAppendingString:s]];
         }
-        // 直接在崩溃线程同步写盘：进程将死，异步队列不会再跑。
         NSMutableArray<NSString *> *buffer = [DYYYDiagnostics logBuffer];
         [buffer addObjectsFromArray:lines];
         NSMutableString *all = [NSMutableString string];
@@ -187,6 +260,10 @@ static void DYYYDiagUncaughtExceptionHandler(NSException *exception) {
     dispatch_once(&onceToken, ^{
       gDYYYDiagPreviousHandler = NSGetUncaughtExceptionHandler();
       NSSetUncaughtExceptionHandler(DYYYDiagUncaughtExceptionHandler);
+      // 异常 handler 只挡得住 ObjC 异常。真正把进程打死的多半是信号：
+      // abort()（如 NSJSONSerialization 内部 C++ 抛错）、段错误、总线错误，
+      // 这些不走 NSException，必须单独装信号处理才能留下现场。
+      DYYYDiagInstallSignalHandlers();
     });
 }
 
