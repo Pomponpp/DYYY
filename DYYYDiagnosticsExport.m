@@ -430,22 +430,19 @@ void DYYYDiagnosticsExportBundle(UIViewController *presenter) {
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSError *error = nil;
         DYYYDiagnosticsExportResult *result = DYYYDiagCreateExport(context, nil, &error);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            busy = NO;
-            if (!result) {
-                [DYYYToast showSuccessToastWithMessage:@"诊断包导出失败"];
-                return;
-            }
-            // zip 拷贝到 Documents/DYYY/logs 持久保存（文件 App 可取）。
+
+        // 拷贝与清理全部留在后台队列：诊断包含 class-list / target-methods
+        // 这类 MB 级文本，在主线程逐文件 copyItemAtPath 会把 UI 卡死
+        // （表现为抖音被灰色蒙版盖住、只剩浮窗能点，必须杀进程重开）。
+        NSString *savedDirName = nil;
+        if (result) {
             NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
             fmt.dateFormat = @"yyyyMMdd-HHmmss";
             NSString *dir = [[DYYYDiagnostics exportedLogPathWithName:@""] stringByAppendingPathComponent:
                 [NSString stringWithFormat:@"DYYY-diag-%@", [fmt stringFromDate:[NSDate date]]]];
-            [[NSFileManager defaultManager] createDirectoryAtPath:dir
-                                      withIntermediateDirectories:YES
-                                                       attributes:nil error:nil];
-            NSString *zipDir = result.workingDirectoryURL.path;
             NSFileManager *fm = [NSFileManager defaultManager];
+            [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+            NSString *zipDir = result.workingDirectoryURL.path;
             for (NSString *f in [fm contentsOfDirectoryAtPath:zipDir error:nil]) {
                 NSString *from = [zipDir stringByAppendingPathComponent:f];
                 NSString *to = [dir stringByAppendingPathComponent:f];
@@ -456,8 +453,18 @@ void DYYYDiagnosticsExportBundle(UIViewController *presenter) {
                 }
             }
             DYYYDiagCleanupExport(result);
+            savedDirName = [dir lastPathComponent];
+        }
+
+        // 只有弹 Toast 需要回主线程，一次轻量调用，不做任何 I/O。
+        dispatch_async(dispatch_get_main_queue(), ^{
+            busy = NO;
+            if (!savedDirName) {
+                [DYYYToast showSuccessToastWithMessage:@"诊断包导出失败"];
+                return;
+            }
             [DYYYToast showSuccessToastWithMessage:
-                [NSString stringWithFormat:@"诊断包已生成\n文件App → DYYY/logs/%@", [dir lastPathComponent]]];
+                [NSString stringWithFormat:@"诊断包已生成\n文件App → DYYY/logs/%@", savedDirName]];
         });
     });
 }

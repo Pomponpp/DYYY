@@ -532,14 +532,12 @@ static NSUInteger gDYYYExpectedHookCount = 0;
         // failAssert → abort。这是"导出必崩"的根因。
         //
         // 先用 class_getImageName 做归属筛选：它只读 class_ro_t 的镜像信息，
-        // 不触发 demangle，可以安全地判断这个类是不是抖音自己的。
-        // 属于抖音的类大部分是 ObjC 类，名字槽位在链接期就填好了，
-        // 直读 raw name 就能拿到；只有少数惰性 Swift 类会拿到 NULL，跳过并计数。
+        // 不触发 demangle，可以安全判断类属于哪个镜像。
+        // 用 C 字符串直接 strstr，不为 13.7 万个类各建一个 NSString——
+        // 之前那版用 containsString 三次，光字符串分配就能把后台线程拖上十几秒。
         const char *image = class_getImageName(cls);
         if (!image) continue;
-        NSString *imagePath = [NSString stringWithUTF8String:image];
-        if (![imagePath containsString:@"Aweme"] && ![imagePath containsString:@"AwemeCore"] &&
-            ![imagePath containsString:@"Aweme.app"]) continue;
+        if (!strstr(image, "Aweme")) continue;
 
         const char *name = DYYYDiagRawClassName(cls);
         if (!name) { skippedLazy++; continue; }

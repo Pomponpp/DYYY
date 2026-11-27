@@ -353,10 +353,32 @@ NSString *DYYYNameOfClass(Class cls) {
 const char *DYYYDiagRawClassName(Class cls) {
     if (!cls) return NULL;
     uintptr_t bits = *(uintptr_t *)((uint8_t *)(__bridge void *)cls + 32);
-    uintptr_t roAddr = bits & (uintptr_t)0x00007ffffffffff8ULL;
-    if (!roAddr) return NULL;
-    // name 为 NULL 表示 Swift 类尚未安装名字；此处不触发安装，直接返回 NULL。
-    return *(const char **)((uint8_t *)roAddr + 24);
+    uintptr_t data = bits & (uintptr_t)0x00007ffffffffff8ULL;
+    if (!data) return NULL;
+
+    // bits 掩码后指向的可能是 class_ro_t，也可能是已经 realize 的 class_rw_t。
+    //   class_ro_t: flags(0) instanceStart(4) instanceSize(8) reserved(12)
+    //               ivarLayout(16) name(24) ...
+    //   class_rw_t: flags(0) witness(4) ro_or_rw(8) firstSubclass(16) ...
+    // 直接按 +24 读只有 ro 形态才拿到 name；realized 类读出来是垃圾或 NULL。
+    // 区分方式：class_rw_t 的 ro_or_rw(+8) 存的是 class_ro_t*，
+    // 它的 size 字段合理、且不等于自身地址。这里用"取 +8 当指针，再读它的 +24"
+    // 逐层下探，任一层拿不到可打印字符串就放弃——全程纯内存读，不调用任何 runtime API。
+    const char *name = NULL;
+    for (int pass = 0; pass < 2; pass++) {
+        const char *cand = *(const char **)((uint8_t *)data + 24);
+        if (cand && ((uintptr_t)cand >> 40) == 0) {
+            // 看起来像有效用户态指针，再验证首字节可打印
+            uint8_t first = *(const uint8_t *)cand;
+            if (first >= 0x20 && first < 0x7f) { name = cand; break; }
+        }
+        // 不是 ro 形态：按 rw 处理，ro = *(void**)(data + 8)
+        uintptr_t inner = *(uintptr_t *)((uint8_t *)data + 8);
+        if (!inner) break;
+        data = inner & (uintptr_t)0x00007ffffffffff8ULL;
+        if (!data) break;
+    }
+    return name;
 }
 
 // 直读父类槽位，不调用 class_getSuperclass。
