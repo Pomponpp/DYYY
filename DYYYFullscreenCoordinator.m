@@ -162,11 +162,16 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     if (!CGAffineTransformIsIdentity(table.transform)) return;
 
     CGFloat target = table.superview ? CGRectGetHeight(table.superview.bounds) : CGRectGetHeight(root.bounds);
+    CGFloat before = CGRectGetHeight(table.frame);
     CGRect adjusted = [self adjustDetailTableFrame:table frame:table.frame target:target];
     if (CGRectIsNull(adjusted)) return;
     table.frame = adjusted;
     if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-        NSLog(@"[DYYY][table] prepare 撑高 %.1f → %.1f", CGRectGetHeight(table.frame), target);
+        // 撑高次数统计：native 每次布局把表压回 843、我们顶回 926，都属于一次撑高。
+        // 这个数字是"拔河强度"，Step 2 换基准法后应显著下降。
+        static NSInteger sStretchCount = 0;
+        sStretchCount++;
+        NSLog(@"[DYYY][table] prepare 撑高 %.1f → %.1f (第 %ld 次)", before, target, (long)sStretchCount);
     }
 }
 
@@ -212,6 +217,7 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
         || current < target * 0.5) {
         return CGRectNull;
     }
+
     if (!objc_getAssociatedObject(table, @selector(prepareDetailTableNew:))) {
         objc_setAssociatedObject(table, @selector(prepareDetailTableNew:), @(current), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
@@ -248,13 +254,22 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
 // 因此行高必须在这里回答，否则整套行高策略是死码，表被撑到 926 而行仍 843，留下 83 空档。
 + (UITableView *)detailTableForScrollDelegate:(id)delegate {
     if (!delegate) return nil;
+    // ① 容器自己登记的详情代理（通常就是 AWEAwemeDetailTableViewController），
+    //    它直接给表，最准也最早——首建行时可见 cell 还是空的。
+    if ([delegate respondsToSelector:@selector(detailDelegate)]) {
+        id detailDelegate = [delegate detailDelegate];
+        if ([detailDelegate respondsToSelector:@selector(tableView)]) {
+            id provided = [detailDelegate tableView];
+            if ([provided isKindOfClass:[UITableView class]]) return (UITableView *)provided;
+        }
+    }
+    // ② 退路：可见 cell 上溯拿表。
     if (![delegate respondsToSelector:@selector(visibleDetailCells)]) return nil;
     id cells = [delegate visibleDetailCells];
     if (![cells isKindOfClass:[NSArray class]]) return nil;
     for (id cell in (NSArray *)cells) {
         if (![cell isKindOfClass:[UIView class]]) continue;
         UIView *view = (UIView *)cell;
-        // 可见 cell 一定已挂到表上；沿父链上溯拿表，避免依赖容器的私有 provider 形态。
         for (NSUInteger depth = 0; view && depth < 12; depth++, view = view.superview) {
             if ([view isKindOfClass:[UITableView class]]) return (UITableView *)view;
         }
@@ -278,11 +293,23 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     UIWindow *window = table.window ?: [self rowHeightFallbackWindow];
     CGFloat windowHeight = window ? CGRectGetHeight(window.bounds)
                                   : CGRectGetHeight([UIScreen mainScreen].bounds);
-    // 调用方就是详情的滚动容器，无表可查时也按详情页处理（窗口兜底分支仍成立）。
+    // 窗口尺寸未就绪（建行早于挂载）时不要瞎算，原样透传；下一次查询窗口就有了。
+    if (!isfinite(windowHeight) || windowHeight <= 0.0) {
+        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+            static NSInteger sNoWindow = 0;
+            if (++sNoWindow <= 5) {
+                NSLog(@"[DYYY][rowq2] 窗口未就绪，透传 native=%.1f（第 %ld 次）",
+                      nativeHeight, (long)sNoWindow);
+            }
+        }
+        return nativeHeight;
+    }
+    // 无表可查时不再无条件当详情页：只在"满屏减底栏"的压缩高上做映射，
+    // 其它值原样透传（策略函数内部已按窗口高差值判定，这里只传真实 isDetail）。
     BOOL isDetail = table ? [self isDetailTable:table] : YES;
 
-    double answer = DYYYDetailRowHeightAnswer(1, isDetail ? 1 : 0, nativeHeight,
-                                              table ? CGRectGetHeight(table.bounds) : NAN,
+    double tableHeight = table ? CGRectGetHeight(table.bounds) : NAN;
+    double answer = DYYYDetailRowHeightAnswer(1, isDetail ? 1 : 0, nativeHeight, tableHeight,
                                               original ? original.doubleValue : NAN,
                                               pinned ? pinned.doubleValue : NAN,
                                               windowHeight);
@@ -291,7 +318,7 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
         if (++sDelegateRowCalls <= 30) {
             NSLog(@"[DYYY][rowq2] #%ld native=%.1f 答=%.1f 表=%@ 原高=%@ 窗口=%.1f",
                   (long)sDelegateRowCalls, nativeHeight, answer,
-                  table ? [NSString stringWithFormat:@"%.1f", CGRectGetHeight(table.bounds)] : @"无",
+                  table ? [NSString stringWithFormat:@"%.1f", tableHeight] : @"无",
                   original ? [NSString stringWithFormat:@"%.1f", original.doubleValue] : @"无",
                   windowHeight);
         }
