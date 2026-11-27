@@ -523,28 +523,43 @@ static NSUInteger gDYYYExpectedHookCount = 0;
     Class *classes = objc_copyClassList(&classCount);
     if (!classes) return @"(无法获取类列表)\n";
     NSMutableArray<NSString *> *names = [NSMutableArray arrayWithCapacity:classCount];
+    NSUInteger skippedLazy = 0;
     for (unsigned int i = 0; i < classCount; i++) {
-        // 关键：不能用 class_getName。全表 13.7 万个类里混着大量惰性 Swift 泛型类，
-        // 一碰 class_getName 就会走 installMangledNameForLazilyNamedClass →
-        // libswiftCore demangler，畸形 mangled 名 failAssert → abort。
-        // 这是"任何页面导出都闪退"的真正原因：这份清单是全局全量遍历。
-        // 改用直读 class_ro_t.name，不触发任何安装动作；名字未生成则跳过。
-        const char *name = DYYYDiagRawClassName(classes[i]);
-        if (!name) continue;
+        Class cls = classes[i];
+        // 关键：不能用 class_getName / NSStringFromClass。
+        // 全表 13.7 万个类里混着大量惰性 Swift 泛型类，一碰就
+        // installMangledNameForLazilyNamedClass → libswiftCore demangler →
+        // failAssert → abort。这是"导出必崩"的根因。
+        //
+        // 先用 class_getImageName 做归属筛选：它只读 class_ro_t 的镜像信息，
+        // 不触发 demangle，可以安全地判断这个类是不是抖音自己的。
+        // 属于抖音的类大部分是 ObjC 类，名字槽位在链接期就填好了，
+        // 直读 raw name 就能拿到；只有少数惰性 Swift 类会拿到 NULL，跳过并计数。
+        const char *image = class_getImageName(cls);
+        if (!image) continue;
+        NSString *imagePath = [NSString stringWithUTF8String:image];
+        if (![imagePath containsString:@"Aweme"] && ![imagePath containsString:@"AwemeCore"] &&
+            ![imagePath containsString:@"Aweme.app"]) continue;
+
+        const char *name = DYYYDiagRawClassName(cls);
+        if (!name) { skippedLazy++; continue; }
+        BOOL matched = NO;
         for (NSUInteger p = 0; p < kPrefixCount; p++) {
             if (strncmp(name, kPrefixes[p].UTF8String, strlen(kPrefixes[p].UTF8String)) == 0) {
                 [names addObject:[NSString stringWithUTF8String:name]];
+                matched = YES;
                 break;
             }
         }
+        if (!matched) continue;
     }
     free(classes);
     [names sortUsingSelector:@selector(compare:)];
 
     NSMutableString *out = [NSMutableString string];
     NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
-    [out appendFormat:@"# DYYY 运行时类清单\n# 抖音版本: %@\n# 过滤前缀: AWE/IES/HTS/AFD/TT/BD/DUX/ALM\n# 总数: %lu\n\n",
-                      appVersion, (unsigned long)names.count];
+    [out appendFormat:@"# DYYY 运行时类清单\n# 抖音版本: %@\n# 过滤前缀: AWE/IES/HTS/AFD/TT/BD/DUX/ALM\n# 总数: %lu\n# 惰性命名跳过: %lu（Swift 泛型类名字未生成，取名字会触发 demangler 崩溃）\n\n",
+                      appVersion, (unsigned long)names.count, (unsigned long)skippedLazy];
     for (NSString *n in names) [out appendFormat:@"%@\n", n];
     return out;
 }
