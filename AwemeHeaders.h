@@ -1382,11 +1382,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (double)cellHeightAtIndex:(long long)index;
 - (double)contentOffsetYForCellAtIndex:(long long)index;
 - (void)adjustTableViewHeightForTargetIndex:(long long)index;
-- (NSArray *)visibleDetailCells;
 - (NSUInteger)currentVisibleCellIndex;
-// 容器登记的详情代理（通常就是 AWEAwemeDetailTableViewController）。
-- (id)detailDelegate;
-- (void)setDetailDelegate:(id)delegate;
+// 注意：不在这里声明 visibleDetailCells / detailDelegate / tableView 一类的视图访问器。
+// 行高回答运行在抖音的行高查询链上，@selector 一旦在头文件可见就很容易被误用去
+// 触碰视图层；tableView 还是详情页 VC 的懒加载 getter，会强制建视图。
 @end
 
 // 41.1 视图树实锤：评论列表区不透明底色来源（rgba(0.086,0.086,0.086,1.0)），

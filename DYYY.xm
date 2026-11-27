@@ -7175,7 +7175,16 @@ static CGRect DYYYGeoAdjustFrame(UIView *view, CGRect frame) {
     if (useFullHeight) {
         frame.size.height = superviewHeight;
     } else {
-        frame.size.height = MAX(0, superviewHeight - [DYYYFullscreenCoordinator bottomOccupiedHeightForView:self.view]);
+        CGFloat occupied = [DYYYFullscreenCoordinator bottomOccupiedHeightForView:self.view];
+        // 父容器已经比窗口矮出底栏的量，说明这一层早就让过位了，不能再扣第二次。
+        // 聊天页/群聊视频的互动层父级是 cell（843 = 926 - 83 输入栏），
+        // 早先无条件再减 83 会把互动层压成 760，进度条随之上移 83；
+        // 拖动时抖音重排又写回 843，松手再被压回 760 —— 就是"拖动弹起、松手回落"。
+        CGFloat windowHeight = CGRectGetHeight(self.view.window.bounds);
+        if (occupied > 0 && windowHeight > 0 && superviewHeight <= windowHeight - occupied + 1.0) {
+            occupied = 0;
+        }
+        frame.size.height = MAX(0, superviewHeight - occupied);
     }
 
     if (fabs(frame.size.height - self.view.frame.size.height) > 0.5) {

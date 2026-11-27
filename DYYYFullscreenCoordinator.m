@@ -87,7 +87,14 @@
     BOOL detail = NO;
     for (NSUInteger depth = 0; controller && depth < 8; depth++, controller = controller.parentViewController) {
         if (remoteClass && [controller isKindOfClass:remoteClass]) return NO;
-        if ([controller isKindOfClass:detailClass]) detail = YES;
+        if (![controller isKindOfClass:detailClass]) continue;
+        // 命中的是详情页宿主。聊天页 / 群聊页的视频挂在同一个详情页类上，
+        // 但它的子控制器里有 83pt 快捷回复输入栏（AWEIM 系），底部由抖音按输入栏
+        // 自己算，不是详情页操作栏。这里不接管，避免我们按屏高改写互动层。
+        for (UIViewController *child in controller.childViewControllers) {
+            if ([NSStringFromClass([child class]) hasPrefix:@"AWEIM"]) return NO;
+        }
+        detail = YES;
     }
     return detail;
 }
@@ -251,78 +258,39 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
 // 详情滚动代理容器侧的行高回答入口。
 // 背景：41.3 的详情页把"算行高 / 算落点 / 翻页吸附"交给 AWEDetailFeedScrollDelegateContainer，
 // VC 上的 fixedCellHeight / cellHeightAtIndex: 不再被调用（诊断包 [rowq] 0 次可证）。
-// 因此行高必须在这里回答，否则整套行高策略是死码，表被撑到 926 而行仍 843，留下 83 空档。
-+ (UITableView *)detailTableForScrollDelegate:(id)delegate {
-    if (!delegate) return nil;
-    // ① 容器自己登记的详情代理（通常就是 AWEAwemeDetailTableViewController），
-    //    它直接给表，最准也最早——首建行时可见 cell 还是空的。
-    //    强类型再用，避免在 id 上调用未声明 selector 触发编译错误。
-    AWEDetailFeedScrollDelegateContainer *container = (AWEDetailFeedScrollDelegateContainer *)delegate;
-    if ([container respondsToSelector:@selector(detailDelegate)]) {
-        id detail = [container detailDelegate];
-        if ([detail respondsToSelector:@selector(tableView)]) {
-            id provided = [(id)detail tableView];
-            if ([provided isKindOfClass:[UITableView class]]) return (UITableView *)provided;
-        }
-    }
-    // ② 退路：可见 cell 上溯拿表。
-    if (![container respondsToSelector:@selector(visibleDetailCells)]) return nil;
-    id cells = [container visibleDetailCells];
-    if (![cells isKindOfClass:[NSArray class]]) return nil;
-    for (id cell in (NSArray *)cells) {
-        if (![cell isKindOfClass:[UIView class]]) continue;
-        UIView *view = (UIView *)cell;
-        for (NSUInteger depth = 0; view && depth < 12; depth++, view = view.superview) {
-            if ([view isKindOfClass:[UITableView class]]) return (UITableView *)view;
-        }
-    }
-    return nil;
-}
-
-+ (UIWindow *)rowHeightFallbackWindow {
-    for (UIWindow *window in [UIApplication sharedApplication].windows) {
-        if (window.isKeyWindow) return window;
-    }
-    return nil;
+//
+// 硬约束：这个函数运行在抖音的行高查询链上，每帧都会被问，绝不能触碰视图层。
+// 曾经的写法会去读 visibleDetailCells、沿父链找 UITableView、再从 detailDelegate
+// 取 tableView —— tableView 在详情页 VC 上是懒加载 getter，会强制建视图。
+// 聊天页/群聊视频页同样会走到这个钩子（[rowq2] 实测 30 次全在聊天页），
+// 于是它还没准备好就被我们拉起了视图树，抖音判定 model 无效，弹「视频不见了」。
+//
+// 现在只做纯数值判断：聊天页原生给 926（=窗口高），差值 0，原样返回；
+// 详情页原生给 843（=窗口高−底栏），差值 83，映射成窗口高。
++ (CGFloat)rowHeightReferenceWindowHeight {
+    // 只读尺寸，不遍历窗口、不建视图。keyWindow 是弱引用已有的窗口对象。
+    UIWindow *window = [UIApplication sharedApplication].keyWindow;
+    CGFloat height = window ? CGRectGetHeight(window.bounds) : 0;
+    if (!isfinite(height) || height <= 0) height = CGRectGetHeight([UIScreen mainScreen].bounds);
+    return height;
 }
 
 + (double)detailRowHeightForScrollDelegate:(id)delegate nativeHeight:(double)nativeHeight {
     if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
 
-    UITableView *table = [self detailTableForScrollDelegate:delegate];
-    NSNumber *original = table ? objc_getAssociatedObject(table, @selector(prepareDetailTableNew:)) : nil;
-    NSNumber *pinned = table ? objc_getAssociatedObject(table, @selector(alignExistingCellsIfNeeded:target:)) : nil;
-    UIWindow *window = table.window ?: [self rowHeightFallbackWindow];
-    CGFloat windowHeight = window ? CGRectGetHeight(window.bounds)
-                                  : CGRectGetHeight([UIScreen mainScreen].bounds);
-    // 窗口尺寸未就绪（建行早于挂载）时不要瞎算，原样透传；下一次查询窗口就有了。
-    if (!isfinite(windowHeight) || windowHeight <= 0.0) {
-        if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
-            static NSInteger sNoWindow = 0;
-            if (++sNoWindow <= 5) {
-                NSLog(@"[DYYY][rowq2] 窗口未就绪，透传 native=%.1f（第 %ld 次）",
-                      nativeHeight, (long)sNoWindow);
-            }
-        }
-        return nativeHeight;
-    }
-    // 无表可查时不再无条件当详情页：只在"满屏减底栏"的压缩高上做映射，
-    // 其它值原样透传（策略函数内部已按窗口高差值判定，这里只传真实 isDetail）。
-    BOOL isDetail = table ? [self isDetailTable:table] : YES;
+    CGFloat windowHeight = [self rowHeightReferenceWindowHeight];
+    // 窗口尺寸未就绪时原样透传，不做任何推断。
+    if (!isfinite(windowHeight) || windowHeight <= 0.0) return nativeHeight;
 
-    double tableHeight = table ? CGRectGetHeight(table.bounds) : NAN;
-    double answer = DYYYDetailRowHeightAnswer(1, isDetail ? 1 : 0, nativeHeight, tableHeight,
-                                              original ? original.doubleValue : NAN,
-                                              pinned ? pinned.doubleValue : NAN,
-                                              windowHeight);
+    // 纯数值回答：不查表、不查 cell、不查 delegate 的任何视图属性。
+    // tableHeight/original/pinned 一律传 NAN，让策略函数走"窗口高兜底"分支：
+    // 只有"满屏减去底栏"这一种 native 才映射成窗口高，其它值原样返回。
+    double answer = DYYYDetailRowHeightAnswer(1, 1, nativeHeight, NAN, NAN, NAN, windowHeight);
     if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
         static NSInteger sDelegateRowCalls = 0;
         if (++sDelegateRowCalls <= 30) {
-            NSLog(@"[DYYY][rowq2] #%ld native=%.1f 答=%.1f 表=%@ 原高=%@ 窗口=%.1f",
-                  (long)sDelegateRowCalls, nativeHeight, answer,
-                  table ? [NSString stringWithFormat:@"%.1f", tableHeight] : @"无",
-                  original ? [NSString stringWithFormat:@"%.1f", original.doubleValue] : @"无",
-                  windowHeight);
+            NSLog(@"[DYYY][rowq2] #%ld native=%.1f 答=%.1f 窗口=%.1f",
+                  (long)sDelegateRowCalls, nativeHeight, answer, windowHeight);
         }
     }
     return answer;
@@ -468,10 +436,16 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     for (UIViewController *owner = controller; owner; owner = owner.parentViewController) {
         if (![owner respondsToSelector:@selector(activeBottomBar)]) continue;
         UIView *bar = [(AWEAwemeDetailTableViewController *)owner activeBottomBar];
-        if (bar.window == window && bar.bounds.size.height > 0) return bar.bounds.size.height;
+        if (bar.window == window && bar.bounds.size.height > 0 && [self visible:bar]) return bar.bounds.size.height;
     }
     // 评论会隐藏底栏，尺寸仍以同一窗口中的真实栏为准。
-    for (UIView *bar in [self tabBars].allObjects) if (bar.window == window && bar.bounds.size.height > 0) return bar.bounds.size.height;
+    // 关键：必须走 visible: 判定，不能只看 window + 高度。
+    // 聊天页（单聊/群聊视频）的根 tab bar 是 hidden=YES 且被移到 x=-428，
+    // 但它的 bounds 仍是 428×83；只看窗口和高度会把它当成可见底栏扣掉 83，
+    // 把互动层从 843 压成 760，进度条随之整体上移、松手回落（拖动弹跳）。
+    for (UIView *bar in [self tabBars].allObjects) {
+        if (bar.window == window && bar.bounds.size.height > 0 && [self visible:bar]) return bar.bounds.size.height;
+    }
     return 0;
 }
 + (CGRect)rect:(CGRect)rect followingView:(UIView *)view controller:(UIViewController *)controller anchor:(UIView *)anchor {
