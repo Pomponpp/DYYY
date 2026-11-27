@@ -1,5 +1,6 @@
 #import "AwemeHeaders.h"
 #import "DYYYClassRegistry.h"
+#import "DYYYDiagnosticsCore.h"
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach-o/dyld.h>
@@ -395,7 +396,10 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
     }
     Class cls = [self resolveClassByName:className];
     if (outResolvedName) {
-        *outResolvedName = cls ? NSStringFromClass(cls) : nil;
+        // 不用 NSStringFromClass：遇到惰性命名的 Swift 泛型类会触发
+        // installMangledNameForLazilyNamedClass → libswiftCore demangler，
+        // 畸形 mangled 名 failAssert → abort。改走不触发安装的 raw 读法。
+        *outResolvedName = cls ? DYYYNameOfClass(cls) : nil;
     }
     return cls ? DYYYClassAuditStatusOK : DYYYClassAuditStatusMissing;
 }
@@ -520,7 +524,12 @@ static NSUInteger gDYYYExpectedHookCount = 0;
     if (!classes) return @"(无法获取类列表)\n";
     NSMutableArray<NSString *> *names = [NSMutableArray arrayWithCapacity:classCount];
     for (unsigned int i = 0; i < classCount; i++) {
-        const char *name = class_getName(classes[i]);
+        // 关键：不能用 class_getName。全表 13.7 万个类里混着大量惰性 Swift 泛型类，
+        // 一碰 class_getName 就会走 installMangledNameForLazilyNamedClass →
+        // libswiftCore demangler，畸形 mangled 名 failAssert → abort。
+        // 这是"任何页面导出都闪退"的真正原因：这份清单是全局全量遍历。
+        // 改用直读 class_ro_t.name，不触发任何安装动作；名字未生成则跳过。
+        const char *name = DYYYDiagRawClassName(classes[i]);
         if (!name) continue;
         for (NSUInteger p = 0; p < kPrefixCount; p++) {
             if (strncmp(name, kPrefixes[p].UTF8String, strlen(kPrefixes[p].UTF8String)) == 0) {
