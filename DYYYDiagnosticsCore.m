@@ -342,7 +342,11 @@ NSString *DYYYNameOfClass(Class cls) {
 
 NSString *DYYYNameOfObject(id object) {
     if (!object) return @"";
-    return DYYYNameOfClass([object class]);
+    // 不能用 [object class]：对某些 Swift 泛型类实例，-class 会走进
+    // objc_class::demangledName → libswiftCore 的 copyGenericClassObjCName，
+    // 畸形 mangled 名会 failAssert → abort。真机实测在直播间/推荐页导出必崩。
+    // object_getClass 只读 isa，不触发 demangle。
+    return DYYYNameOfClass(object_getClass(object));
 }
 
 BOOL DYYYPrefBool(NSString *key) {

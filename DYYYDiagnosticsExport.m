@@ -161,7 +161,9 @@ static NSString *DYYYDiagReadme(DYYYDiagnosticsContext *context) {
 #pragma mark - 页面内容
 
 static void DYYYDiagWritePageClasses(DYYYDiagExportSink *sink, NSArray<NSString *> *classNames) {
-    for (NSString *name in [classNames sortedArrayUsingSelector:@selector(compare:)]) {
+    // 不排序：类名里混着 Swift 泛型 mangled 名，全量 compare 会反复走字符串路径，
+    // 放大 Swift demangler 的触发面。遍历顺序对诊断没有影响。
+    for (NSString *name in classNames) {
         @autoreleasepool {
             @try {
                 Class cls = NSClassFromString(name);
@@ -189,8 +191,10 @@ static void DYYYDiagWritePageFiles(DYYYDiagExportSink *sink,
     DYYYDiagWriteString(sink, @"page/view-controllers.txt", context.viewControllersText, NO);
     DYYYDiagWriteJSON(sink, @"page/layers.json", context.layersJSON ?: @[], NO);
     // 只导"选中视图链 + 当前页控制器"相关的类头文件。
-    // 之前是整页所有类（实测 139 个文件 1.9MB），绝大多数与当次排查无关，
-    // 纯粹撑大包体、拖慢导出。真要查某个类的方法签名，target-methods.txt 里就有。
+    // 之前是整页所有类（实测 139 个文件 1.9MB），绝大多数与当次排查无关。
+    // 注意：这里全程用 NSSet 做成员判断，不排序、不逐项比较——
+    // 页面类清单里混着大量 Swift 泛型 mangled 名，任何一次全量比较都会
+    // 反复走字符串路径，把 Swift demangler 的触发面放大。
     if (progress) progress(@"导出本页类头文件...");
     NSMutableArray<NSString *> *focused = [NSMutableArray array];
     NSArray<NSString *> *allNames = context.pageClassNames ?: @[];
@@ -200,12 +204,12 @@ static void DYYYDiagWritePageFiles(DYYYDiagExportSink *sink,
                             ? context.selectedViewJSON[@"nearestViewController"][@"class"] : nil;
     for (NSString *name in allNames) {
         if ([name isEqualToString:hitClass] || [name isEqualToString:vcClass]) [focused addObject:name];
+        if (focused.count >= 20) break;
     }
-    // 选中链上的类一个都没匹配到时，退回导出前 20 个，保证至少有东西可看。
+    // 选中链上的类一个都没匹配到时，退回导出前 20 个（保持原始顺序，不排序），保证至少有东西可看。
     if (focused.count == 0) {
-        NSArray<NSString *> *sorted = [allNames sortedArrayUsingSelector:@selector(compare:)];
-        NSUInteger limit = MIN(sorted.count, (NSUInteger)20);
-        [focused addObjectsFromArray:[sorted subarrayWithRange:NSMakeRange(0, limit)]];
+        NSUInteger limit = MIN(allNames.count, (NSUInteger)20);
+        if (limit > 0) [focused addObjectsFromArray:[allNames subarrayWithRange:NSMakeRange(0, limit)]];
     }
     DYYYDiagWritePageClasses(sink, focused);
 }
