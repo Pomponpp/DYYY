@@ -64,8 +64,15 @@ extern "C" {
 #endif
 
 /// 类名 / 对象类名的安全读取（nil 安全）。
+/// 内部直接读 class_ro_t 的 name 字段，不调用 class_getName ——
+/// 后者对尚未具名的 Swift 泛型类会触发 demangler，畸形名会 abort。
+/// 名字尚未安装时返回 "(lazy-swift-class)"，不会引发任何安装动作。
 NSString *DYYYNameOfClass(Class cls);
 NSString *DYYYNameOfObject(id object);
+
+/// 读类的 raw name 指针，不触发 Swift 惰性命名安装。
+/// 返回 NULL 表示该类的名字还未生成；调用方应自行给占位符。
+const char *DYYYDiagRawClassName(Class cls);
 
 /// 诊断开关读取（统一走 NSUserDefaults，DYYY 键名直读）。
 BOOL DYYYPrefBool(NSString *key);

@@ -8,6 +8,7 @@
 
 
 #import "DYYYDiagnosticsCompat.h"
+#import "DYYYDiagnosticsCore.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <zlib.h>
 #import <objc/runtime.h>
@@ -62,8 +63,8 @@ BOOL DYYYDiagClassIsSafe(Class cls) {
     // 它在内部会走 objc_class::demangledName → libswiftCore 的
     // copyGenericClassObjCName，畸形 Swift 泛型 mangled 名会 failAssert → abort。
     // 真机实测：427/428 在所有页面导出必崩，栈顶就是 demangledName。
-    // 改用 class_getName + 名字比对，只读字符串，不触发任何 demangle。
-    const char *raw = class_getName(cls);
+    // 改用直读 class_ro_t 的 name 字段（DYYYDiagRawClassName），不触发任何 demangle。
+    const char *raw = DYYYDiagRawClassName(cls);
     if (!raw) return NO;
     if (strcmp(raw, "NSObject") == 0 || strcmp(raw, "NSProxy") == 0) return YES;
     // 其余类只要名字可读就允许内省；真正的越界读由下面各处 try/catch 兜住。
@@ -206,10 +207,10 @@ static NSString *DYYYDiagMethodLine(Method m, BOOL isClassMethod) {
 static NSString *DYYYDiagHeaderForClass(Class cls, NSString *imageName) {
     if (!DYYYDiagClassIsSafe(cls)) return nil;
     @try {
-        // 用 class_getName 而非 NSStringFromClass：
+        // 用 DYYYDiagRawClassName 而非 NSStringFromClass / class_getName：
         // 畸形 Swift mangled 名会让 NSStringFromClass 走 demangle 并 abort，
         // @try 拦不住（abort 不是 ObjC 异常）。
-        const char *rawName = class_getName(cls);
+        const char *rawName = DYYYDiagRawClassName(cls);
         NSString *className = rawName ? [NSString stringWithUTF8String:rawName] : nil;
         if (className.length == 0) return nil;
         if (DYYYDiagIsLikelySwiftName(className)) {
@@ -218,10 +219,10 @@ static NSString *DYYYDiagHeaderForClass(Class cls, NSString *imageName) {
                     className, imageName ?: @"Unknown"];
         }
 
-        // 父类名同样用 class_getName 读 raw，不经过 class_getSuperclass
+        // 父类名同样直读 raw name，不经过 class_getSuperclass
         // （后者会触发 Swift demangler，见 DYYYDiagClassIsSafe 处的说明）。
         Class superCls = class_getSuperclass(cls);
-        const char *rawSuper = superCls ? class_getName(superCls) : NULL;
+        const char *rawSuper = superCls ? DYYYDiagRawClassName(superCls) : NULL;
         NSString *superName = rawSuper ? [NSString stringWithUTF8String:rawSuper] : @"NSObject";
 
         NSMutableString *h = [NSMutableString string];

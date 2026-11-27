@@ -22,7 +22,18 @@ static NSString *DYYYDiagStringFromPointer(const void *pointer) {
 }
 
 static NSString *DYYYDiagClassName(id object) {
-    return object ? DYYYNameOfObject(object) : @"";
+    if (!object) return @"";
+    // class_getName 对"惰性命名的 Swift 类"会先走
+    // installMangledNameForLazilyNamedClass → demangledName → Swift demangler，
+    // 畸形泛型 mangled 名会 failAssert → abort。直播间里大量 _TtC 泛型 CALayer
+    // 正是这类，所以每条导出必崩在那，推荐页偶发。
+    //
+    // 这里改成读 isa 的 raw 名，但先判一次"名字是否已经在类结构里"：
+    // 惰性类的 name 指针为空，此时不取名字，直接返回占位，绝不触发安装流程。
+    Class cls = object_getClass(object);
+    if (!cls) return @"";
+    const char *raw = DYYYDiagRawClassName(cls);
+    return raw ? [NSString stringWithUTF8String:raw] : @"(lazy-swift-class)";
 }
 
 static NSString *DYYYDiagObjectDesc(id object) {
@@ -542,12 +553,12 @@ static NSData *DYYYDiagScreenshotPNG(UIWindow *targetWindow) {
 #pragma mark - 页面类收集
 
 // 收集一个类及其整条继承链的类名：跳过运行时生成子类噪声，但继续上溯。
-// 全程只用 class_getName：抖音的 Swift 类里有畸形 mangled 名，
+// 全程只用 DYYYDiagRawClassName：抖音的 Swift 类里有畸形 mangled 名，
 // NSStringFromClass 以及 class_getSuperclass 都会触发 swift demangle abort。
-// 上溯只用 class_getName 读 raw 名，不调用任何会解析名字的 API。
+// 上溯只读 raw 名，不调用任何会解析或安装名字的 API。
 static void DYYYDiagCollectClassAndSupers(Class cls, NSMutableSet<NSString *> *names) {
     for (int i = 0; cls && i < 50; i++) {
-        const char *raw = class_getName(cls);
+        const char *raw = DYYYDiagRawClassName(cls);
         NSString *name = raw ? [NSString stringWithUTF8String:raw] : nil;
         if (name.length && !DYYYDiagClassNameIsRuntimeGenerated(name)) [names addObject:name];
         // 父类指针直接取自 class 结构体，不触发 demangle。

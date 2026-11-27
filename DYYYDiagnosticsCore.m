@@ -336,8 +336,23 @@ static void DYYYDiagUncaughtExceptionHandler(NSException *exception) {
 
 NSString *DYYYNameOfClass(Class cls) {
     if (!cls) return @"";
-    const char *raw = class_getName(cls);
-    return raw ? [NSString stringWithUTF8String:raw] : @"";
+    // 不用 class_getName：类还没被具名时它会先做 installMangledNameForLazilyNamedClass，
+    // 那一步进 libswiftCore 的 demangler，畸形泛型 mangled 名直接 failAssert → abort。
+    // 直播间里大量 _TtC 泛型 CALayer 属于这类，导出必崩。
+    const char *raw = DYYYDiagRawClassName(cls);
+    if (!raw) return @"(lazy-swift-class)";
+    return [NSString stringWithUTF8String:raw];
+}
+
+const char *DYYYDiagRawClassName(Class cls) {
+    if (!cls) return NULL;
+    // class_t +32 = bits（低 3 位是标志，掩掉得到 class_ro_t*）
+    // class_ro_t +24 = name
+    // name 为 NULL 表示 Swift 类尚未安装名字；此处不触发安装，直接返回 NULL。
+    uintptr_t bits = *(uintptr_t *)((uint8_t *)(__bridge void *)cls + 32);
+    uintptr_t roAddr = bits & (uintptr_t)0x00007ffffffffff8ULL;
+    if (!roAddr) return NULL;
+    return *(const char **)((uint8_t *)roAddr + 24);
 }
 
 NSString *DYYYNameOfObject(id object) {
