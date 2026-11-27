@@ -123,8 +123,11 @@ jobs:
           done
 
           deb_files=(packages/*.deb)
-          if [ "${#deb_files[@]}" -eq 0 ]; then
-            echo "No .deb files found after downloading artifact" >&2
+          dylib_files=(packages/*.dylib)
+          # 当前构建工作流只产出 dylib（注入式分发），deb 属于可选发行形态。
+          # 这里只要求"至少有一个产物"，具体形态校验交给 Verify release assets。
+          if [ "${#deb_files[@]}" -eq 0 ] && [ "${#dylib_files[@]}" -eq 0 ]; then
+            echo "No .deb or .dylib files found after downloading artifact" >&2
             find . -maxdepth 3 -type f | sed 's/^/  /'
             exit 1
           fi
@@ -180,8 +183,12 @@ jobs:
           for file in packages/*.dylib; do
             [ -f "$file" ] || continue
             base=$(basename "$file")
-            # DYYY_<version>.dylib -> DYYY_<version>-N.dylib
+            # DYYY_<version>.dylib 或裸 DYYY.dylib -> DYYY_<version>-N.dylib
             if [[ "$base" == "DYYY_${version}.dylib" ]]; then
+              renamed="DYYY_${version}${suffix}.dylib"
+              mv "$file" "packages/$renamed"
+              echo "  $base -> $renamed"
+            elif [[ "$base" == "DYYY.dylib" ]]; then
               renamed="DYYY_${version}${suffix}.dylib"
               mv "$file" "packages/$renamed"
               echo "  $base -> $renamed"
@@ -198,24 +205,37 @@ jobs:
 
           deb_files=(packages/*.deb)
           dylib_files=(packages/*.dylib)
-          if [ "${#deb_files[@]}" -ne 3 ]; then
-            echo "Expected 3 Deb packages, found ${#deb_files[@]}:" >&2
-            printf '  %s\n' "${deb_files[@]}" >&2
+
+          # 规则：
+          #   · 至少一个产物；
+          #   · dylib 最多 1 个（同名不同架构不允许多份）；
+          #   · 只要带了 deb，就必须是 rootful/rootless/roothide 三套齐全。
+          # 构建工作流只出 dylib 时，deb 校验整体跳过，不再阻塞发布。
+          if [ "${#deb_files[@]}" -eq 0 ] && [ "${#dylib_files[@]}" -eq 0 ]; then
+            echo "No release assets found in packages/" >&2
             exit 1
           fi
-          if [ "${#dylib_files[@]}" -ne 1 ]; then
-            echo "Expected 1 dylib, found ${#dylib_files[@]}:" >&2
+          if [ "${#dylib_files[@]}" -gt 1 ]; then
+            echo "Expected at most 1 dylib, found ${#dylib_files[@]}:" >&2
             printf '  %s\n' "${dylib_files[@]}" >&2
             exit 1
           fi
-
-          for scheme in rootful rootless roothide; do
-            scheme_files=(packages/*-"${scheme}".deb)
-            if [ "${#scheme_files[@]}" -ne 1 ]; then
-              echo "Expected exactly one ${scheme} package, found ${#scheme_files[@]}" >&2
+          if [ "${#deb_files[@]}" -gt 0 ]; then
+            if [ "${#deb_files[@]}" -ne 3 ]; then
+              echo "Deb packages present but incomplete: expected 3, found ${#deb_files[@]}:" >&2
+              printf '  %s\n' "${deb_files[@]}" >&2
               exit 1
             fi
-          done
+            for scheme in rootful rootless roothide; do
+              scheme_files=(packages/*-"${scheme}".deb)
+              if [ "${#scheme_files[@]}" -ne 1 ]; then
+                echo "Expected exactly one ${scheme} package, found ${#scheme_files[@]}" >&2
+                exit 1
+              fi
+            done
+          else
+            echo "No deb packages in this run; publishing dylib-only release."
+          fi
 
           printf 'Release asset: %s\n' "${deb_files[@]}" "${dylib_files[@]}"
 
@@ -292,7 +312,16 @@ jobs:
           RELEASE_TITLE: ${{ steps.release.outputs.title }}
           RELEASE_TARGET_SHA: ${{ steps.release_target.outputs.sha }}
         run: |
-          gh release create "$RELEASE_TAG" packages/*.deb packages/*.dylib \
+          set -euo pipefail
+          shopt -s nullglob
+          # 只上传实际存在的产物：纯 dylib 发布时不能把未展开的 glob 字面量塞给 gh。
+          assets=(packages/*.deb packages/*.dylib)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No release assets to upload" >&2
+            exit 1
+          fi
+          printf 'Uploading: %s\n' "${assets[@]}"
+          gh release create "$RELEASE_TAG" "${assets[@]}" \
             --target "$RELEASE_TARGET_SHA" \
             --title "$RELEASE_TITLE" \
             --notes-file release-notes.md \
