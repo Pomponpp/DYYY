@@ -1375,6 +1375,17 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (double)contentOffsetYForCellAtIndex:(long long)index;
 - (void)adjustTableViewHeightForTargetIndex:(long long)index;
 @end
+// 41.3 详情页的滚动代理容器：算行高 / 落点 / 翻页吸附都在这里，
+// VC 上的同名方法不再被调用（真机诊断包 [rowq] 0 次可证）。
+@interface AWEDetailFeedScrollDelegateContainer : NSObject
+- (CGFloat)fixedCellHeight;
+- (double)cellHeightAtIndex:(long long)index;
+- (double)contentOffsetYForCellAtIndex:(long long)index;
+- (void)adjustTableViewHeightForTargetIndex:(long long)index;
+- (NSArray *)visibleDetailCells;
+- (NSUInteger)currentVisibleCellIndex;
+@end
+
 // 41.1 视图树实锤：评论列表区不透明底色来源（rgba(0.086,0.086,0.086,1.0)），
 // 盖在原生毛玻璃层之上，是"评论区黑色"的真凶。
 @interface AWEBaseListSectionBackgroundView : UIView

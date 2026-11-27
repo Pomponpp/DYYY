@@ -24,6 +24,7 @@
 #import "DYYYFloatingButtonCoordinator.h"
 #import "AwemeHeaders.h"
 #import <objc/runtime.h>
+#import <math.h>
 
 @interface DYYYFullscreenPlayerState : NSObject
 @property(nonatomic, weak) UIViewController *owner;
@@ -239,6 +240,63 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
             }
         }
     }
+}
+
+// 详情滚动代理容器侧的行高回答入口。
+// 背景：41.3 的详情页把"算行高 / 算落点 / 翻页吸附"交给 AWEDetailFeedScrollDelegateContainer，
+// VC 上的 fixedCellHeight / cellHeightAtIndex: 不再被调用（诊断包 [rowq] 0 次可证）。
+// 因此行高必须在这里回答，否则整套行高策略是死码，表被撑到 926 而行仍 843，留下 83 空档。
++ (UITableView *)detailTableForScrollDelegate:(id)delegate {
+    if (!delegate) return nil;
+    if (![delegate respondsToSelector:@selector(visibleDetailCells)]) return nil;
+    id cells = [delegate visibleDetailCells];
+    if (![cells isKindOfClass:[NSArray class]]) return nil;
+    for (id cell in (NSArray *)cells) {
+        if (![cell isKindOfClass:[UIView class]]) continue;
+        UIView *view = (UIView *)cell;
+        // 可见 cell 一定已挂到表上；沿父链上溯拿表，避免依赖容器的私有 provider 形态。
+        for (NSUInteger depth = 0; view && depth < 12; depth++, view = view.superview) {
+            if ([view isKindOfClass:[UITableView class]]) return (UITableView *)view;
+        }
+    }
+    return nil;
+}
+
++ (UIWindow *)rowHeightFallbackWindow {
+    for (UIWindow *window in [UIApplication sharedApplication].windows) {
+        if (window.isKeyWindow) return window;
+    }
+    return nil;
+}
+
++ (double)detailRowHeightForScrollDelegate:(id)delegate nativeHeight:(double)nativeHeight {
+    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) return nativeHeight;
+
+    UITableView *table = [self detailTableForScrollDelegate:delegate];
+    NSNumber *original = table ? objc_getAssociatedObject(table, @selector(prepareDetailTableNew:)) : nil;
+    NSNumber *pinned = table ? objc_getAssociatedObject(table, @selector(alignExistingCellsIfNeeded:target:)) : nil;
+    UIWindow *window = table.window ?: [self rowHeightFallbackWindow];
+    CGFloat windowHeight = window ? CGRectGetHeight(window.bounds)
+                                  : CGRectGetHeight([UIScreen mainScreen].bounds);
+    // 调用方就是详情的滚动容器，无表可查时也按详情页处理（窗口兜底分支仍成立）。
+    BOOL isDetail = table ? [self isDetailTable:table] : YES;
+
+    double answer = DYYYDetailRowHeightAnswer(1, isDetail ? 1 : 0, nativeHeight,
+                                              table ? CGRectGetHeight(table.bounds) : NAN,
+                                              original ? original.doubleValue : NAN,
+                                              pinned ? pinned.doubleValue : NAN,
+                                              windowHeight);
+    if (DYYYGetBool(@"DYYYDiagEntryEnabled")) {
+        static NSInteger sDelegateRowCalls = 0;
+        if (++sDelegateRowCalls <= 30) {
+            NSLog(@"[DYYY][rowq2] #%ld native=%.1f 答=%.1f 表=%@ 原高=%@ 窗口=%.1f",
+                  (long)sDelegateRowCalls, nativeHeight, answer,
+                  table ? [NSString stringWithFormat:@"%.1f", CGRectGetHeight(table.bounds)] : @"无",
+                  original ? [NSString stringWithFormat:@"%.1f", original.doubleValue] : @"无",
+                  windowHeight);
+        }
+    }
+    return answer;
 }
 
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight {

@@ -4253,32 +4253,13 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %end
 
 // 热点状态栏
-// 重构全屏·招③行高查询：行高只"回答"表视口高，不改写 cell（只答不改）。
-// 生效条件：实验档 
+// 行高查询（41.3 迁移说明）：
+//   抖音 41.3 把"算行高 / 算落点 / 翻页吸附"交给 AWEDetailFeedScrollDelegateContainer，
+//   VC 上的 fixedCellHeight / cellHeightAtIndex: / heightForRowAtIndexPath: 不再被调用
+//   （真机诊断包 [rowq] 0 次可证）。这三个入口曾经是行高回答点，现在保留在原类上只会
+//   造成"两个回答点"的歧义，因此已移除；行高改由下面的滚动容器 block 统一回答。
+//   本 block 只保留布局前后准备表高与状态栏/建行入口，不改行高。
 %hook AWEAwemeDetailTableViewController
-
-- (double)fixedCellHeight {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
-        return %orig;
-    }
-    // #31 闭环：先准备表（记原高/撑回满视口），再按同源规则回答。
-    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    double nativeHeight = %orig;
-    return [DYYYFullscreenCoordinator detailRowHeight:[self tableView] nativeHeight:nativeHeight];
-}
-
-- (double)cellHeightAtIndex:(long long)index {
-    return [self fixedCellHeight];
-}
-
-- (double)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (!DYYYGetBool(@"DYYYEnableFullScreen") || !NSThread.isMainThread) {
-        return %orig;
-    }
-    [DYYYFullscreenCoordinator prepareDetailTableNew:self];
-    double nativeHeight = %orig;
-    return [DYYYFullscreenCoordinator detailRowHeight:table nativeHeight:nativeHeight];
-}
 
 // 详情页建行/落点/翻页入口（对齐已验证实现的同源纪律）：
 // 每个入口都先 prepare 撑高表，再放行原生——建行、落点、分页看到同一个表高。
@@ -4319,6 +4300,23 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
     if (DYYYGetBool(@"DYYYEnableFullScreen")) {
         [DYYYFullscreenCoordinator prepareDetailTableNew:self];
     }
+}
+
+%end
+
+// 41.3 行高唯一回答点：详情滚动代理容器（AWEDetailFeedScrollDelegateContainer）。
+// 只回答"行高"，不改 offset / 落点 / 分页——抖音按我们说出的行高自行推导档位与吸附，
+// 若这里再改一遍落点，就变成两套坐标互相推翻（历史上 843/926 拔河就是这么来的）。
+%hook AWEDetailFeedScrollDelegateContainer
+
+- (CGFloat)fixedCellHeight {
+    double native = %orig;
+    return [DYYYFullscreenCoordinator detailRowHeightForScrollDelegate:self nativeHeight:native];
+}
+
+- (double)cellHeightAtIndex:(long long)index {
+    double native = %orig;
+    return [DYYYFullscreenCoordinator detailRowHeightForScrollDelegate:self nativeHeight:native];
 }
 
 %end
@@ -10310,7 +10308,10 @@ static void findTargetViewInView(UIView *view) {
                      // hook 健康度：期望值 = 编译期 hook 块内方法总数（见脚本统计）。
                      // 实际生效数靠运行时扫 _logos_method$ 前缀得到。
                      // 数字对不上说明「类在、但方法签名变了导致 hook 静默失效」。
-                     [DYYYClassRegistry setExpectedHookCount:739];
+                     // 41.3 行高钩点迁移后的净变化：VC 侧移除 3 个死钩点
+                     // （fixedCellHeight / cellHeightAtIndex: / heightForRowAtIndexPath:），
+                     // 滚动容器侧新增 2 个（fixedCellHeight / cellHeightAtIndex:），净 −1。
+                     [DYYYClassRegistry setExpectedHookCount:738];
                      NSString *health = [DYYYClassRegistry hookHealthText];
                      NSLog(@"[DYYY][compat] %@", health);
                      // 状态自证日志：导出的日志首段即可确认实验档是否生效，

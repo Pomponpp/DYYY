@@ -19,6 +19,9 @@
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame;
 + (CGRect)adjustDetailTableFrame:(UIView *)table frame:(CGRect)frame target:(CGFloat)target;
 + (double)detailRowHeight:(UITableView *)table nativeHeight:(double)nativeHeight;
+// 详情滚动代理容器侧的行高回答（41.3 起行高查询由 AWEDetailFeedScrollDelegateContainer 发出，
+// VC 上的同名方法不再被调用）。table 由容器的可见 cell 反查，拿不到时按窗口高兜底。
++ (double)detailRowHeightForScrollDelegate:(id)delegate nativeHeight:(double)nativeHeight;
 + (void)alignExistingCellsIfNeeded:(UITableView *)table target:(CGFloat)target;
 + (CGFloat)heightForDetailRow:(CGFloat)height table:(UITableView *)table controller:(UIViewController *)controller;
 + (BOOL)layoutNativeInteraction:(UIViewController *)controller;

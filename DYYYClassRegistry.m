@@ -20,6 +20,9 @@ static const DYYYAuditEntry kDYYYAuditTable[] = {
     // ---- 全屏 / 互动区链路 ----
     DYYY_AUDIT("AWEPlayInteractionViewController", "全屏布局、互动区、评论入口"),
     DYYY_AUDIT("AWEAwemeDetailTableViewController", "详情页全屏分页"),
+    // 41.3 起行高的真实查询宿主：算行高/落点/翻页吸附都在这个容器上，
+    // 它要是改名，全屏详情页的行高回答会整体失效（表 926 / 行 843 留 83 空档）。
+    DYYY_AUDIT("AWEDetailFeedScrollDelegateContainer", "详情页行高回答"),
     DYYY_AUDIT("AWEAwemeDetailCellViewController", "详情页底栏透明"),
     DYYY_AUDIT("AFDPlayRemoteFeedTableViewController", "远程播放页排除"),
     DYYY_AUDIT("AFDPureModePageListViewController", "清屏纯净模式状态栏"),
