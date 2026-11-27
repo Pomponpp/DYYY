@@ -213,74 +213,48 @@ static void DYYYDiagFinishExport(DYYYDiagnosticsExportResult *result, UIViewCont
         return;
     }
 
-    NSString *name = result.zipURL.lastPathComponent ?: @"诊断包";
-    UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"导出完成"
-                                            message:[NSString stringWithFormat:@"已生成 %@\n点「分享」可保存到文件或发出去。", name]
-                                     preferredStyle:UIAlertControllerStyleAlert];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"分享"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(__unused UIAlertAction *action) {
-                                             // 分享面板必须从 App 自己的控制器弹出，理由见 DYYYDiagUIContextHost。
-                                             UIViewController *host = DYYYDiagUIContextHost();
-                                             if (!host) {
-                                                 DYYYDiagFinalizeExportAndRecover(result);
-                                                 return;
-                                             }
-                                             UIActivityViewController *activity =
-                                                 [[UIActivityViewController alloc] initWithActivityItems:@[ result.zipURL ]
-                                                                                   applicationActivities:nil];
-                                             if (activity.popoverPresentationController) {
-                                                 activity.popoverPresentationController.sourceView = host.view;
-                                                 activity.popoverPresentationController.sourceRect = host.view.bounds;
-                                             }
-                                             __block BOOL recovered = NO;
-                                             void (^recoverOnce)(void) = ^{
-                                               if (recovered) return;
-                                               recovered = YES;
-                                               DYYYDiagFinalizeExportAndRecover(result);
-                                             };
-                                             activity.completionWithItemsHandler =
-                                                 ^(__unused UIActivityType type, __unused BOOL completed,
-                                                   __unused NSArray *items, __unused NSError *error) {
-                                                   recoverOnce();
-                                                 };
-                                             [host presentViewController:activity animated:YES completion:nil];
-                                             // 兜底：completionWithItemsHandler 在「交给别的 App」路径上
-                                             // 常常不回调（微信/输入法中转），不兜底就会一直卡在分享页。
-                                             // 3 秒后若分享面板已不在窗口上，直接收尾复位。
-                                             dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                                                          (int64_t)(3.0 * NSEC_PER_SEC)),
-                                                            dispatch_get_main_queue(), ^{
-                                                              if (activity.presentingViewController == nil ||
-                                                                  activity.view.window == nil) {
-                                                                  recoverOnce();
-                                                              }
-                                                            });
-                                           }]];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"完成"
-                                             style:UIAlertActionStyleCancel
-                                           handler:^(__unused UIAlertAction *action) {
-                                             DYYYDiagFinalizeExportAndRecover(result);
-                                           }]];
-
-    // 关键：alert 也从 App 窗口弹，不从浮层弹。
-    // 从浮层弹时 capturesOverlayTouches 会返回 YES，浮层整屏吞触摸，
-    // 表现就是「点导出后界面蒙住、只有扳手能点」。
+    // 导出完成直接进系统分享面板，中间不再插一层「导出完成」提示框。
+    //
+    // 原因：每一次 modal 切换都会让 App 的 active / key 状态抖一次，
+    // 播放器监听这些事件后暂停。原来这条链路要连抖三次
+    // （进度框 → 导出完成框 → 分享面板），导出完视频就停在暂停态，
+    // 得手动暂停+播放触发一次 seek 才恢复。
+    // 砍掉中间那层后只剩两次切换，与行为对照版本的链路一致。
     UIViewController *host = DYYYDiagUIContextHost();
     if (!host) {
         DYYYDiagCleanupExport(result);
         return;
     }
-    if (host.presentedViewController && !host.presentedViewController.isBeingDismissed) {
-        [host dismissViewControllerAnimated:NO completion:^{
-          [host presentViewController:alert animated:YES completion:nil];
-        }];
-        return;
+
+    UIActivityViewController *activity =
+        [[UIActivityViewController alloc] initWithActivityItems:@[ result.zipURL ] applicationActivities:nil];
+    if (activity.popoverPresentationController) {
+        activity.popoverPresentationController.sourceView = host.view;
+        activity.popoverPresentationController.sourceRect = host.view.bounds;
     }
-    [host presentViewController:alert animated:YES completion:nil];
+    __block BOOL recovered = NO;
+    void (^recoverOnce)(void) = ^{
+      if (recovered) return;
+      recovered = YES;
+      DYYYDiagFinalizeExportAndRecover(result);
+    };
+    activity.completionWithItemsHandler =
+        ^(__unused UIActivityType type, __unused BOOL completed,
+          __unused NSArray *items, __unused NSError *error) {
+          recoverOnce();
+        };
+    [host presentViewController:activity animated:YES completion:nil];
+    // 兜底：completionWithItemsHandler 在「交给别的 App」路径上常常不回调
+    // （微信/输入法中转），不兜底就会一直卡在分享页。
+    // 这里只复位界面状态，不删 zip —— 用户可能还在别的 App 里读这个文件。
+    // 真正的清理留给 completionWithItemsHandler。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                     if (activity.presentingViewController == nil || activity.view.window == nil) {
+                         DYYYDiagRecoverOverlayStateIfNeeded();
+                         DYYYDiagnosticsOverlayRefresh();
+                     }
+                   });
 }
 
 static void DYYYDiagSetProgress(UIAlertController *alert, NSString *text) {

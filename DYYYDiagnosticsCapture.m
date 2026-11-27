@@ -539,35 +539,30 @@ static void DYYYDiagAppendVCText(UIViewController *vc, NSUInteger depth, NSMutab
 static NSData *DYYYDiagScreenshotPNG(UIWindow *targetWindow) {
     if (!targetWindow) return NSData.data;
 
-    // 截图必须"不参与渲染"。
-    //
-    // drawViewHierarchyInRect 会对整棵视图树做一次离屏渲染提交，
-    // 其中的 CAMetalLayer 视频层会被强制拉帧，drawable 状态被打乱：
-    // 画面冻结在最后一帧，复用播放器切下一个视频时 drawable 不重新绑定，
-    // 表现就是每个视频都停在"暂停态"，必须手动暂停+播放触发 seek 才恢复。
-    // 这个副作用从诊断系统最早就存在（152 版同样复现）。
-    //
-    // 改用 layer 的 renderInContext：它只做 CoreAnimation 的合成拷贝，
-    // 不会向 Metal 提交 drawable，因此不会干扰播放。
-    // 代价是 Metal 视频画面在截图里可能是黑的——诊断只需要看 UI 布局，
-    // 这个取舍远好于破坏播放器状态。
-    CGSize size = targetWindow.bounds.size;
-    if (size.width <= 0 || size.height <= 0) return NSData.data;
+    // 按 windowLevel 从低到高逐个画，截图才等于用户真正看到的画面。
+    // 只画 key 窗口会漏层：内嵌画中画窗口在 windowLevel 2000，铺满全屏时
+    // 只画目标窗口会得到一张"看起来正常但缺了主画面"的图，排查会绕远路。
+    // scale 传 0 = 跟随屏幕，与设备实际像素一致。
+    NSArray<UIWindow *> *windows =
+        [DYYYDiagActiveWindows() sortedArrayUsingComparator:^NSComparisonResult(UIWindow *a, UIWindow *b) {
+            if (a.windowLevel == b.windowLevel) return NSOrderedSame;
+            return a.windowLevel < b.windowLevel ? NSOrderedAscending : NSOrderedDescending;
+        }];
+    if (windows.count == 0) windows = @[ targetWindow ];
 
-    UIGraphicsBeginImageContextWithOptions(size, NO, 1.0);
-    CGContextRef ctx = UIGraphicsGetCurrentContext();
-    NSData *result = nil;
-    if (ctx) {
-        @try {
-            [targetWindow.layer renderInContext:ctx];
-            UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-            result = image ? UIImagePNGRepresentation(image) : NSData.data;
-        } @catch (__unused NSException *exception) {
-            result = NSData.data;
+    UIGraphicsBeginImageContextWithOptions(targetWindow.bounds.size, NO, 0);
+    @try {
+        for (UIWindow *window in windows) {
+            BOOL drew = [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:NO];
+            if (!drew) [window.layer renderInContext:UIGraphicsGetCurrentContext()];
         }
+        UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+        return image ? UIImagePNGRepresentation(image) : NSData.data;
+    } @catch (__unused NSException *exception) {
+        return NSData.data;
+    } @finally {
+        UIGraphicsEndImageContext();
     }
-    UIGraphicsEndImageContext();
-    return result ?: NSData.data;
 }
 
 #pragma mark - 页面类收集
@@ -714,7 +709,6 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
     context.selectedViewJSON = selected;
     context.viewControllersText = vcText;
     context.layersJSON = layersJSON;
-    context.screenshotPNG = DYYYDiagScreenshotPNG(targetWindow);
     context.summary = summary;
     context.pageClassNames = pageClasses.allObjects;
     context.sourceView = targetWindow;
