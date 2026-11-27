@@ -436,18 +436,32 @@ static const CGFloat kDYYYDetailHeightTol = 0.5;
     for (UIViewController *owner = controller; owner; owner = owner.parentViewController) {
         if (![owner respondsToSelector:@selector(activeBottomBar)]) continue;
         UIView *bar = [(AWEAwemeDetailTableViewController *)owner activeBottomBar];
-        if (bar.window == window && bar.bounds.size.height > 0 && [self visible:bar]) return bar.bounds.size.height;
+        if (bar.window == window && bar.bounds.size.height > 0) return bar.bounds.size.height;
     }
     // 评论会隐藏底栏，尺寸仍以同一窗口中的真实栏为准。
-    // 关键：必须走 visible: 判定，不能只看 window + 高度。
-    // 聊天页（单聊/群聊视频）的根 tab bar 是 hidden=YES 且被移到 x=-428，
-    // 但它的 bounds 仍是 428×83；只看窗口和高度会把它当成可见底栏扣掉 83，
-    // 把互动层从 843 压成 760，进度条随之整体上移、松手回落（拖动弹跳）。
+    //
+    // 这里只问"这条栏在这个窗口里存不存在"，不问 hidden / alpha / 坐标。
+    // 曾经加过可见性判定，结果是：详情页拖动进度条时抖音把底栏淡出，
+    // 判定立刻归 0，互动层从 843 撑回 926，进度条反而下移 83，
+    // 松手后底栏恢复又弹回来（拖动往下弹、松手回位）。
+    //
+    // 聊天页那个 x=-428 的隐藏根 tab bar 也确实会被算进来，但不需要在这里排除：
+    // 调用方 DYYY.xm 已有"父容器已经让过位就不再扣第二次"的判断——
+    // 聊天页互动层父容器是 843（= 926 − 83 输入栏），会让 occupied 归 0，
+    // 最终高度仍是 843。两处合起来才成立，不要再单独往这里加可见性条件。
     for (UIView *bar in [self tabBars].allObjects) {
-        if (bar.window == window && bar.bounds.size.height > 0 && [self visible:bar]) return bar.bounds.size.height;
+        if (bar.window == window && bar.bounds.size.height > 0) return bar.bounds.size.height;
     }
     return 0;
 }
+
+// 这条栏是否真的占据窗口的可视横向范围。
+// 只看横向坐标，纵向一律不管：
+//   · 完全被移出屏幕（例如 x=-428 的隐藏 tab bar）→ NO，不当作底栏；
+//   · 仍坐在原位、只是 hidden / alpha / 纵向动画变化的栏 → YES。
+//     淡出和位移都只是视觉，布局上这块空间仍然被占着，高度不能当 0。
+// 纵向也参与判定的话，拖动时抖音一旦把底栏往下带一点就会误判成"没有底栏"，
+// 互动层撑回 926，进度条下移——这正是要修的弹跳本身。
 + (CGRect)rect:(CGRect)rect followingView:(UIView *)view controller:(UIViewController *)controller anchor:(UIView *)anchor {
     UIWindow *window = view.window;
     UIView *cell = [self cellForPlayer:view owner:controller];
