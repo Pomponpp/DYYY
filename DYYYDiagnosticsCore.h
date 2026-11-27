@@ -74,6 +74,16 @@ NSString *DYYYNameOfObject(id object);
 /// 返回 NULL 表示该类的名字还未生成；调用方应自行给占位符。
 const char *DYYYDiagRawClassName(Class cls);
 
+/// 直读 class_t 的 superclass 槽位，不调用 class_getSuperclass。
+/// 后者内部先 realizeMaybe()，惰性 Swift 类会被 realize 并触发 demangler，
+/// 畸形泛型名直接 abort。未 realize 的类父类指针在链接期已填好，纯读即可。
+Class DYYYDiagSuperClass(Class cls);
+
+/// 分步打点：写一行日志并立即落盘。
+/// 导出流程崩在后台线程时，进程被杀后内存缓冲留不下任何东西；
+/// 每步主动 flush 才能保证 runtime.log 停在最后一个成功步骤。
+void DYYYDiagStep(NSString *text);
+
 /// 诊断开关读取（统一走 NSUserDefaults，DYYY 键名直读）。
 BOOL DYYYPrefBool(NSString *key);
 NSInteger DYYYPrefInteger(NSString *key);

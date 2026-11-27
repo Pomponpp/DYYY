@@ -553,17 +553,19 @@ static NSData *DYYYDiagScreenshotPNG(UIWindow *targetWindow) {
 #pragma mark - 页面类收集
 
 // 收集一个类及其整条继承链的类名：跳过运行时生成子类噪声，但继续上溯。
-// 全程只用 DYYYDiagRawClassName：抖音的 Swift 类里有畸形 mangled 名，
-// NSStringFromClass 以及 class_getSuperclass 都会触发 swift demangle abort。
-// 上溯只读 raw 名，不调用任何会解析或安装名字的 API。
+// 全程不调用任何会触发 realize 的 runtime API：
+//   · 名字走 DYYYDiagRawClassName（直读 class_ro_t.name）
+//   · 父类走 DYYYDiagSuperClass（直读 class_t.superclass）
+// 任何一次 realize 都可能把惰性 Swift 泛型类送进 demangler，
+// 畸形 mangled 名 failAssert → abort。直播间里这类层最多，所以那边最易崩。
 static void DYYYDiagCollectClassAndSupers(Class cls, NSMutableSet<NSString *> *names) {
     for (int i = 0; cls && i < 50; i++) {
+        // 已知坏类立即停，不再对它们做任何读取或上溯。
+        if (!DYYYDiagClassIsSafe(cls)) break;
         const char *raw = DYYYDiagRawClassName(cls);
         NSString *name = raw ? [NSString stringWithUTF8String:raw] : nil;
         if (name.length && !DYYYDiagClassNameIsRuntimeGenerated(name)) [names addObject:name];
-        // 父类指针直接取自 class 结构体，不触发 demangle。
-        cls = class_getSuperclass(cls);
-        if (cls && !DYYYDiagClassIsSafe(cls)) break;
+        cls = DYYYDiagSuperClass(cls);
     }
 }
 
@@ -610,9 +612,15 @@ static NSDictionary *DYYYDiagMetadata(UIWindow *targetWindow, CGPoint point) {
 @implementation DYYYDiagnosticsContext
 @end
 
+// 分步打点用 Core 里的 DYYYDiagStep（写一行并立即落盘）。
+// 崩溃发生在后台线程时，进程被杀后内存缓冲留不下任何东西，
+// 每步主动 flush 才能保证 runtime.log 停在最后一个成功步骤。
+
 DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint point, UIView *selectedView) {
+    DYYYDiagStep(@"capture 开始");
     DYYYDiagnosticsContext *context = [DYYYDiagnosticsContext new];
     NSArray<UIWindow *> *windows = DYYYDiagActiveWindows();
+    DYYYDiagStep([NSString stringWithFormat:@"windows 取得 %lu 个", (unsigned long)windows.count]);
     NSMutableArray *windowsJSON = [NSMutableArray array];
     NSMutableArray *treeJSON = [NSMutableArray array];
     NSMutableArray *layersJSON = [NSMutableArray array];
@@ -624,22 +632,30 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
     BOOL treeTruncated = NO;
 
     for (UIWindow *window in windows) {
+        NSString *winName = DYYYDiagClassName(window);
         [windowsJSON addObject:DYYYDiagWindowJSON(window)];
+        DYYYDiagStep([NSString stringWithFormat:@"%@ windowsJSON 完成", winName]);
         // JSON 与文本树各自独立预算：两者遍历路径不同，不共享计数才能各自完整。
         DYYYDiagTreeBudget jsonBudget = {0, NO};
         DYYYDiagTreeBudget textBudget = {0, NO};
         [treeJSON addObject:DYYYDiagViewTreeJSON(window, 0, layersJSON, &jsonBudget)];
+        DYYYDiagStep([NSString stringWithFormat:@"%@ 视图树JSON 完成 %lu 节点", winName, (unsigned long)jsonBudget.count]);
         DYYYDiagAppendViewTreeText(window, 0, treeText, &textBudget);
+        DYYYDiagStep([NSString stringWithFormat:@"%@ 视图树文本 完成 %lu 节点", winName, (unsigned long)textBudget.count]);
         if (jsonBudget.hitLimit || textBudget.hitLimit) treeTruncated = YES;
         DYYYDiagCollectPageClassesFromView(window, pageClasses);
+        DYYYDiagStep([NSString stringWithFormat:@"%@ 页面类(视图) 完成 %lu 个", winName, (unsigned long)pageClasses.count]);
         DYYYDiagCollectPageClassesFromVC(window.rootViewController, pageClasses, seenClassVCs);
+        DYYYDiagStep([NSString stringWithFormat:@"%@ 页面类(VC) 完成 %lu 个", winName, (unsigned long)pageClasses.count]);
         if (window.rootViewController) {
             [vcText appendFormat:@"Window %@ %@\n", DYYYDiagClassName(window), DYYYDiagStringFromPointer((__bridge const void *)window)];
             DYYYDiagAppendVCText(window.rootViewController, 1, vcText, seenVCs);
+            DYYYDiagStep([NSString stringWithFormat:@"%@ VC树 完成", winName]);
         }
     }
 
     UIViewController *nearestVC = DYYYDiagViewControllerForView(selectedView);
+    DYYYDiagStep(@"nearestVC 解析完成");
     NSDictionary *selected = @{
         @"tapPointInWindow": DYYYDiagPointDict(point),
         @"hitView": DYYYDiagBaseViewInfo(selectedView ?: targetWindow, 0),
@@ -649,6 +665,7 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
         } : @{},
         @"ancestorChain": selectedView ? DYYYDiagAncestorChain(selectedView) : @[]
     };
+    DYYYDiagStep(@"selectedView 信息完成");
 
     NSString *summary = [NSString stringWithFormat:
                          @"Hit: %@ %@\nFrame: %@\nBounds: %@\nNearest VC: %@ %@\nWindows: %lu\nSubviews: %lu",
@@ -660,6 +677,7 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
                          nearestVC ? DYYYDiagStringFromPointer((__bridge const void *)nearestVC) : @"",
                          (unsigned long)windows.count,
                          (unsigned long)selectedView.subviews.count];
+    DYYYDiagStep(@"summary 完成");
 
     NSMutableDictionary *metadata = [DYYYDiagMetadata(targetWindow, point) mutableCopy];
     if (treeTruncated) {
@@ -669,6 +687,7 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
         metadata[@"treeLimitNodes"] = @(kDYYYDiagMaxTreeNodes);
     }
     context.metadata = metadata;
+    DYYYDiagStep(@"metadata 完成");
     context.windowsJSON = windowsJSON;
     context.viewTreeJSON = treeJSON;
     context.viewTreeText = treeText;
@@ -680,5 +699,9 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
     context.pageClassNames = pageClasses.allObjects;
     context.sourceView = targetWindow;
     context.presenter = DYYYDiagTopPresenter(targetWindow);
+    DYYYDiagStep([NSString stringWithFormat:@"截图 开始 classes=%lu", (unsigned long)pageClasses.count]);
+    context.screenshotPNG = DYYYDiagScreenshotPNG(targetWindow);
+    DYYYDiagStep([NSString stringWithFormat:@"截图 完成 %lu 字节", (unsigned long)context.screenshotPNG.length]);
+    DYYYDiagStep(@"capture 全部完成");
     return context;
 }

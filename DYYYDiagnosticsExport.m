@@ -305,9 +305,13 @@ DYYYDiagnosticsExportResult *DYYYDiagCreateExport(DYYYDiagnosticsContext *contex
     }
 
     DYYYDiagExportSink *sink = [[DYYYDiagExportSink alloc] initWithRootDir:rootDir];
+    DYYYDiagStep(@"export: sink 就绪");
     DYYYDiagWriteString(sink, @"README.txt", DYYYDiagReadme(context), NO);
+    DYYYDiagStep(@"export: README 完成");
     DYYYDiagWriteData(sink, @"ui/screenshot.png", context.screenshotPNG, NO);
+    DYYYDiagStep(@"export: 截图 完成");
     DYYYDiagWritePageFiles(sink, context, progress);
+    DYYYDiagStep([NSString stringWithFormat:@"export: 页面文件 完成 files=%lu", (unsigned long)sink.files.count]);
 
     @try {
         DYYYDiagWriteCrashFiles(sink, progress);
@@ -315,6 +319,7 @@ DYYYDiagnosticsExportResult *DYYYDiagCreateExport(DYYYDiagnosticsContext *contex
         DYYYDiagRecordError(sink, @"crash", @"crash-collect",
                             DYYYDiagMakeExportError(30, exception.reason ?: @"崩溃报告收集异常", nil), NO);
     }
+    DYYYDiagStep(@"export: 崩溃报告 完成");
 
     // 运行日志全文：Core 先 flush（缓冲 → runtime.log），这里读文件。
     if (progress) progress(@"写入运行日志全文...");
@@ -324,14 +329,20 @@ DYYYDiagnosticsExportResult *DYYYDiagCreateExport(DYYYDiagnosticsContext *contex
     if (runtime.length) {
         DYYYDiagWriteString(sink, @"probe/runtime.log", runtime, NO);
     }
+    DYYYDiagStep(@"export: 运行日志 完成");
 
     // 适配三件套：类自检 / 运行时类清单 / 目标类方法清单。
     if (progress) progress(@"写入适配诊断...");
+    DYYYDiagStep(@"export: compat 开始");
     @try {
         DYYYDiagWriteString(sink, @"compat/audit.txt", [DYYYClassRegistry auditReportText], NO);
+        DYYYDiagStep(@"export: audit.txt 完成");
         DYYYDiagWriteString(sink, @"compat/hook-health.txt", [DYYYClassRegistry hookHealthText], NO);
+        DYYYDiagStep(@"export: hook-health.txt 完成");
         DYYYDiagWriteString(sink, @"compat/class-list.txt", [DYYYClassRegistry runtimeClassListText], NO);
+        DYYYDiagStep(@"export: class-list.txt 完成");
         DYYYDiagWriteString(sink, @"compat/target-methods.txt", [DYYYClassRegistry targetMethodsText], NO);
+        DYYYDiagStep(@"export: target-methods.txt 完成");
     } @catch (NSException *exception) {
         DYYYDiagRecordError(sink, @"compat", @"compat-collect",
                             DYYYDiagMakeExportError(31, exception.reason ?: @"适配诊断采集异常", nil), NO);

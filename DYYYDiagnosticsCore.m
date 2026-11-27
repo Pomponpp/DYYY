@@ -344,15 +344,34 @@ NSString *DYYYNameOfClass(Class cls) {
     return [NSString stringWithUTF8String:raw];
 }
 
+// 直读类的 name 字段，不调用 class_getName。
+// class_getName 对尚未具名的 Swift 类会先做 installMangledNameForLazilyNamedClass，
+// 那一步进 libswiftCore demangler，畸形泛型 mangled 名 failAssert → abort。
+//
+// class_t 布局：isa(0) / superclass(8) / cache(16–31) / bits(32)。
+// class_ro_t 布局：flags/instanceStart/instanceSize/reserved(0–15) / name(24)。
 const char *DYYYDiagRawClassName(Class cls) {
     if (!cls) return NULL;
-    // class_t +32 = bits（低 3 位是标志，掩掉得到 class_ro_t*）
-    // class_ro_t +24 = name
-    // name 为 NULL 表示 Swift 类尚未安装名字；此处不触发安装，直接返回 NULL。
     uintptr_t bits = *(uintptr_t *)((uint8_t *)(__bridge void *)cls + 32);
     uintptr_t roAddr = bits & (uintptr_t)0x00007ffffffffff8ULL;
     if (!roAddr) return NULL;
+    // name 为 NULL 表示 Swift 类尚未安装名字；此处不触发安装，直接返回 NULL。
     return *(const char **)((uint8_t *)roAddr + 24);
+}
+
+// 直读父类槽位，不调用 class_getSuperclass。
+// class_getSuperclass 内部先 cls->realizeMaybe()：惰性 Swift 类一旦被 realize，
+// 同样走 installMangledNameForLazilyNamedClass → demangler → abort。
+// 只拆"读名字"不拆"读父类"，上溯时仍会踩到同一个坑——两处必须一起改。
+// 未 realize 的类，superclass 在链接期已填好，纯读即可。
+Class DYYYDiagSuperClass(Class cls) {
+    if (!cls) return Nil;
+    return *(Class *)((uint8_t *)(__bridge void *)cls + 8);
+}
+
+void DYYYDiagStep(NSString *text) {
+    [DYYYDiagnostics appendRuntimeLogLine:[@"[DYYY][diag-step] " stringByAppendingString:text]];
+    [DYYYDiagnostics flushRuntimeLogToFile];
 }
 
 NSString *DYYYNameOfObject(id object) {

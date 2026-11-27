@@ -59,15 +59,18 @@ static void DYYYDiagClassDumpInit(void) {
 BOOL DYYYDiagClassIsSafe(Class cls) {
     if (!cls) return NO;
     if (DYYYDiagUnsafeClassSet && CFSetContainsValue(DYYYDiagUnsafeClassSet, (__bridge const void *)cls)) return NO;
-    // 不能用 class_getSuperclass 判断"是不是根类"：
-    // 它在内部会走 objc_class::demangledName → libswiftCore 的
-    // copyGenericClassObjCName，畸形 Swift 泛型 mangled 名会 failAssert → abort。
-    // 真机实测：427/428 在所有页面导出必崩，栈顶就是 demangledName。
-    // 改用直读 class_ro_t 的 name 字段（DYYYDiagRawClassName），不触发任何 demangle。
+    // 原来用 class_getSuperclass 判断"是不是根类"，但它在内部会先 realizeMaybe()，
+    // 惰性 Swift 类一旦 realize 就进 libswiftCore demangler，
+    // 畸形泛型 mangled 名 failAssert → abort（真机栈顶就是 demangledName）。
+    // 现在统一走纯读：名字取 class_ro_t.name，父类取 class_t.superclass。
+    //
+    // 注意：abort 不是 ObjC 异常，@try 拦不住它，
+    // 所以"越界读由 try/catch 兜住"这种兜底在这里不成立——
+    // 唯一可靠的做法就是别调用会 realize 或会解析名字的 runtime API。
     const char *raw = DYYYDiagRawClassName(cls);
     if (!raw) return NO;
     if (strcmp(raw, "NSObject") == 0 || strcmp(raw, "NSProxy") == 0) return YES;
-    // 其余类只要名字可读就允许内省；真正的越界读由下面各处 try/catch 兜住。
+    // 名字可读的类允许内省；父类槽位是纯读，不产生副作用。
     return YES;
 }
 
@@ -219,9 +222,9 @@ static NSString *DYYYDiagHeaderForClass(Class cls, NSString *imageName) {
                     className, imageName ?: @"Unknown"];
         }
 
-        // 父类名同样直读 raw name，不经过 class_getSuperclass
-        // （后者会触发 Swift demangler，见 DYYYDiagClassIsSafe 处的说明）。
-        Class superCls = class_getSuperclass(cls);
+        // 父类指针直读 class_t.superclass，不调用 class_getSuperclass。
+        // 后者内部会 realizeMaybe()，惰性 Swift 类一被 realize 就进 demangler。
+        Class superCls = DYYYDiagSuperClass(cls);
         const char *rawSuper = superCls ? DYYYDiagRawClassName(superCls) : NULL;
         NSString *superName = rawSuper ? [NSString stringWithUTF8String:rawSuper] : @"NSObject";
 
