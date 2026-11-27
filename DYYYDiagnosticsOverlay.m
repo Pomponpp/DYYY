@@ -121,7 +121,11 @@ static BOOL DYYYDiagIsDebugOverlayWindow(UIWindow *window) {
 static UIViewController *DYYYDiagUIContextHost(void) {
     UIWindow *target = DYYYDiagTargetWindow();
     UIViewController *root = target.rootViewController;
-    if (!root) return DYYYDiagController;
+    // 找不到 App 自己的窗口就放弃，绝不能退回浮层控制器：
+    // 从浮层 present 面板会让 capturesOverlayTouches 返回 YES，
+    // 浮层整屏吞掉触摸，表现为"界面被灰蒙版盖住、只剩扳手能点"。
+    if (!root) return nil;
+    if ([root isKindOfClass:DYYYDiagOverlayViewController.class]) return nil;
 
     UIViewController *top = root;
     for (NSUInteger depth = 0; top && depth < 16; depth++) {
@@ -129,8 +133,10 @@ static UIViewController *DYYYDiagUIContextHost(void) {
         if (!presented || presented.isBeingDismissed) break;
         top = presented;
     }
-    // 万一路径上撞到我们自己的浮层（旧版本残留的调用），退回窗口根控制器。
-    if ([top isKindOfClass:DYYYDiagOverlayViewController.class] || !top) return root;
+    // 沿 present 链走到浮层上时回到窗口根控制器；根也不是 App 的就放弃。
+    if ([top isKindOfClass:DYYYDiagOverlayViewController.class] || !top) {
+        return [root isKindOfClass:DYYYDiagOverlayViewController.class] ? nil : root;
+    }
     if (!top.viewIfLoaded.window) return root;
     return top;
 }
@@ -614,17 +620,25 @@ static void DYYYDiagEnsureDebugWindow(void) {
 }
 
 - (void)exportWholePage {
-    UIWindow *targetWindow = DYYYDiagTargetWindow();
-    if (!targetWindow) {
-        DYYYDiagPresentError(self, @"没有找到可导出的 App 窗口");
-        return;
-    }
+    // 扳手菜单（ActionSheet）是从浮层控制器自己弹出的。它的 action handler 一触发，
+    // 菜单还在做 dismiss 动画；此时马上从别的控制器 present 进度框，
+    // 两条 modal 链相撞，菜单可能停在半关闭状态。
+    // 一旦浮层控制器残留 presentedViewController，capturesOverlayTouches 就返回 YES，
+    // 浮层整屏吞触摸 —— 表现为"界面被灰蒙版盖住、只剩扳手能点"，必须重启。
+    // 跳一帧让菜单先完成 dismiss，再进入导出。
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIWindow *targetWindow = DYYYDiagTargetWindow();
+        if (!targetWindow) {
+            DYYYDiagPresentError(self, @"没有找到可导出的 App 窗口");
+            return;
+        }
 
-    // 调试浮层始终置顶、无需选元素：直接快照整页（selectedView=nil 即整窗）。
-    DYYYDiagnosticsContext *context = DYYYDiagCaptureContext(targetWindow, CGPointZero, nil);
-    context.presenter = nil;
-    context.sourceView = nil;
-    DYYYDiagStartExport(context);
+        // 调试浮层始终置顶、无需选元素：直接快照整页（selectedView=nil 即整窗）。
+        DYYYDiagnosticsContext *context = DYYYDiagCaptureContext(targetWindow, CGPointZero, nil);
+        context.presenter = nil;
+        context.sourceView = nil;
+        DYYYDiagStartExport(context);
+    });
 }
 
 // 面板（菜单/进度）在场时窗口恢复全量命中——否则"关闭"的触摸被穿透。
@@ -665,14 +679,27 @@ static void DYYYDiagEnsureDebugWindow(void) {
 // 这里在每次回到前台时统一收尾。
 static void DYYYDiagRecoverOverlayStateIfNeeded(void) {
     UIViewController *controller = DYYYDiagController;
-    if (!controller) return;
+    if (controller) {
+        UIViewController *presented = controller.presentedViewController;
+        if (presented) {
+            BOOL isStaleShare = [presented isKindOfClass:[UIActivityViewController class]];
+            BOOL isGone = presented.isBeingDismissed || presented.view.window == nil;
+            if (isStaleShare || isGone) {
+                [controller dismissViewControllerAnimated:NO completion:nil];
+            }
+        }
+    }
 
-    UIViewController *presented = controller.presentedViewController;
-    if (presented) {
-        BOOL isStaleShare = [presented isKindOfClass:[UIActivityViewController class]];
-        BOOL isGone = presented.isBeingDismissed || presented.view.window == nil;
-        if (isStaleShare || isGone) {
-            [controller dismissViewControllerAnimated:NO completion:nil];
+    // 分享面板是从 App 控制器弹的，走「交给别的 App」路径时可能停在
+    // dismiss 一半的状态：面板已经不在窗口上，但控制器仍认为它在 present。
+    // 这种残留会让 App 窗口一直保持 dimmed（整体发灰），
+    // 一并清掉。只处理已经离屏或正在关闭的分享面板，不碰用户正在用的弹窗。
+    UIViewController *host = DYYYDiagUIContextHost();
+    if (host && host != controller) {
+        UIViewController *presented = host.presentedViewController;
+        if ([presented isKindOfClass:[UIActivityViewController class]] &&
+            (presented.isBeingDismissed || presented.view.window == nil)) {
+            [host dismissViewControllerAnimated:NO completion:nil];
         }
     }
 

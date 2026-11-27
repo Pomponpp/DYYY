@@ -95,8 +95,14 @@ static NSDictionary *DYYYDiagTransform3DDict(CATransform3D t) {
 #pragma mark - 窗口与控制器工具
 
 static BOOL DYYYDiagIsDebugWindow(UIWindow *window) {
+    if (!window) return YES;
+    // 前缀必须覆盖 DYYYDiag，不能只写 DYYYDiagnostics：
+    // 浮层窗口类名是 DYYYDiagOverlayWindow，旧判断放它进了活动窗口列表，
+    // 于是"目标窗口"可能选中浮层，导出/分享面板从浮层控制器弹出，
+    // 分享结束后浮层残留 presentedViewController，capturesOverlayTouches
+    // 返回 YES → 整屏吞触摸，表现为"界面被灰蒙版盖住、只有扳手能点"。
     NSString *cls = DYYYNameOfObject(window);
-    return [cls hasPrefix:@"DYYYDiagnostics"] || [cls hasPrefix:@"FLEX"];
+    return [cls hasPrefix:@"DYYYDiag"] || [cls hasPrefix:@"DYYYDiagnostics"] || [cls hasPrefix:@"FLEX"];
 }
 
 NSArray<UIWindow *> *DYYYDiagActiveWindows(void) {
