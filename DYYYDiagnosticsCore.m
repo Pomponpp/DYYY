@@ -366,7 +366,9 @@ const char *DYYYDiagRawClassName(Class cls) {
 // 未 realize 的类，superclass 在链接期已填好，纯读即可。
 Class DYYYDiagSuperClass(Class cls) {
     if (!cls) return Nil;
-    return *(Class *)((uint8_t *)(__bridge void *)cls + 8);
+    // ARC 不允许 uint8_t* 直接转 Class*，先用 void* 读槽位再 bridge。
+    void *raw = *(void **)((uint8_t *)(__bridge void *)cls + 8);
+    return (__bridge Class)raw;
 }
 
 void DYYYDiagStep(NSString *text) {
