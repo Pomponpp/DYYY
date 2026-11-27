@@ -542,15 +542,17 @@ static NSData *DYYYDiagScreenshotPNG(UIWindow *targetWindow) {
 #pragma mark - 页面类收集
 
 // 收集一个类及其整条继承链的类名：跳过运行时生成子类噪声，但继续上溯。
-// 必须用 class_getName 而不是 NSStringFromClass：抖音的 Swift 类里有畸形
-// mangled 名，NSStringFromClass 会触发 swift demangle abort 杀掉进程。
+// 全程只用 class_getName：抖音的 Swift 类里有畸形 mangled 名，
+// NSStringFromClass 以及 class_getSuperclass 都会触发 swift demangle abort。
+// 上溯只用 class_getName 读 raw 名，不调用任何会解析名字的 API。
 static void DYYYDiagCollectClassAndSupers(Class cls, NSMutableSet<NSString *> *names) {
     for (int i = 0; cls && i < 50; i++) {
-        if (!DYYYDiagClassIsSafe(cls)) break;
         const char *raw = class_getName(cls);
         NSString *name = raw ? [NSString stringWithUTF8String:raw] : nil;
         if (name.length && !DYYYDiagClassNameIsRuntimeGenerated(name)) [names addObject:name];
+        // 父类指针直接取自 class 结构体，不触发 demangle。
         cls = class_getSuperclass(cls);
+        if (cls && !DYYYDiagClassIsSafe(cls)) break;
     }
 }
 

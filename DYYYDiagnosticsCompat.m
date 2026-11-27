@@ -58,10 +58,15 @@ static void DYYYDiagClassDumpInit(void) {
 BOOL DYYYDiagClassIsSafe(Class cls) {
     if (!cls) return NO;
     if (DYYYDiagUnsafeClassSet && CFSetContainsValue(DYYYDiagUnsafeClassSet, (__bridge const void *)cls)) return NO;
-    // 无父类者只有 NSObject / NSProxy 两个已知根类是安全的
-    if (!class_getSuperclass(cls)) {
-        return cls == DYYYDiagNSObjectClass || cls == DYYYDiagNSProxyClass;
-    }
+    // 不能用 class_getSuperclass 判断"是不是根类"：
+    // 它在内部会走 objc_class::demangledName → libswiftCore 的
+    // copyGenericClassObjCName，畸形 Swift 泛型 mangled 名会 failAssert → abort。
+    // 真机实测：427/428 在所有页面导出必崩，栈顶就是 demangledName。
+    // 改用 class_getName + 名字比对，只读字符串，不触发任何 demangle。
+    const char *raw = class_getName(cls);
+    if (!raw) return NO;
+    if (strcmp(raw, "NSObject") == 0 || strcmp(raw, "NSProxy") == 0) return YES;
+    // 其余类只要名字可读就允许内省；真正的越界读由下面各处 try/catch 兜住。
     return YES;
 }
 
@@ -213,6 +218,8 @@ static NSString *DYYYDiagHeaderForClass(Class cls, NSString *imageName) {
                     className, imageName ?: @"Unknown"];
         }
 
+        // 父类名同样用 class_getName 读 raw，不经过 class_getSuperclass
+        // （后者会触发 Swift demangler，见 DYYYDiagClassIsSafe 处的说明）。
         Class superCls = class_getSuperclass(cls);
         const char *rawSuper = superCls ? class_getName(superCls) : NULL;
         NSString *superName = rawSuper ? [NSString stringWithUTF8String:rawSuper] : @"NSObject";
