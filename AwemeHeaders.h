@@ -2227,6 +2227,13 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @interface TTNetworkManager : NSObject
 + (instancetype)shareInstance;
+// 41.3 的过滤器注册入口（旧 requestForJSONWithResponse: 等已移除）。
+// 两个 Block 版返回 void，三个 Object 版返回 BOOL。
+- (void)addRequestFilterBlock:(id)block;
+- (void)addResponseFilterBlock:(id)block;
+- (BOOL)addPreRequestFilterObject:(id)object;
+- (BOOL)addRequestFilterObject:(id)object;
+- (BOOL)addResponseFilterObject:(id)object;
 - (id)requestForJSONWithURL:(NSString *)url
                      params:(id)params
                      method:(NSString *)method

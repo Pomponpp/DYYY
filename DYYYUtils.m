@@ -1025,6 +1025,47 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
     }
 }
 
++ (NSString *)blockSignature:(id)block {
+    if (!block)
+        return nil;
+
+    // Block 的内存布局（libclosure 的公开结构）：
+    //   isa | flags | reserved | invoke | descriptor
+    // descriptor 尾部就是 C 字符串形式的完整 ObjC 类型编码，
+    // 比如 "B24@?0@"NSURLRequest"8@"NSDictionary"16" 表示
+    //   返回 BOOL，block 收两个参数：请求对象与字典。
+    // 这里只读这个字符串，不调用 block、不改内存，任何不认识的形态都返回 nil。
+    struct DYYYBlockLayout {
+        void *isa;
+        volatile int32_t flags;
+        int32_t reserved;
+        void *invoke;
+        struct DYYYBlockDescriptor *descriptor;
+    };
+    struct DYYYBlockDescriptor {
+        unsigned long reserved;
+        unsigned long size;
+        void *copy;
+        void *dispose;
+        const char *signature;
+    };
+
+    struct DYYYBlockLayout *layout = (__bridge struct DYYYBlockLayout *)block;
+
+    // flags 里的 BLOCK_HAS_SIGNATURE = 1 << 30
+    const int32_t kHasSignature = 1 << 30;
+    if (!(layout->flags & kHasSignature))
+        return nil;
+    if (!layout->descriptor)
+        return nil;
+
+    const char *signature = layout->descriptor->signature;
+    if (!signature)
+        return nil;
+
+    return [NSString stringWithUTF8String:signature];
+}
+
 + (void)showToast:(NSString *)text {
     Class toastClass = NSClassFromString(@"DUXToast");
     if (toastClass && [toastClass respondsToSelector:@selector(showText:)]) {

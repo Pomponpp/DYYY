@@ -99,6 +99,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// 把视图树里所有 UILabel 的文字改成白色，跳过 exceptTexts 里列出的文案。
 /// 用于暗色毛玻璃上保证文字可读（通知栏、评论面板等）。
 + (void)whitenLabelsInView:(UIView *)view exceptTexts:(NSArray<NSString *> *)exceptTexts;
+/// 读取一个 block 的完整类型签名（来自 Block_descriptor->signature）。
+/// 只读，不执行 block、不改变任何行为。拿不到时返回 nil。
+/// 用途：运行时探测「只知道收一个 block、但不知道 block 自己参数表」的 API。
++ (NSString *)blockSignature:(id)block;
 
 /**
  * 显示提示信息

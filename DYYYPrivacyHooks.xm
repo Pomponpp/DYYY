@@ -1,5 +1,6 @@
 #import "AwemeHeaders.h"
 #import "DYYYPrivacyRecordUploadGuard.h"
+#import "DYYYUtils.h"
 
 // 抖音 39.1.0 访问他人主页时会由详情组件直接上传访客记录
 %hook AWEProfileUserDetailComponent
@@ -112,7 +113,69 @@ static BOOL DYYYTryBlockPrivacyNetworkRequest(NSString *URLString, id completion
 
 %end
 
+// ===== 41.3 网络拦截探测（临时探针，只读不改行为）=====
+//
+// TTNetworkManager 的三个 requestFor* 入口已被删除，改成过滤器注册机制。
+// 二进制只能证明「这些方法收一个 block」（类型编码 v24@0:8@?16），
+// 拿不到 block 自己的参数表，所以无法写真正的拦截判断。
+//
+// 这里挂只读探针：注册时把 block 的完整签名打进日志。
+// 签名来自 Block_descriptor->signature（见 DYYYUtils blockSignature:），
+// 只读字符串，不执行 block、不改任何返回值，也不会让抖音崩溃。
+//
+// 探针不做开关门控：只在过滤器注册时触发，一个进程内同类签名最多打一次，
+// 日志量极小。这样不需要新增设置项，装上就能采到数据。
+// 探测完成、换成真正的拦截实现后，这一整块应当删除。
+static void DYYYProbeNetworkFilterBlock(NSString *api, id block) {
+    NSString *signature = [DYYYUtils blockSignature:block];
+    NSString *key = [NSString stringWithFormat:@"%@|%@", api, signature ?: @"(无签名)"];
+
+    static NSMutableSet<NSString *> *loggedKeys = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        loggedKeys = [NSMutableSet set];
+    });
+
+    BOOL isNew = NO;
+    @synchronized (loggedKeys) {
+        if (![loggedKeys containsObject:key]) {
+            [loggedKeys addObject:key];
+            isNew = YES;
+        }
+    }
+    if (!isNew) {
+        return;
+    }
+
+    NSLog(@"[DYYY][net-probe] %@ signature=%@", api, signature ?: @"(无签名)");
+}
+
 %hook TTNetworkManager
+
+- (void)addRequestFilterBlock:(id)block {
+    DYYYProbeNetworkFilterBlock(@"addRequestFilterBlock:", block);
+    %orig;
+}
+
+- (void)addResponseFilterBlock:(id)block {
+    DYYYProbeNetworkFilterBlock(@"addResponseFilterBlock:", block);
+    %orig;
+}
+
+- (BOOL)addPreRequestFilterObject:(id)object {
+    DYYYProbeNetworkFilterBlock(@"addPreRequestFilterObject:", object);
+    return %orig;
+}
+
+- (BOOL)addRequestFilterObject:(id)object {
+    DYYYProbeNetworkFilterBlock(@"addRequestFilterObject:", object);
+    return %orig;
+}
+
+- (BOOL)addResponseFilterObject:(id)object {
+    DYYYProbeNetworkFilterBlock(@"addResponseFilterObject:", object);
+    return %orig;
+}
 
 // 41.3 实测：以下三个 request 入口在二进制里已全部不存在。
 // TTNetworkManager 现在的请求入口换成了过滤器机制：
