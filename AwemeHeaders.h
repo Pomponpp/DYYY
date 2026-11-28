@@ -1601,6 +1601,8 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @interface AWEPlayInteractionUserAvatarElement : NSObject
 @property(retain, nonatomic) AWEAwemeModel *model;
+- (void)layoutElementView;
+- (void)setHide:(BOOL)hide;
 @end
 
 @interface AWEPlayInteractionUserAvatarContext : NSObject
@@ -2047,6 +2049,14 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEListKitMagicCollectionView : UICollectionView
+@end
+
+// 评论面板 tab 的内容容器：自己会画一层实色底，盖在毛玻璃之上。
+@interface AWEListKitTabContentCollectionView : UICollectionView
+@end
+
+// 首页右侧头像整块容器（头像图 + 直播环 + 关注气泡）。
+@interface AWEPlayInteractionUserProfileContainerView : UIView
 @end
 
 @interface TTPlayerView : UIView
