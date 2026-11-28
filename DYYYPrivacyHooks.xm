@@ -104,30 +104,26 @@ static BOOL DYYYTryBlockPrivacyNetworkRequest(NSString *URLString, id completion
     return %orig;
 }
 
-+ (id)requestWithURLString:(NSString *)URLString params:(id)params method:(id)method completion:(id)completion {
-    if (DYYYTryBlockPrivacyNetworkRequest(URLString, completion)) {
-        return nil;
-    }
-    return %orig;
-}
-
-+ (id)postWithURLString:(NSString *)URLString params:(id)params headerField:(id)headerField completion:(id)completion {
-    if (DYYYTryBlockPrivacyNetworkRequest(URLString, completion)) {
-        return nil;
-    }
-    return %orig;
-}
-
-+ (id)getWithURLString:(NSString *)URLString params:(id)params headerField:(id)headerField completion:(id)completion {
-    if (DYYYTryBlockPrivacyNetworkRequest(URLString, completion)) {
-        return nil;
-    }
-    return %orig;
-}
+// 41.3 实测：带 headerField 的旧签名网络入口、以及
+// requestWithURLString:params:method:completion: 在二进制里均不存在。
+// 现行入口只有 postWithURLString:params:completion: 和
+// getWithURLString:params:completion:（上面已 hook）。
+// 这些裸 hook 挂不上、只让统计虚高，移除。
 
 %end
 
 %hook TTNetworkManager
+
+// 41.3 实测：以下三个 request 入口在二进制里已全部不存在。
+// TTNetworkManager 现在的请求入口换成了过滤器机制：
+//   addRequestFilterBlock: / addResponseFilterBlock:
+//   addPreRequestFilterObject: / addRequestFilterObject: / addResponseFilterObject:
+//   setEnableReqFilter: / enableApiHttpIntercept
+// 其中 addRequestFilterBlock: 的类型编码是 v24@0:8@?16 —— 只知道收一个 block，
+// 拿不到 block 自身的参数表，离线无法确定签名，需要真机探测后才能重新适配。
+//
+// 这段保留是为了留住原有判断逻辑（URL 匹配 + 回调拦截）作为适配时的参考，
+// 它挂不上任何方法，不会影响运行；要恢复隐私网络拦截需另立一项重做。
 
 - (id)requestForJSONWithURL:(NSString *)url
                      params:(id)params

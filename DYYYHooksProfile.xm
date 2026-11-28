@@ -84,38 +84,9 @@
     return %orig;
 }
 
-// 41.1：仅放行菜单项不够，下载本身还被 allowsAvatarDownload 拦截（表现为菜单可见但点了没反应）。
-- (BOOL)allowsAvatarDownload {
-    if (DYYYGetBool(@"DYYYEnableSaveAvatar")) {
-        return YES;
-    }
-    return %orig;
-}
-
-// 41.1：主页大头像预览页的下载按钮由 allowsRoleHeadDownload 控制，
-// 该属性位于预览数据模型上，故在管理器一侧一并放行。
-- (BOOL)allowsRoleHeadDownload {
-    if (DYYYGetBool(@"DYYYEnableSaveAvatar")) {
-        return YES;
-    }
-    return %orig;
-}
-
-- (BOOL)currentAllowsRoleHeadDownload {
-    if (DYYYGetBool(@"DYYYEnableSaveAvatar")) {
-        return YES;
-    }
-    return %orig;
-}
-
-// 41.1 实测（探针日志）：头像预览页功能项显示由该方法控制，
-// AWEProfileAvatarFunctionModel title=保存头像 对应 type == 1。
-- (BOOL)p_shouldShowFunctionWithType:(long long)type {
-    if (type == 1 && DYYYGetBool(@"DYYYEnableSaveAvatar")) {
-        return YES;
-    }
-    return %orig;
-}
+// 41.3 实测：以下四个入口在二进制里均已不存在，属 41.1 时代的下载权限检查。
+// 现在菜单项显示由 shouldShowSaveAvatarItem 控制、下载本身也不再走这些开关，
+// 留着只是让「hook 生效数」统计虚高，故移除。
 %end
 
 %hook AWEProfileNavigationButton

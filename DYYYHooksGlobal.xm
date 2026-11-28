@@ -157,6 +157,17 @@
 
 %end
 
+// 「评论区毛玻璃」的另一层：评论面板的 tab 内容容器自己会画一层实色底，
+// 分区背景清了但这一层还在时，整片依然是不透的。同样交给协调器判定。
+%hook AWEListKitTabContentCollectionView
+
+- (void)layoutSubviews {
+    %orig;
+    [DYYYCommentBlurCoordinator layoutListView:self];
+}
+
+%end
+
 %hook UIViewController
 - (void)viewWillAppear:(BOOL)animated {
     %orig;

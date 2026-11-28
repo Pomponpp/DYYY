@@ -37,6 +37,51 @@
 #import "DYYYClassRegistry.h"
 #import "DYYYDiagnosticsOverlay.h"
 
+// 「隐藏头像及周边」：41.x 右侧头像不是一个视图，而是三层——
+//   AWEPlayInteractionUserProfileContainerView（头像图 + 直播环 + 关注气泡，整块容器）
+//   AWEPlayInteractionUserAvatarElement / ...AvatarOptElementElement（内部元素）
+// 只隐藏其中一层会露出残留（比如直播环还在转）。这里三层一起处理：
+// 容器层直接 hidden；元素层走各自的 setHide:（原生入口，会同时停掉内部动画）。
+// setHide: 不一定在本类，先 respondsToSelector 再调，拿不到就退回 hidden。
+
+static void DYYYHideInteractionElement(id element) {
+    if (!element) return;
+    if ([element respondsToSelector:@selector(setHide:)]) {
+        ((void (*)(id, SEL, BOOL))objc_msgSend)(element, @selector(setHide:), YES);
+        return;
+    }
+    if ([element isKindOfClass:[UIView class]]) {
+        ((UIView *)element).hidden = YES;
+    }
+}
+
+%hook AWEPlayInteractionUserProfileContainerView
+- (void)layoutSubviews {
+    %orig;
+    if (DYYYGetBool(@"DYYYHideAvatarButton")) {
+        ((UIView *)self).hidden = YES;
+    }
+}
+%end
+
+%hook AWEPlayInteractionUserAvatarElement
+- (void)layoutElementView {
+    %orig;
+    if (DYYYGetBool(@"DYYYHideAvatarButton")) {
+        DYYYHideInteractionElement(self);
+    }
+}
+%end
+
+%hook AWEPlayInteractionUserAvatarOptElementElement
+- (void)layoutElementView {
+    %orig;
+    if (DYYYGetBool(@"DYYYHideAvatarButton")) {
+        DYYYHideInteractionElement(self);
+    }
+}
+%end
+
 %hook AWEPlayInteractionUserAvatarElement
 - (void)onFollowViewClicked:(UITapGestureRecognizer *)gesture {
     if (DYYYGetBool(@"DYYYFollowTips")) {

@@ -3426,6 +3426,16 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
     }
 }
 
+// 「移除头像加号」：光在 layoutSubviews 里设 hidden 不够——
+// 抖音后面还会调用 setHidden: 把状态覆盖回去，表现为关掉开关时残留、开着时又冒出来。
+// 在 setter 上再兜一次，保证整块隐藏且不可点。
+- (void)setHidden:(BOOL)hidden {
+    if (DYYYAvatarFollowOptionsEnabled() && DYYYGetBool(@"DYYYHideFollowPromptView")) {
+        hidden = YES;
+    }
+    %orig(hidden);
+}
+
 - (void)didMoveToSuperview {
     %orig;
 
@@ -8272,6 +8282,34 @@ static void findTargetViewInView(UIView *view) {
 
 %end
 
+%group DYYYCommentBlurLabelGroup
+// 「评论区毛玻璃」的漏网层：评论区的用户名 / 时间 / 回复文字是
+// AWECommentSwiftBizUI.CommentInteractionBaseLabel，它们自带一层实色底，
+// 盖在原生毛玻璃之上，表现为「开了毛玻璃但那一行是黑底」。
+//
+// 关键点（踩过的坑）：opaque 的层配透明底会渲染成黑块。
+// 所以不能只把 backgroundColor 设 clear —— 必须同时把 opaque 关掉，
+// 并且三项一起接才稳：写入点拦截（setBackgroundColor: / setOpaque:）
+// 加上布局后复查（layoutSubviews），否则 ListKit 复用重绘会把实色写回去。
+// 判定与清理统一交给 DYYYCommentBlurCoordinator，只在评论面板状态下生效。
+%hook DYYYCommentBlurLabel
+
+- (void)setBackgroundColor:(UIColor *)color {
+    %orig([DYYYCommentBlurCoordinator backgroundColorForTextView:self proposed:color]);
+}
+
+- (void)setOpaque:(BOOL)opaque {
+    %orig([DYYYCommentBlurCoordinator opaqueForTextView:self proposed:opaque]);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    [DYYYCommentBlurCoordinator layoutTextView:self];
+}
+
+%end
+%end
+
 %group DYYYCommentExactTimeGroup
 %hook AWECommentSwiftBizUI_CommentInteractionBaseLabel
 
@@ -10352,6 +10390,8 @@ static void findTargetViewInView(UIView *view) {
                                                             "_TtC20AWECommentSwiftBizUI27CommentInteractionBaseLabel");
     if (interactionBaseLabelClass) {
         %init(DYYYCommentExactTimeGroup, AWECommentSwiftBizUI_CommentInteractionBaseLabel = interactionBaseLabelClass);
+        // 同一个类再挂一组毛玻璃清理（评论具体时间与本组互不影响，各自 hook 不同方法）
+        %init(DYYYCommentBlurLabelGroup, DYYYCommentBlurLabel = interactionBaseLabelClass);
     }
 
     // 评论分享横栏诊断：41.1 的数据源是 Swift 类，必须按运行时 mangled 名挂载。
