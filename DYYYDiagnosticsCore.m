@@ -398,6 +398,27 @@ void DYYYDiagStep(NSString *text) {
     [DYYYDiagnostics flushRuntimeLogToFile];
 }
 
+#pragma mark - 分步排查开关
+
+NSString *const DYYYDiagToggleTree = @"DYYYDiagToggleTree";
+NSString *const DYYYDiagToggleVC = @"DYYYDiagToggleVC";
+NSString *const DYYYDiagToggleClasses = @"DYYYDiagToggleClasses";
+NSString *const DYYYDiagToggleShot = @"DYYYDiagToggleShot";
+NSString *const DYYYDiagToggleShare = @"DYYYDiagToggleShare";
+
+BOOL DYYYDiagToggleEnabled(NSString *key) {
+    if (key.length == 0) return YES;
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    // 没写过就当开：默认行为与加开关前完全一致，不改就等于没改。
+    if ([defaults objectForKey:key] == nil) return YES;
+    return [defaults boolForKey:key];
+}
+
+void DYYYDiagToggleSet(NSString *key, BOOL enabled) {
+    if (key.length == 0) return;
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:key];
+}
+
 NSString *DYYYNameOfObject(id object) {
     if (!object) return @"";
     // 不能用 [object class]：对某些 Swift 泛型类实例，-class 会走进

@@ -32,19 +32,178 @@
 
 @end
 
+#pragma mark - 诊断菜单面板（自绘，不 present）
+
+// 为什么不用 UIAlertController / ActionSheet：
+// 从浮层控制器 present 系统 UI 会踩两个老坑。
+//   ① 浮层 window 的 canBecomeKeyWindow 返回 NO（拖扳手不中断视频播放的既定设计），
+//      UIActivityViewController 这类需要键盘焦点的面板会整体卡死，既发不出去也关不掉。
+//   ② completionWithItemsHandler 在「交给别的 App」路径下常常不触发，
+//      presentedViewController 残留后 capturesOverlayTouches 一直返回 YES，
+//      浮层窗口整屏接管触摸 —— 表现为界面被灰蒙版盖住、只剩扳手能点。
+// 改成普通 UIView + addSubview 完全不碰 presentation 机制，这两个坑都不存在。
+
+static NSArray<NSString *> *DYYYDiagToggleKeyList(void) {
+    return @[ DYYYDiagToggleTree, DYYYDiagToggleVC, DYYYDiagToggleClasses,
+              DYYYDiagToggleShot, DYYYDiagToggleShare ];
+}
+
+static NSArray<NSString *> *DYYYDiagToggleTitleList(void) {
+    return @[ @"采集视图树", @"采集 VC 树", @"采集页面类", @"截图", @"弹分享面板" ];
+}
+
+@interface DYYYDiagMenuPanel : UIView
+@property (nonatomic, copy) void (^onClose)(void);
+@property (nonatomic, copy) void (^onAction)(NSInteger index);
+- (instancetype)initWithActions:(NSArray<NSString *> *)actions;
+@end
+
+@implementation DYYYDiagMenuPanel {
+    NSArray<NSString *> *_toggleKeys;
+}
+
+static const CGFloat kDYYYDiagPanelWidth = 280.0;
+static const CGFloat kDYYYDiagRowHeight = 44.0;
+static const CGFloat kDYYYDiagToggleRow = 38.0;
+
+- (instancetype)initWithActions:(NSArray<NSString *> *)actions {
+    NSArray<NSString *> *keys = DYYYDiagToggleKeyList();
+    CGFloat height = 16.0 + 22.0 + 10.0
+                   + actions.count * kDYYYDiagRowHeight
+                   + 10.0 + 1.0 + 10.0
+                   + 18.0 + keys.count * kDYYYDiagToggleRow
+                   + 10.0 + 1.0
+                   + kDYYYDiagRowHeight + 8.0;
+
+    self = [super initWithFrame:CGRectMake(0, 0, kDYYYDiagPanelWidth, height)];
+    if (!self) return nil;
+    _toggleKeys = keys;
+
+    self.backgroundColor = [UIColor colorWithWhite:0.06 alpha:0.94];
+    self.layer.cornerRadius = 16.0;
+    self.layer.shadowColor = UIColor.blackColor.CGColor;
+    self.layer.shadowOpacity = 0.30;
+    self.layer.shadowRadius = 12.0;
+    self.layer.shadowOffset = CGSizeMake(0, 4);
+
+    CGFloat y = 16.0;
+
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, y, kDYYYDiagPanelWidth, 22.0)];
+    title.text = @"DYYY 诊断";
+    title.textAlignment = NSTextAlignmentCenter;
+    title.font = [UIFont boldSystemFontOfSize:17.0];
+    title.textColor = UIColor.whiteColor;
+    [self addSubview:title];
+    y += 22.0 + 10.0;
+
+    for (NSUInteger i = 0; i < actions.count; i++) {
+        UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
+        // 用 frame 内缩留出左边距，不用 contentEdgeInsets（iOS 15 起弃用，
+        // 开了 -Werror 会直接编译失败）。
+        row.frame = CGRectMake(20, y, kDYYYDiagPanelWidth - 40, kDYYYDiagRowHeight);
+        [row setTitle:actions[i] forState:UIControlStateNormal];
+        [row setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+        row.titleLabel.font = [UIFont systemFontOfSize:15.0];
+        row.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+        row.tag = (NSInteger)i;
+        [row addTarget:self action:@selector(actionTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:row];
+        y += kDYYYDiagRowHeight;
+    }
+
+    y += 10.0;
+    UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(16, y, kDYYYDiagPanelWidth - 32, 1.0)];
+    divider.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.15];
+    [self addSubview:divider];
+    y += 1.0 + 10.0;
+
+    UILabel *subtitle = [[UILabel alloc] initWithFrame:CGRectMake(20, y, kDYYYDiagPanelWidth - 40, 18.0)];
+    subtitle.text = @"分步排查（关掉某项再导一次，看是否还定格）";
+    subtitle.font = [UIFont systemFontOfSize:12.0];
+    subtitle.textColor = [UIColor colorWithWhite:1.0 alpha:0.55];
+    [self addSubview:subtitle];
+    y += 18.0;
+
+    NSArray<NSString *> *names = DYYYDiagToggleTitleList();
+    for (NSUInteger i = 0; i < _toggleKeys.count && i < names.count; i++) {
+        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20, y, kDYYYDiagPanelWidth - 90, kDYYYDiagToggleRow)];
+        label.text = names[i];
+        label.font = [UIFont systemFontOfSize:14.0];
+        label.textColor = UIColor.whiteColor;
+        [self addSubview:label];
+
+        UISwitch *toggle = [[UISwitch alloc] initWithFrame:
+                            CGRectMake(kDYYYDiagPanelWidth - 20 - 51, y + (kDYYYDiagToggleRow - 31) / 2.0, 51, 31)];
+        toggle.on = DYYYDiagToggleEnabled(_toggleKeys[i]);
+        toggle.tag = (NSInteger)i;
+        [toggle addTarget:self action:@selector(toggleChanged:) forControlEvents:UIControlEventValueChanged];
+        [self addSubview:toggle];
+
+        y += kDYYYDiagToggleRow;
+    }
+
+    y += 10.0;
+    UIView *divider2 = [[UIView alloc] initWithFrame:CGRectMake(16, y, kDYYYDiagPanelWidth - 32, 1.0)];
+    divider2.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.15];
+    [self addSubview:divider2];
+    y += 1.0;
+
+    UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
+    close.frame = CGRectMake(0, y, kDYYYDiagPanelWidth, kDYYYDiagRowHeight);
+    [close setTitle:@"关闭" forState:UIControlStateNormal];
+    [close setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.8] forState:UIControlStateNormal];
+    close.titleLabel.font = [UIFont systemFontOfSize:15.0];
+    [close addTarget:self action:@selector(closeTapped:) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:close];
+
+    return self;
+}
+
+- (void)actionTapped:(UIButton *)sender {
+    if (self.onAction) self.onAction(sender.tag);
+}
+
+- (void)toggleChanged:(UISwitch *)sender {
+    NSInteger index = sender.tag;
+    if (index < 0 || index >= (NSInteger)_toggleKeys.count) return;
+    DYYYDiagToggleSet(_toggleKeys[index], sender.on);
+}
+
+- (void)closeTapped:(id)sender {
+    if (self.onClose) self.onClose();
+}
+
+@end
+
 @interface DYYYDiagOverlayWindow : UIWindow
 @end
 
 @interface DYYYDiagOverlayViewController : UIViewController
 @property (nonatomic, strong) UIButton *wrenchButton;
 @property (nonatomic, assign) BOOL didPlaceButton;
+// 自绘菜单面板与它的透明遮罩（都不走 present，避免 modal 残留）。
+@property (nonatomic, strong) DYYYDiagMenuPanel *menuPanel;
+@property (nonatomic, strong) UIView *menuBackdrop;
 // 扳手拖动判定：区分「拖」与「点」，避免拖动结束被当成点击弹面板。
 @property (nonatomic, assign) CGPoint wrenchDragStartCenter;
 @property (nonatomic, assign) BOOL wrenchDidDrag;
 - (void)persistWrenchPosition;
 - (BOOL)capturesOverlayTouches;
 - (void)exportWholePage;
+- (void)showDebugMenu;
+- (void)hideDebugMenu;
+- (void)handleMenuAction:(NSInteger)index;
+- (void)menuBackdropTapped:(UITapGestureRecognizer *)recognizer;
 @end
+
+// 扳手视觉尺寸缩到 36pt 后，命中区域向外补到 44×44（每边 +4），
+// 保证手指点击精度和原来一致。视觉小、点得准。
+static BOOL DYYYDiagWrenchHit(UIView *wrench, CGPoint pointInWindow, UIWindow *window) {
+    if (!wrench) return NO;
+    CGPoint p = [wrench convertPoint:pointInWindow fromView:window];
+    if ([wrench pointInside:p withEvent:nil]) return YES;
+    return CGRectContainsPoint(CGRectInset(wrench.bounds, -4.0, -4.0), p);
+}
 
 @implementation DYYYDiagOverlayWindow
 
@@ -61,8 +220,7 @@
                                                ? (DYYYDiagOverlayViewController *)self.rootViewController
                                                : nil;
     if ([controller capturesOverlayTouches]) return [super pointInside:point withEvent:event];
-    CGPoint p = [controller.wrenchButton convertPoint:point fromView:self];
-    return [controller.wrenchButton pointInside:p withEvent:event];
+    return DYYYDiagWrenchHit(controller.wrenchButton, point, self);
 }
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
@@ -71,6 +229,8 @@
                                                ? (DYYYDiagOverlayViewController *)self.rootViewController
                                                : nil;
     if ([controller capturesOverlayTouches]) return hit ?: controller.view;
+    // 落在扳手的扩展命中区内就交给扳手，否则放行给抖音。
+    if (DYYYDiagWrenchHit(controller.wrenchButton, point, self)) return controller.wrenchButton;
     if (!hit || hit == controller.view || hit == self) return nil;
     return hit;
 }
@@ -220,6 +380,14 @@ static void DYYYDiagFinishExport(DYYYDiagnosticsExportResult *result, UIViewCont
     // （进度框 → 导出完成框 → 分享面板），导出完视频就停在暂停态，
     // 得手动暂停+播放触发一次 seek 才恢复。
     // 砍掉中间那层后只剩两次切换，与行为对照版本的链路一致。
+    // 分步排查：关闭「弹分享面板」时直接收尾，不进系统分享。
+    // 这一步用于判断「定格是不是 present 分享面板引起的」——
+    // 关掉后 zip 仍会写盘，只是不再弹 UIActivityViewController。
+    if (!DYYYDiagToggleEnabled(DYYYDiagToggleShare)) {
+        DYYYDiagFinalizeExportAndRecover(result);
+        return;
+    }
+
     UIViewController *host = DYYYDiagUIContextHost();
     if (!host) {
         DYYYDiagCleanupExport(result);
@@ -426,24 +594,26 @@ static void DYYYDiagEnsureDebugWindow(void) {
     [super viewDidLoad];
 
     self.wrenchButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    self.wrenchButton.frame = CGRectMake(0, 0, 48, 48);
+    // 视觉 36×36（原 48 的 3/4），圆角取一半保持正圆。
+    // 命中区域在 DYYYDiagOverlayWindow 的 pointInside 里单独外扩到 44×44，
+    // 视觉变小、点击范围不变。
+    self.wrenchButton.frame = CGRectMake(0, 0, 36, 36);
     self.wrenchButton.backgroundColor = [UIColor colorWithWhite:0.05 alpha:0.82];
     self.wrenchButton.tintColor = UIColor.whiteColor;
-    self.wrenchButton.layer.cornerRadius = 24;
+    self.wrenchButton.layer.cornerRadius = 18;
     self.wrenchButton.layer.shadowColor = UIColor.blackColor.CGColor;
     self.wrenchButton.layer.shadowOpacity = 0.24;
     self.wrenchButton.layer.shadowRadius = 8;
     self.wrenchButton.layer.shadowOffset = CGSizeMake(0, 2);
     self.wrenchButton.accessibilityLabel = @"DYYY 诊断";
 
-    UIImage *image = nil;
-    if ([UIImage respondsToSelector:@selector(systemImageNamed:)]) image = [UIImage systemImageNamed:@"wrench.fill"];
-    if (image) {
-        [self.wrenchButton setImage:image forState:UIControlStateNormal];
-    } else {
-        [self.wrenchButton setTitle:@"W" forState:UIControlStateNormal];
-        self.wrenchButton.titleLabel.font = [UIFont boldSystemFontOfSize:20];
-    }
+    // 齿轮用 Unicode 字符而不是系统图标。
+    // U+2699 在部分字体下会落到彩色 emoji 字形，不受 setTitleColor 控制，
+    // 这里指定无衬线数字体拿单色字形；万一仍渲染成 emoji，退回纯文字 D。
+    [self.wrenchButton setTitle:@"⚙" forState:UIControlStateNormal];
+    [self.wrenchButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    self.wrenchButton.titleLabel.font = [UIFont fontWithName:@"HelveticaNeue" size:22.0]
+                                     ?: [UIFont systemFontOfSize:22.0];
     [self.wrenchButton addTarget:self action:@selector(wrenchTouchUpInside) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:self.wrenchButton];
 
@@ -561,45 +731,60 @@ static void DYYYDiagEnsureDebugWindow(void) {
 
 - (void)showDebugMenu {
     if (!DYYYPrefBool(@"DYYYDebugInspectorEnabled")) return;
+    if (self.menuPanel) return;   // 已经在显示
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"DYYY 诊断"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-    [alert addAction:[UIAlertAction actionWithTitle:@"导出诊断包 (zip)"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(__unused UIAlertAction *action) {
-        [self exportWholePage];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"导出运行日志"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(__unused UIAlertAction *action) {
-        [DYYYDiagnostics exportRuntimeLogFromViewController:DYYYDiagUIContextHost()];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"环境自检"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(__unused UIAlertAction *action) {
-        [DYYYDiagnostics showAuditReportFromViewController:DYYYDiagUIContextHost()];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"清空日志"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(__unused UIAlertAction *action) {
-        [DYYYDiagnostics clearRuntimeLogFromViewController:DYYYDiagUIContextHost()];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
-    if (alert.popoverPresentationController) {
-        alert.popoverPresentationController.sourceView = self.wrenchButton;
-        alert.popoverPresentationController.sourceRect = self.wrenchButton.bounds;
+    // 全屏透明遮罩：承接「点面板外部收起」。
+    // 用普通 UIView + 手势，不走 modal，所以不会出现 presentedViewController 残留。
+    UIView *backdrop = [[UIView alloc] initWithFrame:self.view.bounds];
+    backdrop.backgroundColor = [UIColor clearColor];
+    backdrop.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(menuBackdropTapped:)];
+    [backdrop addGestureRecognizer:tap];
+    [self.view addSubview:backdrop];
+    self.menuBackdrop = backdrop;
+
+    NSArray<NSString *> *actions = @[ @"导出诊断包 (zip)", @"导出运行日志", @"环境自检", @"清空日志" ];
+    DYYYDiagMenuPanel *panel = [[DYYYDiagMenuPanel alloc] initWithActions:actions];
+    panel.center = CGPointMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds));
+    __weak typeof(self) weakSelf = self;
+    panel.onClose = ^{
+      [weakSelf hideDebugMenu];
+    };
+    panel.onAction = ^(NSInteger index) {
+      [weakSelf hideDebugMenu];
+      [weakSelf handleMenuAction:index];
+    };
+    [self.view addSubview:panel];
+    self.menuPanel = panel;
+}
+
+- (void)menuBackdropTapped:(__unused UITapGestureRecognizer *)recognizer {
+    [self hideDebugMenu];
+}
+
+- (void)hideDebugMenu {
+    [self.menuPanel removeFromSuperview];
+    self.menuPanel = nil;
+    [self.menuBackdrop removeFromSuperview];
+    self.menuBackdrop = nil;
+    // 收起后强制复位一次触摸判定：浮层回到"只有扳手能点"的状态。
+    [DYYYDiagnosticsOverlayRefresh];
+}
+
+- (void)handleMenuAction:(NSInteger)index {
+    switch (index) {
+        case 0: [self exportWholePage]; break;
+        case 1: [DYYYDiagnostics exportRuntimeLogFromViewController:DYYYDiagUIContextHost()]; break;
+        case 2: [DYYYDiagnostics showAuditReportFromViewController:DYYYDiagUIContextHost()]; break;
+        case 3: [DYYYDiagnostics clearRuntimeLogFromViewController:DYYYDiagUIContextHost()]; break;
+        default: break;
     }
-    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)exportWholePage {
-    // 扳手菜单（ActionSheet）是从浮层控制器自己弹出的。它的 action handler 一触发，
-    // 菜单还在做 dismiss 动画；此时马上从别的控制器 present 进度框，
-    // 两条 modal 链相撞，菜单可能停在半关闭状态。
-    // 一旦浮层控制器残留 presentedViewController，capturesOverlayTouches 就返回 YES，
-    // 浮层整屏吞触摸 —— 表现为"界面被灰蒙版盖住、只剩扳手能点"，必须重启。
-    // 跳一帧让菜单先完成 dismiss，再进入导出。
+    // 菜单现在是自绘面板（addSubview），不再有 dismiss 动画和 modal 链，
+    // 所以不需要等动画结束。仍然跳一帧，让按钮的高亮/收起先落到屏幕上，
+    // 避免采集和截图把一个还带高亮的界面拍进去。
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *targetWindow = DYYYDiagTargetWindow();
         if (!targetWindow) {
@@ -625,6 +810,11 @@ static void DYYYDiagEnsureDebugWindow(void) {
 //
 // 所以这里要把分享面板排除掉，并且跳过正在 dismiss 的控制器。
 - (BOOL)capturesOverlayTouches {
+    // 自绘菜单面板在场时必须整窗接管触摸，否则面板上的按钮和开关点不到：
+    // 浮层窗口的 pointInside/hitTest 在 capturesOverlayTouches 为 NO 时
+    // 只放行扳手按钮那一点区域。
+    if (self.menuPanel && self.menuPanel.superview) return YES;
+
     UIViewController *presented = self.presentedViewController;
     if (!presented) return NO;
     if (presented.isBeingDismissed) return NO;

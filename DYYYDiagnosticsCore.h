@@ -84,6 +84,20 @@ Class DYYYDiagSuperClass(Class cls);
 /// 每步主动 flush 才能保证 runtime.log 停在最后一个成功步骤。
 void DYYYDiagStep(NSString *text);
 
+#pragma mark - 分步排查开关
+
+/// 导出各阶段的分项开关，默认全开（取不到值时按 YES 处理）。
+/// 用途：排查「导出后画面定格」这类问题，一次只关一项再导一次，
+/// 二分定位是哪一步影响了播放/渲染。
+extern NSString *const DYYYDiagToggleTree;     // 采集视图树
+extern NSString *const DYYYDiagToggleVC;       // 采集 VC 树
+extern NSString *const DYYYDiagToggleClasses;  // 采集页面类
+extern NSString *const DYYYDiagToggleShot;     // 截图
+extern NSString *const DYYYDiagToggleShare;    // 弹分享面板
+
+BOOL DYYYDiagToggleEnabled(NSString *key);
+void DYYYDiagToggleSet(NSString *key, BOOL enabled);
+
 /// 诊断开关读取（统一走 NSUserDefaults，DYYY 键名直读）。
 BOOL DYYYPrefBool(NSString *key);
 NSInteger DYYYPrefInteger(NSString *key);

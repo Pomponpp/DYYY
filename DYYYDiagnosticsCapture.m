@@ -653,19 +653,29 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
         // JSON 与文本树各自独立预算：两者遍历路径不同，不共享计数才能各自完整。
         DYYYDiagTreeBudget jsonBudget = {0, NO};
         DYYYDiagTreeBudget textBudget = {0, NO};
-        [treeJSON addObject:DYYYDiagViewTreeJSON(window, 0, layersJSON, &jsonBudget)];
-        DYYYDiagStep([NSString stringWithFormat:@"%@ 视图树JSON 完成 %lu 节点", winName, (unsigned long)jsonBudget.count]);
-        DYYYDiagAppendViewTreeText(window, 0, treeText, &textBudget);
-        DYYYDiagStep([NSString stringWithFormat:@"%@ 视图树文本 完成 %lu 节点", winName, (unsigned long)textBudget.count]);
-        if (jsonBudget.hitLimit || textBudget.hitLimit) treeTruncated = YES;
-        DYYYDiagCollectPageClassesFromView(window, pageClasses);
-        DYYYDiagStep([NSString stringWithFormat:@"%@ 页面类(视图) 完成 %lu 个", winName, (unsigned long)pageClasses.count]);
-        DYYYDiagCollectPageClassesFromVC(window.rootViewController, pageClasses, seenClassVCs);
-        DYYYDiagStep([NSString stringWithFormat:@"%@ 页面类(VC) 完成 %lu 个", winName, (unsigned long)pageClasses.count]);
-        if (window.rootViewController) {
+        if (DYYYDiagToggleEnabled(DYYYDiagToggleTree)) {
+            [treeJSON addObject:DYYYDiagViewTreeJSON(window, 0, layersJSON, &jsonBudget)];
+            DYYYDiagStep([NSString stringWithFormat:@"%@ 视图树JSON 完成 %lu 节点", winName, (unsigned long)jsonBudget.count]);
+            DYYYDiagAppendViewTreeText(window, 0, treeText, &textBudget);
+            DYYYDiagStep([NSString stringWithFormat:@"%@ 视图树文本 完成 %lu 节点", winName, (unsigned long)textBudget.count]);
+            if (jsonBudget.hitLimit || textBudget.hitLimit) treeTruncated = YES;
+        } else {
+            DYYYDiagStep([NSString stringWithFormat:@"%@ 视图树 已跳过（开关关闭）", winName]);
+        }
+        if (DYYYDiagToggleEnabled(DYYYDiagToggleClasses)) {
+            DYYYDiagCollectPageClassesFromView(window, pageClasses);
+            DYYYDiagStep([NSString stringWithFormat:@"%@ 页面类(视图) 完成 %lu 个", winName, (unsigned long)pageClasses.count]);
+            DYYYDiagCollectPageClassesFromVC(window.rootViewController, pageClasses, seenClassVCs);
+            DYYYDiagStep([NSString stringWithFormat:@"%@ 页面类(VC) 完成 %lu 个", winName, (unsigned long)pageClasses.count]);
+        } else {
+            DYYYDiagStep([NSString stringWithFormat:@"%@ 页面类 已跳过（开关关闭）", winName]);
+        }
+        if (DYYYDiagToggleEnabled(DYYYDiagToggleVC) && window.rootViewController) {
             [vcText appendFormat:@"Window %@ %@\n", DYYYDiagClassName(window), DYYYDiagStringFromPointer((__bridge const void *)window)];
             DYYYDiagAppendVCText(window.rootViewController, 1, vcText, seenVCs);
             DYYYDiagStep([NSString stringWithFormat:@"%@ VC树 完成", winName]);
+        } else if (!DYYYDiagToggleEnabled(DYYYDiagToggleVC)) {
+            DYYYDiagStep([NSString stringWithFormat:@"%@ VC树 已跳过（开关关闭）", winName]);
         }
     }
 
@@ -714,8 +724,12 @@ DYYYDiagnosticsContext *DYYYDiagCaptureContext(UIWindow *targetWindow, CGPoint p
     context.sourceView = targetWindow;
     context.presenter = DYYYDiagTopPresenter(targetWindow);
     DYYYDiagStep([NSString stringWithFormat:@"截图 开始 classes=%lu", (unsigned long)pageClasses.count]);
-    context.screenshotPNG = DYYYDiagScreenshotPNG(targetWindow);
-    DYYYDiagStep([NSString stringWithFormat:@"截图 完成 %lu 字节", (unsigned long)context.screenshotPNG.length]);
+    if (DYYYDiagToggleEnabled(DYYYDiagToggleShot)) {
+        context.screenshotPNG = DYYYDiagScreenshotPNG(targetWindow);
+        DYYYDiagStep([NSString stringWithFormat:@"截图 完成 %lu 字节", (unsigned long)context.screenshotPNG.length]);
+    } else {
+        DYYYDiagStep(@"截图 已跳过（开关关闭）");
+    }
     DYYYDiagStep(@"capture 全部完成");
     return context;
 }
