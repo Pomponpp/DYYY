@@ -14,7 +14,6 @@
 #import "DYYYDiagnosticsCore.h"
 #import "DYYYDiagnosticsCapture.h"
 #import "DYYYDiagnosticsExport.h"
-#import "DYYYFloatingButtonCoordinator.h"
 
 
 
@@ -56,7 +55,8 @@ static NSArray<NSString *> *DYYYDiagToggleTitleList(void) {
 @interface DYYYDiagMenuPanel : UIView
 @property (nonatomic, copy) void (^onClose)(void);
 @property (nonatomic, copy) void (^onAction)(NSInteger index);
-@property (nonatomic, copy) void (^onOpacityChange)(CGFloat alpha);
+@property (nonatomic, copy) void (^onWrenchOpacityChange)(CGFloat alpha);
+@property (nonatomic, copy) void (^onCardOpacityChange)(CGFloat alpha);
 - (instancetype)initWithActions:(NSArray<NSString *> *)actions;
 @end
 
@@ -64,15 +64,14 @@ static NSArray<NSString *> *DYYYDiagToggleTitleList(void) {
     NSArray<NSString *> *_toggleKeys;
 }
 
-static const CGFloat kDYYYDiagPanelWidth = 280.0;
-static const CGFloat kDYYYDiagPanelHeight = 300.0;   // 固定高度，内容在内部滚动
+static const CGFloat kDYYYDiagPanelWidth = 340.0;
+static const CGFloat kDYYYDiagPanelHeight = 420.0;
 static const CGFloat kDYYYDiagHeaderHeight = 42.0;
 static const CGFloat kDYYYDiagRowHeight = 44.0;
 static const CGFloat kDYYYDiagToggleRow = 38.0;
 static const CGFloat kDYYYDiagSliderRow = 50.0;
-// = 滑块行 50 + 分割线 1 + 关闭行 44，直接写数值常量：
-// C 里 static const 不保证是编译期常量，拿来初始化另一个 static const 不可靠。
-static const CGFloat kDYYYDiagFooterHeight = 95.0;
+// = 两个滑块行 100 + 分割线 1 + 关闭 44
+static const CGFloat kDYYYDiagFooterHeight = 145.0;
 
 - (instancetype)initWithActions:(NSArray<NSString *> *)actions {
     NSArray<NSString *> *keys = DYYYDiagToggleKeyList();
@@ -80,7 +79,7 @@ static const CGFloat kDYYYDiagFooterHeight = 95.0;
     if (!self) return nil;
     _toggleKeys = keys;
 
-    self.backgroundColor = [UIColor colorWithWhite:0.06 alpha:0.92];
+    self.backgroundColor = [UIColor colorWithWhite:0.06 alpha:DYYYDiagCardOpacity()];
     self.layer.cornerRadius = 16.0;
     self.layer.shadowColor = UIColor.blackColor.CGColor;
     self.layer.shadowOpacity = 0.30;
@@ -89,7 +88,6 @@ static const CGFloat kDYYYDiagFooterHeight = 95.0;
 
     CGFloat width = kDYYYDiagPanelWidth;
 
-    // 标题固定在顶部
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 10.0, width, 22.0)];
     title.text = @"DYYY 诊断";
     title.textAlignment = NSTextAlignmentCenter;
@@ -111,11 +109,10 @@ static const CGFloat kDYYYDiagFooterHeight = 95.0;
     CGFloat y = 0.0;
     for (NSUInteger i = 0; i < actions.count; i++) {
         UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
-        // 用 frame 内缩留左边距，不用 contentEdgeInsets（iOS 15 起弃用）
-        row.frame = CGRectMake(20, y, width - 40, kDYYYDiagRowHeight);
+        row.frame = CGRectMake(24, y, width - 48, kDYYYDiagRowHeight);
         [row setTitle:actions[i] forState:UIControlStateNormal];
         [row setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-        row.titleLabel.font = [UIFont systemFontOfSize:15.0];
+        row.titleLabel.font = [UIFont systemFontOfSize:16.0];
         row.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
         row.tag = (NSInteger)i;
         [row addTarget:self action:@selector(actionTapped:) forControlEvents:UIControlEventTouchUpInside];
@@ -124,12 +121,12 @@ static const CGFloat kDYYYDiagFooterHeight = 95.0;
     }
 
     y += 10.0;
-    UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(16, y, width - 32, 1.0)];
+    UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(20, y, width - 40, 1.0)];
     divider.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.15];
     [scroll addSubview:divider];
     y += 1.0 + 10.0;
 
-    UILabel *subtitle = [[UILabel alloc] initWithFrame:CGRectMake(20, y, width - 40, 18.0)];
+    UILabel *subtitle = [[UILabel alloc] initWithFrame:CGRectMake(24, y, width - 48, 18.0)];
     subtitle.text = @"分步排查（关掉某项再导一次，看是否还定格）";
     subtitle.font = [UIFont systemFontOfSize:12.0];
     subtitle.textColor = [UIColor colorWithWhite:1.0 alpha:0.55];
@@ -138,14 +135,14 @@ static const CGFloat kDYYYDiagFooterHeight = 95.0;
 
     NSArray<NSString *> *names = DYYYDiagToggleTitleList();
     for (NSUInteger i = 0; i < _toggleKeys.count && i < names.count; i++) {
-        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20, y, width - 90, kDYYYDiagToggleRow)];
+        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(24, y, width - 110, kDYYYDiagToggleRow)];
         label.text = names[i];
-        label.font = [UIFont systemFontOfSize:14.0];
+        label.font = [UIFont systemFontOfSize:15.0];
         label.textColor = UIColor.whiteColor;
         [scroll addSubview:label];
 
         UISwitch *toggle = [[UISwitch alloc] initWithFrame:
-                            CGRectMake(width - 20 - 51, y + (kDYYYDiagToggleRow - 31) / 2.0, 51, 31)];
+                            CGRectMake(width - 24 - 51, y + (kDYYYDiagToggleRow - 31) / 2.0, 51, 31)];
         toggle.on = DYYYDiagToggleEnabled(_toggleKeys[i]);
         toggle.tag = (NSInteger)i;
         [toggle addTarget:self action:@selector(toggleChanged:) forControlEvents:UIControlEventValueChanged];
@@ -155,39 +152,70 @@ static const CGFloat kDYYYDiagFooterHeight = 95.0;
     }
     scroll.contentSize = CGSizeMake(width, y);
 
-    // ── 底部固定区：透明度滑块 + 关闭（不参与滚动）──
+    // ── 底部固定区：两个透明度滑块 + 关闭（不参与滚动）──
     CGFloat footerTop = kDYYYDiagPanelHeight - kDYYYDiagFooterHeight;
 
-    UIView *footerDivider = [[UIView alloc] initWithFrame:CGRectMake(16, footerTop, width - 32, 1.0)];
+    UIView *footerDivider = [[UIView alloc] initWithFrame:CGRectMake(20, footerTop, width - 40, 1.0)];
     footerDivider.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.15];
     [self addSubview:footerDivider];
 
-    UILabel *opacityLabel = [[UILabel alloc] initWithFrame:
-                             CGRectMake(20, footerTop + 1.0 + 6.0, 78, 24.0)];
-    opacityLabel.text = @"浮窗透明度";
-    opacityLabel.font = [UIFont systemFontOfSize:12.0];
-    opacityLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.65];
-    [self addSubview:opacityLabel];
+    [self addSliderRowAt:footerTop + 1.0
+                   title:@"浮窗透明度"
+                     key:@"wrench"
+                  minValue:20.0
+                  maxValue:100.0
+                     value:DYYYDiagWrenchOpacity() * 100.0];
 
-    UISlider *slider = [[UISlider alloc] initWithFrame:
-                        CGRectMake(104, footerTop + 1.0 + 8.0, width - 104 - 20, 24.0)];
-    slider.minimumValue = 0.3;
-    slider.maximumValue = 1.0;
-    slider.value = (float)DYYYDiagWrenchOpacity();
-    slider.minimumTrackTintColor = [UIColor colorWithWhite:1.0 alpha:0.75];
-    slider.maximumTrackTintColor = [UIColor colorWithWhite:1.0 alpha:0.22];
-    [slider addTarget:self action:@selector(opacityChanged:) forControlEvents:UIControlEventValueChanged];
-    [self addSubview:slider];
+    [self addSliderRowAt:footerTop + 1.0 + kDYYYDiagSliderRow
+                   title:@"卡片透明度"
+                     key:@"card"
+                  minValue:0.0
+                  maxValue:100.0
+                     value:DYYYDiagCardOpacity() * 100.0];
 
     UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
-    close.frame = CGRectMake(0, footerTop + 1.0 + kDYYYDiagSliderRow, width, kDYYYDiagRowHeight);
+    close.frame = CGRectMake(0, footerTop + 1.0 + kDYYYDiagSliderRow * 2.0, width, kDYYYDiagRowHeight);
     [close setTitle:@"关闭" forState:UIControlStateNormal];
     [close setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.8] forState:UIControlStateNormal];
-    close.titleLabel.font = [UIFont systemFontOfSize:15.0];
+    close.titleLabel.font = [UIFont systemFontOfSize:16.0];
     [close addTarget:self action:@selector(closeTapped:) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:close];
 
     return self;
+}
+
+// 一行透明度滑块：左标签 + 滑杆 + 右侧百分比。
+- (void)addSliderRowAt:(CGFloat)top
+                 title:(NSString *)title
+                   key:(NSString *)key
+              minValue:(CGFloat)minValue
+              maxValue:(CGFloat)maxValue
+                 value:(CGFloat)value {
+    CGFloat width = kDYYYDiagPanelWidth;
+
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(24, top + 6.0, 86.0, 24.0)];
+    label.text = title;
+    label.font = [UIFont systemFontOfSize:12.0];
+    label.textColor = [UIColor colorWithWhite:1.0 alpha:0.65];
+    [self addSubview:label];
+
+    UISlider *slider = [[UISlider alloc] initWithFrame:CGRectMake(112, top + 8.0, width - 112 - 20 - 46, 24.0)];
+    slider.minimumValue = (float)minValue;
+    slider.maximumValue = (float)maxValue;
+    slider.value = (float)value;
+    slider.minimumTrackTintColor = [UIColor colorWithWhite:1.0 alpha:0.75];
+    slider.maximumTrackTintColor = [UIColor colorWithWhite:1.0 alpha:0.22];
+    slider.tag = [key isEqualToString:@"wrench"] ? 0 : 1;
+    [slider addTarget:self action:@selector(opacityChanged:) forControlEvents:UIControlEventValueChanged];
+    [self addSubview:slider];
+
+    UILabel *percent = [[UILabel alloc] initWithFrame:CGRectMake(width - 20 - 44, top + 6.0, 44.0, 24.0)];
+    percent.text = [NSString stringWithFormat:@"%.0f%%", value];
+    percent.font = [UIFont monospacedDigitSystemFontOfSize:12.0 weight:UIFontWeightRegular];
+    percent.textColor = [UIColor colorWithWhite:1.0 alpha:0.65];
+    percent.textAlignment = NSTextAlignmentRight;
+    percent.tag = slider.tag + 100;   // 与滑块配对，便于实时刷新读数
+    [self addSubview:percent];
 }
 
 - (void)actionTapped:(UIButton *)sender {
@@ -201,9 +229,20 @@ static const CGFloat kDYYYDiagFooterHeight = 95.0;
 }
 
 - (void)opacityChanged:(UISlider *)sender {
-    CGFloat value = sender.value;
-    DYYYDiagSetWrenchOpacity(value);
-    if (self.onOpacityChange) self.onOpacityChange(value);
+    CGFloat percent = sender.value;
+    CGFloat alpha = percent / 100.0;
+    UILabel *percentLabel = (UILabel *)[self viewWithTag:sender.tag + 100];
+    if ([percentLabel isKindOfClass:UILabel.class]) {
+        percentLabel.text = [NSString stringWithFormat:@"%.0f%%", percent];
+    }
+    if (sender.tag == 0) {
+        DYYYDiagSetWrenchOpacity(alpha);
+        if (self.onWrenchOpacityChange) self.onWrenchOpacityChange(alpha);
+    } else {
+        DYYYDiagSetCardOpacity(alpha);
+        self.backgroundColor = [UIColor colorWithWhite:0.06 alpha:alpha];
+        if (self.onCardOpacityChange) self.onCardOpacityChange(alpha);
+    }
 }
 
 - (void)closeTapped:(id)sender {
@@ -387,10 +426,6 @@ static NSString *DYYYDiagExportErrorMessage(NSError *error, NSString *fallback) 
 // 定义在文件靠后位置，导出收尾时要用，先声明。
 static void DYYYDiagRecoverOverlayStateIfNeeded(void);
 
-// 分享面板前后暂停/恢复播放，定义在文件靠后，这里先声明以免隐式函数声明。
-static id DYYYDiagPausePlaybackIfPossible(void);
-static void DYYYDiagResumePlayback(id pausedObject);
-
 // 导出收尾统一入口：清理临时文件 + 等面板真正关掉后复位浮层状态。
 //
 // 为什么不能只靠 App 回到前台时复位：
@@ -443,16 +478,10 @@ static void DYYYDiagFinishExport(DYYYDiagnosticsExportResult *result, UIViewCont
         activity.popoverPresentationController.sourceRect = host.view.bounds;
     }
 
-    // 先暂停播放再弹面板，关闭后恢复：避免 Metal 定格成假暂停。
-    // 拿不到可暂停对象时 pausedObject 为 nil，照常弹（那种情况仍会定格）。
-    __block id pausedObject = DYYYDiagPausePlaybackIfPossible();
-
     __block BOOL recovered = NO;
     void (^recoverOnce)(void) = ^{
       if (recovered) return;
       recovered = YES;
-      DYYYDiagResumePlayback(pausedObject);
-      pausedObject = nil;
       DYYYDiagFinalizeExportAndRecover(result);
     };
     activity.completionWithItemsHandler =
@@ -468,8 +497,6 @@ static void DYYYDiagFinishExport(DYYYDiagnosticsExportResult *result, UIViewCont
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
                      if (activity.presentingViewController == nil || activity.view.window == nil) {
-                         DYYYDiagResumePlayback(pausedObject);
-                         pausedObject = nil;
                          DYYYDiagRecoverOverlayStateIfNeeded();
                          DYYYDiagnosticsOverlayRefresh();
                      }
@@ -480,38 +507,6 @@ static void DYYYDiagSetProgress(UIAlertController *alert, NSString *text) {
     dispatch_async(dispatch_get_main_queue(), ^{
         alert.message = text ?: @"处理中...";
     });
-}
-
-#pragma mark - 分享面板前后暂停/恢复播放
-
-// 系统分享面板会让 App 短暂失去 active，Metal 层暂停渲染但 AVPlayer 时钟照走，
-// 关闭后就停在最后一帧（假暂停），必须手动暂停再播放才恢复。
-// 这里在弹出前主动暂停、关闭后恢复，等于替用户完成那两个动作。
-//
-// 暂停入口用抖音自己的原生方法（评论暂停走的是同一条），不硬改播放速率。
-// 拿不到可暂停对象时返回 nil，调用方照原流程弹面板 —— 那种情况仍会定格，
-// 用户已知悉并接受。
-static id DYYYDiagPausePlaybackIfPossible(void) {
-    UIViewController *controller = [DYYYFloatingButtonCoordinator currentInteractionController];
-    if (!controller) return nil;
-    SEL pauseSel = @selector(pauseVideoIfPlayingWithoutShowingPauseIcon);
-    SEL resumeSel = @selector(recoverPlayIfPauseByComment);
-    if (![controller respondsToSelector:pauseSel] || ![controller respondsToSelector:resumeSel]) return nil;
-    @try {
-        [controller performSelector:pauseSel];
-        return controller;
-    } @catch (__unused NSException *exception) {
-        return nil;
-    }
-}
-
-static void DYYYDiagResumePlayback(id pausedObject) {
-    if (!pausedObject) return;
-    SEL resumeSel = @selector(recoverPlayIfPauseByComment);
-    @try {
-        if ([pausedObject respondsToSelector:resumeSel]) [pausedObject performSelector:resumeSel];
-    } @catch (__unused NSException *exception) {
-    }
 }
 
 static void DYYYDiagCreateExportInBackground(DYYYDiagnosticsContext *context,
@@ -677,19 +672,26 @@ static void DYYYDiagEnsureDebugWindow(void) {
     [super viewDidLoad];
 
     self.wrenchButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    // 视觉 36×36（原 48 的 3/4）。不再画外圈圆底，只显示齿轮字符本身：
-    // 深色画面上白色字形够清楚，浅色画面上靠 applyWrenchAlpha: 加的深色描边兜住。
+    // 视觉 36×36，不画外圈圆底，只显示齿轮图标本身。
     // 命中区域在 DYYYDiagOverlayWindow 的 pointInside/hitTest 里单独外扩到 44×44，
     // 视觉变小、点击范围不变。
     self.wrenchButton.frame = CGRectMake(0, 0, 36, 36);
     self.wrenchButton.backgroundColor = UIColor.clearColor;
     self.wrenchButton.accessibilityLabel = @"DYYY 诊断";
 
-    // 齿轮用 Unicode 字符而不是系统图标。
-    // U+2699 在部分字体下会落到彩色 emoji 字形，不受标题颜色控制，
-    // 这里指定 HelveticaNeue 拿单色字形。
-    self.wrenchButton.titleLabel.font = [UIFont fontWithName:@"HelveticaNeue" size:24.0]
-                                     ?: [UIFont systemFontOfSize:24.0];
+    // 图标用 SF Symbol 而不是 Unicode 齿轮字符。
+    // U+2699 在真机会落到彩色符号字形，前景色设置全部失效、alpha 只能整体变淡，
+    // 表现就是"调透明度没反应"。模板图走 tintColor，颜色与透明度都可控。
+    UIImage *gear = [UIImage systemImageNamed:@"gearshape.fill"];
+    if (!gear) gear = [UIImage systemImageNamed:@"gearshape"];
+    if (gear) {
+        [self.wrenchButton setImage:[gear imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]
+                           forState:UIControlStateNormal];
+    } else {
+        // 系统图标不可用时退回文字，至少保证入口还在。
+        [self.wrenchButton setTitle:@"D" forState:UIControlStateNormal];
+        [self.wrenchButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    }
     [self applyWrenchAlpha:DYYYDiagWrenchOpacity()];
     [self.wrenchButton addTarget:self action:@selector(wrenchTouchUpInside) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:self.wrenchButton];
@@ -831,8 +833,12 @@ static void DYYYDiagEnsureDebugWindow(void) {
       [weakSelf hideDebugMenu];
       [weakSelf handleMenuAction:index];
     };
-    panel.onOpacityChange = ^(CGFloat alpha) {
+    panel.onWrenchOpacityChange = ^(CGFloat alpha) {
       [weakSelf applyWrenchAlpha:alpha];
+    };
+    // 卡片自身背景在面板内部实时改写，这里不需要额外动作；
+    // 回调保留是为了以后要同步别的地方（比如遮罩浓度）时有挂点。
+    panel.onCardOpacityChange = ^(__unused CGFloat alpha) {
     };
     [self.view addSubview:panel];
     self.menuPanel = panel;
@@ -840,19 +846,17 @@ static void DYYYDiagEnsureDebugWindow(void) {
 
 // 应用扳手字符的不透明度：字形本身半透明，同时叠加一层描边保证浅色背景可见。
 // 描边用负 NSStrokeWidth（描边 + 填充），透明度跟着字形一起走。
+// 应用浮窗不透明度。
+//
+// 不再用 Unicode 字符：U+2699 在真机上会落到彩色符号字形，颜色由系统决定，
+// 前景色设什么都不生效（截图取色是 RGB(169,173,173) 的偏青灰，不是白色），
+// 调 alpha 只会整体变淡一点，看起来"调了没反应"。
+// 改用 SF Symbol 的模板图，tintColor 完全可控；透明度直接落在 button.alpha 上，
+// 那是 100% 生效的通道。下限 0.2 保证按钮始终可点（alpha <= 0.01 的视图不接收触摸）。
 - (void)applyWrenchAlpha:(CGFloat)alpha {
     if (!self.wrenchButton) return;
-    UIFont *font = self.wrenchButton.titleLabel.font ?: [UIFont systemFontOfSize:22.0];
-    UIColor *fill = [UIColor colorWithWhite:1.0 alpha:alpha];
-    UIColor *stroke = [UIColor colorWithWhite:0.0 alpha:MIN(1.0, alpha * 0.9)];
-    NSAttributedString *attr = [[NSAttributedString alloc] initWithString:@"⚙"
-                                                               attributes:@{
-        NSFontAttributeName: font,
-        NSForegroundColorAttributeName: fill,
-        NSStrokeColorAttributeName: stroke,
-        NSStrokeWidthAttributeName: @(-4.0),
-    }];
-    [self.wrenchButton setAttributedTitle:attr forState:UIControlStateNormal];
+    self.wrenchButton.tintColor = UIColor.whiteColor;
+    self.wrenchButton.alpha = alpha;
 }
 
 - (void)menuBackdropTapped:(__unused UITapGestureRecognizer *)recognizer {

@@ -446,26 +446,50 @@ void DYYYDiagToggleSet(NSString *key, BOOL enabled) {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:key];
 }
 
-#pragma mark - 浮窗透明度
+#pragma mark - 浮窗与卡片透明度
 
 NSString *const DYYYDiagWrenchOpacityKey = @"DYYYWrenchOpacity";
+NSString *const DYYYDiagCardOpacityKey = @"DYYYWrenchCardOpacity";
 
+// 浮窗下限 0.20：再低按钮几乎看不见，用户会找不到入口，只能重启改设置。
 static const CGFloat kDYYYDiagWrenchOpacityDefault = 0.70;
-static const CGFloat kDYYYDiagWrenchOpacityMin = 0.30;
+static const CGFloat kDYYYDiagWrenchOpacityMin = 0.20;
+
+// 卡片是临时出现的面板，调到 0 也没有"找不到入口"的风险。
+static const CGFloat kDYYYDiagCardOpacityDefault = 0.85;
+static const CGFloat kDYYYDiagCardOpacityMin = 0.0;
+
+static CGFloat DYYYDiagClampOpacity(NSString *key, CGFloat fallback, CGFloat lo, CGFloat hi) {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([defaults objectForKey:key] == nil) return fallback;
+    CGFloat v = [defaults doubleForKey:key];
+    if (v < lo) v = lo;
+    if (v > hi) v = hi;
+    return v;
+}
 
 CGFloat DYYYDiagWrenchOpacity(void) {
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if ([defaults objectForKey:DYYYDiagWrenchOpacityKey] == nil) return kDYYYDiagWrenchOpacityDefault;
-    CGFloat v = [defaults doubleForKey:DYYYDiagWrenchOpacityKey];
-    if (v < kDYYYDiagWrenchOpacityMin) v = kDYYYDiagWrenchOpacityMin;
-    if (v > 1.0) v = 1.0;
-    return v;
+    return DYYYDiagClampOpacity(DYYYDiagWrenchOpacityKey,
+                                kDYYYDiagWrenchOpacityDefault,
+                                kDYYYDiagWrenchOpacityMin, 1.0);
 }
 
 void DYYYDiagSetWrenchOpacity(CGFloat alpha) {
     if (alpha < kDYYYDiagWrenchOpacityMin) alpha = kDYYYDiagWrenchOpacityMin;
     if (alpha > 1.0) alpha = 1.0;
     [NSUserDefaults.standardUserDefaults setDouble:alpha forKey:DYYYDiagWrenchOpacityKey];
+}
+
+CGFloat DYYYDiagCardOpacity(void) {
+    return DYYYDiagClampOpacity(DYYYDiagCardOpacityKey,
+                                kDYYYDiagCardOpacityDefault,
+                                kDYYYDiagCardOpacityMin, 1.0);
+}
+
+void DYYYDiagSetCardOpacity(CGFloat alpha) {
+    if (alpha < kDYYYDiagCardOpacityMin) alpha = kDYYYDiagCardOpacityMin;
+    if (alpha > 1.0) alpha = 1.0;
+    [NSUserDefaults.standardUserDefaults setDouble:alpha forKey:DYYYDiagCardOpacityKey];
 }
 
 NSString *DYYYNameOfObject(id object) {
