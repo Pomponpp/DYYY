@@ -768,7 +768,7 @@ static void DYYYDiagEnsureDebugWindow(void) {
     [self.menuBackdrop removeFromSuperview];
     self.menuBackdrop = nil;
     // 收起后强制复位一次触摸判定：浮层回到"只有扳手能点"的状态。
-    [DYYYDiagnosticsOverlayRefresh];
+    DYYYDiagnosticsOverlayRefresh();
 }
 
 - (void)handleMenuAction:(NSInteger)index {
