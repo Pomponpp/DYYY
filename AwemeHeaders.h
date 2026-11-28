@@ -454,6 +454,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEFamiliarNavView : UIView
+// 朋友页顶栏的限时日常头像（点击进入故事）。隐藏它即可，不必藏整条导航。
+- (id)storyAvatarCamera;
+- (void)setupStoryAvatarView;
+- (void)refreshStoryAvatarView;
 @end
 
 @interface AWEPlayInteractionNewBaseController : UIView
@@ -2053,6 +2057,16 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 // 评论面板 tab 的内容容器：自己会画一层实色底，盖在毛玻璃之上。
 @interface AWEListKitTabContentCollectionView : UICollectionView
+@end
+
+// 听视频模式的音乐组件控制器。41.3 起「推荐应用下载」的挂载点从
+// addFeedMusicView 改名为 musicView，相关方法同步改名。
+@interface AWEPlayInteractionMusicAiRefactorListenFeedController : NSObject
+@property(retain, nonatomic) UIView *musicView;
+- (id)createMusicView;
+- (void)setMusicView:(UIView *)musicView;
+- (void)ensureMusicView;
+- (void)layoutMusicViewIfNeeded;
 @end
 
 // 首页右侧头像整块容器（头像图 + 直播环 + 关注气泡）。

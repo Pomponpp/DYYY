@@ -12,29 +12,23 @@ static void DYYYRemoveRecommendAppDownloadView(id viewObject) {
 }
 
 static void DYYYHideRecommendAppDownloadViewForOwner(id owner) {
-    id addFeedMusicView = [DYYYFeatureUI value:owner key:@"addFeedMusicView"];
-    DYYYRemoveRecommendAppDownloadView(addFeedMusicView);
-    [DYYYFeatureUI setValue:nil object:owner key:@"addFeedMusicView"];
+    // 41.3 把挂载点属性名从 addFeedMusicView 改成了 musicView
+    id musicView = [DYYYFeatureUI value:owner key:@"musicView"];
+    DYYYRemoveRecommendAppDownloadView(musicView);
+    [DYYYFeatureUI setValue:nil object:owner key:@"musicView"];
 }
 
+// 「隐藏推荐应用下载」：41.3 的挂载点已整体改名——
+//   addFeedMusicView                             → musicView
+//   setAddFeedMusicView:                         → setMusicView:
+//   showFeedMusicViewIfNeeded                    → ensureMusicView / layoutMusicViewIfNeeded
+//   shouldShowAddFeedMusicView                   → shouldShowListenFeedCover
+// 旧四个方法在二进制里已全部不存在（hook 挂空，所以功能失效）。
+// 新实现只认视图注入点，最稳：无论是首次创建还是复用，视图进来就直接摘掉。
+// 不去动 shouldShowListenFeedCover —— 那个控制的是听视频封面展示，改了会连带隐藏封面。
 %hook AWEPlayInteractionMusicAiRefactorListenFeedController
 
-- (BOOL)shouldShowAddFeedMusicView {
-    if (DYYYGetBool(@"DYYYHideRecommendAppDownload")) {
-        return NO;
-    }
-    return %orig;
-}
-
-- (void)showFeedMusicViewIfNeeded {
-    if (DYYYGetBool(@"DYYYHideRecommendAppDownload")) {
-        DYYYHideRecommendAppDownloadViewForOwner(self);
-        return;
-    }
-    %orig;
-}
-
-- (void)setAddFeedMusicView:(UIView *)view {
+- (void)setMusicView:(UIView *)view {
     if (DYYYGetBool(@"DYYYHideRecommendAppDownload")) {
         if ([view isKindOfClass:[UIView class]]) {
             view.hidden = YES;
@@ -46,12 +40,26 @@ static void DYYYHideRecommendAppDownloadViewForOwner(id owner) {
     %orig;
 }
 
-- (void)updateAddFeedMusicViewLayoutWithShowSpeedControl:(BOOL)showSpeedControl {
+- (id)createMusicView {
+    id view = %orig;
+    if (DYYYGetBool(@"DYYYHideRecommendAppDownload")) {
+        DYYYRemoveRecommendAppDownloadView(view);
+    }
+    return view;
+}
+
+- (void)ensureMusicView {
+    %orig;
     if (DYYYGetBool(@"DYYYHideRecommendAppDownload")) {
         DYYYHideRecommendAppDownloadViewForOwner(self);
-        return;
     }
+}
+
+- (void)layoutMusicViewIfNeeded {
     %orig;
+    if (DYYYGetBool(@"DYYYHideRecommendAppDownload")) {
+        DYYYHideRecommendAppDownloadViewForOwner(self);
+    }
 }
 
 %end

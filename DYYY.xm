@@ -9068,13 +9068,40 @@ static void findTargetViewInView(UIView *view) {
 }
 %end
 
-%hook AWEFamiliarNavView
-- (void)layoutSubviews {
-    if (DYYYGetBool(@"DYYYHideFamiliar")) {
-        self.hidden = YES;
+// 「隐藏朋友日常按钮」= 朋友页顶栏左上角那个限时日常头像（抖音内部叫 Skylight / Story）。
+//
+// 原来的实现是把整条 AWEFamiliarNavView 藏掉——但那一条里除了日常头像，
+// 还有加好友、好友请求、发布入口，整条隐藏属于「藏多了」，表现为开关没反应
+// 或者连不该藏的一起消失。
+// 现在只处理 storyAvatarCamera（限时日常头像本身）：
+// 拿得到就只藏它，拿不到才退回整条隐藏（保证开关至少有效果）。
+static void DYYYHideFamiliarStoryAvatar(AWEFamiliarNavView *nav) {
+    if (!nav || !DYYYGetBool(@"DYYYHideFamiliar")) return;
+    id camera = [nav storyAvatarCamera];
+    if ([camera isKindOfClass:[UIView class]]) {
+        ((UIView *)camera).hidden = YES;
+        return;
     }
-    %orig;
+    nav.hidden = YES;
 }
+
+%hook AWEFamiliarNavView
+
+- (void)layoutSubviews {
+    %orig;
+    DYYYHideFamiliarStoryAvatar(self);
+}
+
+- (void)setupStoryAvatarView {
+    %orig;
+    DYYYHideFamiliarStoryAvatar(self);
+}
+
+- (void)refreshStoryAvatarView {
+    %orig;
+    DYYYHideFamiliarStoryAvatar(self);
+}
+
 %end
 
 %hook AWEHPSearchBubbleEntranceView
