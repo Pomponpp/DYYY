@@ -15,6 +15,7 @@
 #import <objc/runtime.h>
 #import <os/log.h>
 #import <signal.h>
+#import <string.h>
 
 #pragma mark - 常量
 
@@ -344,41 +345,67 @@ NSString *DYYYNameOfClass(Class cls) {
     return [NSString stringWithUTF8String:raw];
 }
 
-// 直读类的 name 字段，不调用 class_getName。
-// class_getName 对尚未具名的 Swift 类会先做 installMangledNameForLazilyNamedClass，
-// 那一步进 libswiftCore demangler，畸形泛型 mangled 名 failAssert → abort。
-//
 // class_t 布局：isa(0) / superclass(8) / cache(16–31) / bits(32)。
 // class_ro_t 布局：flags/instanceStart/instanceSize/reserved(0–15) / name(24)。
+//
+// 判断一段内存是不是合法类名。
+// 只读 64 字节上限，避免越过页边界；任何一条不满足就判否，
+// 宁可返回 NULL 让调用方给占位符，也不能把结构体字节当字符串吐出去。
+static BOOL DYYYDiagLooksLikeClassName(const char *s) {
+    if (!s) return NO;
+    uintptr_t v = (uintptr_t)s;
+    if (v < 0x1000 || (v >> 40) != 0) return NO;   // 必须在用户态低地址
+    size_t len = strnlen(s, 64);
+    if (len == 0 || len >= 64) return NO;
+    char c0 = s[0];
+    if (!((c0 >= 'A' && c0 <= 'Z') || (c0 >= 'a' && c0 <= 'z') || c0 == '_')) return NO;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c <= 0x20 || c > 0x7e) return NO;      // 不含空格/控制字符/非 ASCII
+    }
+    return YES;
+}
+
+// 读类的 name，全程纯内存读，绝不调用 class_getName / NSStringFromClass。
+//
+// 那个 API 对尚未具名的 Swift 类会先做 installMangledNameForLazilyNamedClass，
+// 进 libswiftCore demangler，畸形 mangled 名 failAssert 后 abort —— 这是导出必崩的根因。
+//
+// bits 掩码后指向的可能是三种形态之一，必须逐层试：
+//   ① class_ro_t        : name 在 +24                       （未 realize 的类）
+//   ② class_rw_t + ro   : ro_or_rw_ext 在 +8，低位 bit0=0 → 直接是 ro
+//   ③ class_rw_t + ext  : ro_or_rw_ext 在 +8，低位 bit0=1 → 指向 class_rw_ext_t，
+//                         它的 +0 才是 ro
+// 只做①②会漏掉大量已扩展过的类（分类、KVO、动态方法都会走③），
+// 表现为大面积读到 NULL 或读到 baseProperties 指针当名字。
 const char *DYYYDiagRawClassName(Class cls) {
     if (!cls) return NULL;
     uintptr_t bits = *(uintptr_t *)((uint8_t *)(__bridge void *)cls + 32);
     uintptr_t data = bits & (uintptr_t)0x00007ffffffffff8ULL;
     if (!data) return NULL;
 
-    // bits 掩码后指向的可能是 class_ro_t，也可能是已经 realize 的 class_rw_t。
-    //   class_ro_t: flags(0) instanceStart(4) instanceSize(8) reserved(12)
-    //               ivarLayout(16) name(24) ...
-    //   class_rw_t: flags(0) witness(4) ro_or_rw(8) firstSubclass(16) ...
-    // 直接按 +24 读只有 ro 形态才拿到 name；realized 类读出来是垃圾或 NULL。
-    // 区分方式：class_rw_t 的 ro_or_rw(+8) 存的是 class_ro_t*，
-    // 它的 size 字段合理、且不等于自身地址。这里用"取 +8 当指针，再读它的 +24"
-    // 逐层下探，任一层拿不到可打印字符串就放弃——全程纯内存读，不调用任何 runtime API。
-    const char *name = NULL;
-    for (int pass = 0; pass < 2; pass++) {
-        const char *cand = *(const char **)((uint8_t *)data + 24);
-        if (cand && ((uintptr_t)cand >> 40) == 0) {
-            // 看起来像有效用户态指针，再验证首字节可打印
-            uint8_t first = *(const uint8_t *)cand;
-            if (first >= 0x20 && first < 0x7f) { name = cand; break; }
-        }
-        // 不是 ro 形态：按 rw 处理，ro = *(void**)(data + 8)
-        uintptr_t inner = *(uintptr_t *)((uint8_t *)data + 8);
-        if (!inner) break;
-        data = inner & (uintptr_t)0x00007ffffffffff8ULL;
-        if (!data) break;
+    // ① 直接当 ro
+    const char *name = *(const char **)((uint8_t *)data + 24);
+    if (DYYYDiagLooksLikeClassName(name)) return name;
+
+    // ②③ data 是 rw：先取 ro_or_rw_ext
+    uintptr_t roOrExt = *(uintptr_t *)((uint8_t *)data + 8);
+    if (!roOrExt) return NULL;
+    uintptr_t ro = roOrExt & (uintptr_t)0x00007ffffffffff8ULL;
+    if (!ro) return NULL;
+
+    if (roOrExt & 1) {
+        // ③ 指向 class_rw_ext_t，它的首字段才是 ro
+        uintptr_t inner = *(uintptr_t *)((uint8_t *)ro + 0);
+        if (!inner) return NULL;
+        ro = inner & (uintptr_t)0x00007ffffffffff8ULL;
+        if (!ro) return NULL;
     }
-    return name;
+
+    // ②/③ 统一从 ro 的 +24 取 name
+    name = *(const char **)((uint8_t *)ro + 24);
+    if (DYYYDiagLooksLikeClassName(name)) return name;
+    return NULL;
 }
 
 // 直读父类槽位，不调用 class_getSuperclass。
@@ -417,6 +444,28 @@ BOOL DYYYDiagToggleEnabled(NSString *key) {
 void DYYYDiagToggleSet(NSString *key, BOOL enabled) {
     if (key.length == 0) return;
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:key];
+}
+
+#pragma mark - 浮窗透明度
+
+NSString *const DYYYDiagWrenchOpacityKey = @"DYYYWrenchOpacity";
+
+static const CGFloat kDYYYDiagWrenchOpacityDefault = 0.70;
+static const CGFloat kDYYYDiagWrenchOpacityMin = 0.30;
+
+CGFloat DYYYDiagWrenchOpacity(void) {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([defaults objectForKey:DYYYDiagWrenchOpacityKey] == nil) return kDYYYDiagWrenchOpacityDefault;
+    CGFloat v = [defaults doubleForKey:DYYYDiagWrenchOpacityKey];
+    if (v < kDYYYDiagWrenchOpacityMin) v = kDYYYDiagWrenchOpacityMin;
+    if (v > 1.0) v = 1.0;
+    return v;
+}
+
+void DYYYDiagSetWrenchOpacity(CGFloat alpha) {
+    if (alpha < kDYYYDiagWrenchOpacityMin) alpha = kDYYYDiagWrenchOpacityMin;
+    if (alpha > 1.0) alpha = 1.0;
+    [NSUserDefaults.standardUserDefaults setDouble:alpha forKey:DYYYDiagWrenchOpacityKey];
 }
 
 NSString *DYYYNameOfObject(id object) {

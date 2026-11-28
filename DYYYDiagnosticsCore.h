@@ -98,6 +98,14 @@ extern NSString *const DYYYDiagToggleShare;    // 弹分享面板
 BOOL DYYYDiagToggleEnabled(NSString *key);
 void DYYYDiagToggleSet(NSString *key, BOOL enabled);
 
+#pragma mark - 浮窗透明度
+
+/// 扳手字符的不透明度，0.3 ~ 1.0，默认 0.7。
+/// 存在 NSUserDefaults，面板上的滑块实时改写并立即应用到按钮。
+extern NSString *const DYYYDiagWrenchOpacityKey;
+CGFloat DYYYDiagWrenchOpacity(void);
+void DYYYDiagSetWrenchOpacity(CGFloat alpha);
+
 /// 诊断开关读取（统一走 NSUserDefaults，DYYY 键名直读）。
 BOOL DYYYPrefBool(NSString *key);
 NSInteger DYYYPrefInteger(NSString *key);

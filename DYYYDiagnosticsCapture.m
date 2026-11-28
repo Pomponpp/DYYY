@@ -36,6 +36,26 @@ static NSString *DYYYDiagClassName(id object) {
     return raw ? [NSString stringWithUTF8String:raw] : @"(lazy-swift-class)";
 }
 
+// 展示用类名：读不到本视图的名字时，往上找一个已知类名的祖先补上下文。
+//
+// 视图树里大量 Swift 泛型类的名字是懒生成的，读不到；只写 (lazy-swift-class)
+// 的话整整一层都看不出是挂在哪。补上最近的已知祖先，至少能判断
+// "这是 AWEFeedViewCell 底下的某一层"，定位时比纯占位有用得多。
+// 向上最多查 8 层：正常情况 1-2 层就命中，深链全懒时也不至于一路读到根。
+static NSString *DYYYDiagClassDisplayName(UIView *view) {
+    NSString *name = DYYYDiagClassName(view);
+    if (![name isEqualToString:@"(lazy-swift-class)"]) return name;
+
+    UIView *parent = view.superview;
+    for (NSUInteger depth = 0; parent && depth < 8; depth++, parent = parent.superview) {
+        NSString *parentName = DYYYDiagClassName(parent);
+        if ([parentName isEqualToString:@"(lazy-swift-class)"]) continue;
+        if (parentName.length == 0) continue;
+        return [NSString stringWithFormat:@"(lazy in %@)", parentName];
+    }
+    return name;
+}
+
 static NSString *DYYYDiagObjectDesc(id object) {
     if (!object) return @"";
     @try {
@@ -282,7 +302,7 @@ static NSArray<NSString *> *DYYYDiagConstraintsForView(UIView *view, NSUInteger 
 static NSMutableDictionary *DYYYDiagBaseViewInfo(UIView *view, NSUInteger depth) {
     UIViewController *nearestVC = DYYYDiagViewControllerForView(view);
     NSMutableDictionary *info = [@{
-        @"class": DYYYDiagClassName(view),
+        @"class": DYYYDiagClassDisplayName(view),
         @"address": DYYYDiagStringFromPointer((__bridge const void *)view),
         @"depth": @(depth),
         @"frame": DYYYDiagRectDict(view.frame),
@@ -459,7 +479,7 @@ static void DYYYDiagAppendViewTreeText(UIView *view, NSUInteger depth, NSMutable
     DYYYDiagConstraintsForView(view, 0, &cTotal);
     [out appendFormat:@"%@%@ %@ frame=%@ bounds=%@ vc=%@ %@ hidden=%d alpha=%.3f clips=%d user=%d layer=%@ safe(t=%.0f,b=%.0f) transAuto=%d 约束=%lu\n",
      indent,
-     DYYYDiagClassName(view),
+     DYYYDiagClassDisplayName(view),
      DYYYDiagStringFromPointer((__bridge const void *)view),
      NSStringFromCGRect(view.frame),
      NSStringFromCGRect(view.bounds),
