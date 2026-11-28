@@ -72,7 +72,7 @@
 
 - (void)layoutSubviews {
     %orig;
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYEnableNotificationTransparency"]) {
+    if (DYYYGetBool(@"DYYYEnableNotificationTransparency")) {
         [self setupBlurEffectForNotificationView];
     }
 }
@@ -167,6 +167,47 @@
         subview.backgroundColor = [UIColor clearColor];
         [self clearBackgroundRecursivelyInView:subview];
     }
+}
+
+%end
+
+// 「通知栏毛玻璃」在 41.3 上直接挂在内容容器上。
+//
+// 原来的实现是从 AWEInnerNotificationWindow 里遍历子视图、
+// 找到类名含 AWEInnerNotificationContainerView 的那个再处理。
+// 41.3 的窗口只剩 9 个方法（全是 hitTest / canBecomeKeyWindow 一类），
+// 通知内容已经不由它组织，遍历能不能找到全看层级——层级一变就整套失效，
+// 表现就是「开关开着但通知没有任何毛玻璃」。
+//
+// 现在直接 hook 容器自己的 layoutSubviews：不依赖从谁身上查找，
+// 容器每次布局就重新贴一次材质。毛玻璃生成、背景清理、白字
+// 都复用 DYYYUtils 里已有的实现，避免在两处维护同一套逻辑。
+%hook AWEInnerNotificationContainerView
+
+- (void)layoutSubviews {
+    %orig;
+
+    if (!DYYYGetBool(@"DYYYEnableNotificationTransparency")) {
+        return;
+    }
+
+    float userTransparency = [[[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYCommentBlurTransparent"] floatValue];
+    if (userTransparency <= 0 || userTransparency > 1) {
+        userTransparency = 0.5;
+    }
+
+    [DYYYUtils applyBlurEffectToView:self transparency:userTransparency blurViewTag:999];
+    [DYYYUtils clearBackgroundRecursivelyInView:self];
+
+    float userRadius = [[[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNotificationCornerRadius"] floatValue];
+    if (!userRadius || userRadius < 0 || userRadius > 50) {
+        userRadius = 12;
+    }
+    self.layer.cornerRadius = userRadius;
+    self.layer.masksToBounds = YES;
+
+    // 三个动作文案保持原色，否则会和纯白背景混在一起。
+    [DYYYUtils whitenLabelsInView:self exceptTexts:@[@"回复", @"查看", @"续火花"]];
 }
 
 %end

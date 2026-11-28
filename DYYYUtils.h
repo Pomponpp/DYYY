@@ -96,6 +96,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (void)applyBlurEffectToView:(UIView *)view transparency:(float)userTransparency blurViewTag:(NSInteger)tag;
 + (void)clearBackgroundRecursivelyInView:(UIView *)view;
+/// 把视图树里所有 UILabel 的文字改成白色，跳过 exceptTexts 里列出的文案。
+/// 用于暗色毛玻璃上保证文字可读（通知栏、评论面板等）。
++ (void)whitenLabelsInView:(UIView *)view exceptTexts:(NSArray<NSString *> *)exceptTexts;
 
 /**
  * 显示提示信息

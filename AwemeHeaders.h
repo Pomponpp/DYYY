@@ -1075,6 +1075,14 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)clearBackgroundRecursivelyInView:(UIView *)view;
 @end
 
+// 站内顶部通知的内容容器。41.3 起毛玻璃要直接加在它身上，
+// 而不是从窗口里遍历子视图去找（层级一变就找不到）。
+@interface AWEInnerNotificationContainerView : UIView
+- (id)contentView;
+- (id)contentContainerView;
+- (BOOL)__useWhiteStyle;
+@end
+
 @interface AWEFakeProgressSliderView : UIView
 @end
 

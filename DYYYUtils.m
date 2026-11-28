@@ -1009,6 +1009,22 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
     }
 }
 
++ (void)whitenLabelsInView:(UIView *)view exceptTexts:(NSArray<NSString *> *)exceptTexts {
+    if (!view)
+        return;
+
+    for (UIView *subview in view.subviews) {
+        if ([subview isKindOfClass:[UILabel class]]) {
+            UILabel *label = (UILabel *)subview;
+            NSString *text = label.text;
+            if (text.length == 0 || ![exceptTexts containsObject:text]) {
+                label.textColor = [UIColor whiteColor];
+            }
+        }
+        [self whitenLabelsInView:subview exceptTexts:exceptTexts];
+    }
+}
+
 + (void)showToast:(NSString *)text {
     Class toastClass = NSClassFromString(@"DUXToast");
     if (toastClass && [toastClass respondsToSelector:@selector(showText:)]) {
