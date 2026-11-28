@@ -14,6 +14,7 @@
 #import "DYYYDiagnosticsCore.h"
 #import "DYYYDiagnosticsCapture.h"
 #import "DYYYDiagnosticsExport.h"
+#import "DYYYToast.h"
 
 
 
@@ -271,6 +272,7 @@ static const CGFloat kDYYYDiagFooterHeight = 145.0;
 - (void)handleMenuAction:(NSInteger)index;
 - (void)menuBackdropTapped:(UITapGestureRecognizer *)recognizer;
 - (void)applyWrenchAlpha:(CGFloat)alpha;
+- (void)handleWrenchLongPress:(UILongPressGestureRecognizer *)gesture;
 @end
 
 // 扳手视觉尺寸缩到 36pt 后，命中区域向外补到 44×44（每边 +4），
@@ -701,6 +703,54 @@ static void DYYYDiagEnsureDebugWindow(void) {
     pan.delaysTouchesBegan = NO;
     pan.delaysTouchesEnded = NO;
     [self.wrenchButton addGestureRecognizer:pan];
+
+    // 蒙版自救：长按扳手 2 秒强制复位浮层。
+    //
+    // 场景：偶发出现「界面像盖了层灰蒙版、只剩扳手能点」。那是浮层窗口的
+    // capturesOverlayTouches 返回 YES 后在整窗接管触摸，而面板/modal 又没清干净。
+    // 这时浮层自己的菜单打不开、抖音也点不动，只能杀进程。
+    // 长按能收到是因为 pointInside/hitTest 对扳手区域始终放行。
+    //
+    // allowableMovement 保持默认 10pt：长按期间拖动超过这个距离手势自动失败，
+    // 由 pan 接管，所以拖动挪位置不受影响，不需要额外的失败依赖。
+    UILongPressGestureRecognizer *longPress =
+        [[UILongPressGestureRecognizer alloc] initWithTarget:self
+                                                      action:@selector(handleWrenchLongPress:)];
+    longPress.minimumPressDuration = 2.0;
+    longPress.cancelsTouchesInView = NO;
+    [self.wrenchButton addGestureRecognizer:longPress];
+}
+
+// 强制复位：把浮层能残留的状态全部清一遍，不依赖具体的出错原因。
+- (void)handleWrenchLongPress:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state != UIGestureRecognizerStateBegan) return;
+
+    // ① 自绘菜单面板（它会让 capturesOverlayTouches 保持 YES）
+    [self hideDebugMenu];
+
+    // ② 浮层控制器上的残留 modal（分享面板 / 提示框没关干净的情况）
+    UIViewController *presented = self.presentedViewController;
+    if (presented) {
+        [self dismissViewControllerAnimated:NO completion:nil];
+    }
+
+    // ③ App 主窗口控制器上的残留分享面板 / 提示框
+    UIViewController *host = DYYYDiagUIContextHost();
+    if (host) {
+        UIViewController *hostPresented = host.presentedViewController;
+        if ([hostPresented isKindOfClass:[UIActivityViewController class]] ||
+            [hostPresented isKindOfClass:[UIAlertController class]]) {
+            [host dismissViewControllerAnimated:NO completion:nil];
+        }
+    }
+
+    // ④ 导出忙标记卡住会让后续导出直接返回，这里无条件放行
+    DYYYDiagExportSetBusy(NO);
+
+    // ⑤ 窗口显隐、frame、key window 一并复位
+    DYYYDiagnosticsOverlayRefresh();
+
+    [DYYYToast showSuccessToastWithMessage:@"浮层已复位"];
 }
 
 - (void)viewDidLayoutSubviews {
