@@ -309,15 +309,16 @@ static NSMutableDictionary *DYYYDiagBaseViewInfo(UIView *view, NSUInteger depth)
         } : @{},
         @"layer": DYYYDiagLayerInfo(view.layer),
         @"subviewCount": @(view.subviews.count),
-        // 布局三件套：安全区、是否用约束布局、自身想要的尺寸
-        @"safeAreaInsets": @{
-            @"top": @(view.safeAreaInsets.top),
-            @"left": @(view.safeAreaInsets.left),
-            @"bottom": @(view.safeAreaInsets.bottom),
-            @"right": @(view.safeAreaInsets.right)
-        },
-        @"translatesAutoresizingMaskIntoConstraints": @(view.translatesAutoresizingMaskIntoConstraints),
-        @"intrinsicContentSize": DYYYDiagSizeDict(view.intrinsicContentSize)
+        // 这里刻意不采 safeAreaInsets 与 intrinsicContentSize。
+        // 这两个不是普通 ivar：访问 safeAreaInsets 会让 UIKit 沿层级向上
+        // 查询窗口安全区并在布局繁忙时触发布局传播；intrinsicContentSize
+        // 会调用视图自身的测量方法（文字排版、图片尺寸）。
+        // 全树几百个节点每层都访问一次，正好落在视频页的主线程上，
+        // 会把 Metal 层的尺寸/位置反复重算，画面定住而播放时钟继续走
+        // ——表现为「假暂停」，要手动暂停再播放触发 seek 才恢复。
+        // 排查实际用的是 frame / bounds / hidden / alpha / layer 类名，
+        // 这两个值需要时可以从 frame 与屏幕尺寸反推。
+        @"translatesAutoresizingMaskIntoConstraints": @(view.translatesAutoresizingMaskIntoConstraints)
     } mutableCopy];
 
     // 垂直方向的两个优先级：被压扁时靠它们判断是谁让步了。
@@ -457,7 +458,7 @@ static void DYYYDiagAppendViewTreeText(UIView *view, NSUInteger depth, NSMutable
     UIViewController *vc = DYYYDiagViewControllerForView(view);
     NSUInteger cTotal = 0;
     DYYYDiagConstraintsForView(view, 0, &cTotal);
-    [out appendFormat:@"%@%@ %@ frame=%@ bounds=%@ vc=%@ %@ hidden=%d alpha=%.3f clips=%d user=%d layer=%@ safe(t=%.0f,b=%.0f) transAuto=%d 约束=%lu\n",
+    [out appendFormat:@"%@%@ %@ frame=%@ bounds=%@ vc=%@ %@ hidden=%d alpha=%.3f clips=%d user=%d layer=%@ transAuto=%d 约束=%lu\n",
      indent,
      DYYYDiagClassName(view),
      DYYYDiagStringFromPointer((__bridge const void *)view),
@@ -470,8 +471,6 @@ static void DYYYDiagAppendViewTreeText(UIView *view, NSUInteger depth, NSMutable
      view.clipsToBounds,
      view.userInteractionEnabled,
      DYYYDiagClassName(view.layer),
-     view.safeAreaInsets.top,
-     view.safeAreaInsets.bottom,
      view.translatesAutoresizingMaskIntoConstraints ? 1 : 0,
      (unsigned long)cTotal];
     for (UIView *subview in view.subviews) DYYYDiagAppendViewTreeText(subview, depth + 1, out, budget);
