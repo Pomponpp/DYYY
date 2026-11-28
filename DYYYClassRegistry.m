@@ -515,6 +515,11 @@ static NSUInteger gDYYYExpectedHookCount = 0;
 
 // 抖音改版时，新类名靠猜。这里把运行时全部类名按抖音前缀过滤后输出，
 // 我拿到后与旧版清单对比，直接给出「缺失 → 疑似新名」的候选。
+//
+// 注意：本方法不在诊断包导出路径上调用。objc_copyClassList 需持 objc
+// 运行时类表锁遍历 13.7 万项，持锁期间主线程 objc 调用全部排队，同时
+// 产出 2MB 字符串把导出峰值内存抬高；实测会让导出后画面定在最后一帧。
+// 需要时手动调用即可，不要接回导出流程。
 + (NSString *)runtimeClassListText {
     static NSString *const kPrefixes[] = { @"AWE", @"IES", @"HTS", @"AFD", @"TT", @"BD", @"DUX", @"ALM" };
     static const NSUInteger kPrefixCount = sizeof(kPrefixes) / sizeof(kPrefixes[0]);
@@ -566,6 +571,10 @@ static NSUInteger gDYYYExpectedHookCount = 0;
 
 // 对审计表里的每个类，dump 其全部实例方法名。
 // 抖音改了方法名（类名不变）时，靠这份清单能直接看出少了哪个 selector。
+//
+// 注意：本方法不在诊断包导出路径上调用。324 个类的全量方法表遍历会产出
+// 1.3MB 字符串并大幅抬高导出峰值内存，与运行时类清单同属导出后画面定格的
+// 诱因。需要时手动调用，不要接回导出流程。
 + (NSString *)targetMethodsText {
     NSMutableString *out = [NSMutableString string];
     NSUInteger total = [self auditEntryCount];

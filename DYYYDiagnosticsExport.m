@@ -154,7 +154,7 @@ static NSString *DYYYDiagReadme(DYYYDiagnosticsContext *context) {
      context.metadata[@"buildVersion"] ?: @""];
     [text appendFormat:@"System: %@ %@\n", context.metadata[@"systemName"] ?: @"",
      context.metadata[@"systemVersion"] ?: @""];
-    [text appendString:@"\nContents:\n- page/: UI 主线程快照与本页类\n- compat/: 适配三件套\n- probe/: 运行日志全文\n- ui/: 目标窗口截图\n- crash/: 本 App 最近崩溃报告\n"];
+    [text appendString:@"\nContents:\n- page/: UI 主线程快照与本页类\n- compat/: 类自检与 hook 健康度\n- probe/: 运行日志全文\n- ui/: 目标窗口截图\n- crash/: 本 App 最近崩溃报告\n"];
     return text;
 }
 
@@ -331,18 +331,28 @@ DYYYDiagnosticsExportResult *DYYYDiagCreateExport(DYYYDiagnosticsContext *contex
     }
     DYYYDiagStep(@"export: 运行日志 完成");
 
-    // 适配三件套：类自检 / 运行时类清单 / 目标类方法清单。
-    if (progress) progress(@"写入适配诊断...");
+    // 适配诊断：只写两份小文件。
+//
+// 这里刻意不再生成 class-list.txt（遍历 13.7 万个类，2.0MB）和
+// target-methods.txt（遍历 324 个类的全部方法，1.3MB）：
+//
+// 1) 导出后画面会定在最后一帧而播放时钟继续走，必须手动暂停再播放
+//    触发一次 seek 才恢复。这两个文件的生成正是导出链路里最重的两步——
+//    objc_copyClassList 要持 objc 运行时类表锁遍历 13.7 万项，持锁期间
+//    主线程每次 objc 调用都排队；同时他们让导出峰值内存多出十几 MB，
+//    视频解码器在压力下被回收，渲染链断掉后 nextDrawable 不再返回新帧。
+//    行为对照实现没有这两份文件，也没有该现象。
+//
+// 2) 排查用不上：查某个类是否存在，直接解析 IPA 二进制更权威
+//    （类清单只反映"已加载"的类）；方法改名时 audit.txt 已覆盖
+//    全部 hook 目标类的缺失检测。
+if (progress) progress(@"写入适配诊断...");
     DYYYDiagStep(@"export: compat 开始");
     @try {
         DYYYDiagWriteString(sink, @"compat/audit.txt", [DYYYClassRegistry auditReportText], NO);
         DYYYDiagStep(@"export: audit.txt 完成");
         DYYYDiagWriteString(sink, @"compat/hook-health.txt", [DYYYClassRegistry hookHealthText], NO);
         DYYYDiagStep(@"export: hook-health.txt 完成");
-        DYYYDiagWriteString(sink, @"compat/class-list.txt", [DYYYClassRegistry runtimeClassListText], NO);
-        DYYYDiagStep(@"export: class-list.txt 完成");
-        DYYYDiagWriteString(sink, @"compat/target-methods.txt", [DYYYClassRegistry targetMethodsText], NO);
-        DYYYDiagStep(@"export: target-methods.txt 完成");
     } @catch (NSException *exception) {
         DYYYDiagRecordError(sink, @"compat", @"compat-collect",
                             DYYYDiagMakeExportError(31, exception.reason ?: @"适配诊断采集异常", nil), NO);
